@@ -1,0 +1,76 @@
+#pragma once 
+#include <dlprim/context.hpp>
+#include <dlprim/shape.hpp>
+#include <memory>
+namespace dlprim {
+    
+    class TensorSpecs {
+    public:
+        TensorSpecs(Shape const &s=Shape(),DataType d=float_data) :
+            shape_(s),
+            dtype_(d)
+        {
+        }
+
+        Shape const &shape() const
+        {
+            return shape_;
+        }
+
+        size_t memory_size() const
+        {
+            return shape_.total_size() * size_of_data_type(dtype_);
+        }
+        DataType dtype() const
+        {
+            return dtype_;
+        }
+    protected:
+        Shape shape_;
+        DataType dtype_;
+    };
+
+    class Tensor : public TensorSpecs {
+    public:
+        
+        Tensor(Context &ctx,Shape const &s,DataType d=float_data);
+
+        Tensor();
+        Tensor(Tensor const &) = default;
+        Tensor &operator=(Tensor const &) = default;
+        Tensor(Tensor &&) = default;
+        Tensor &operator=(Tensor &&) = default;
+        ~Tensor() {}
+        
+        cl::Buffer &device_buffer() 
+        { 
+            DLPRIM_CHECK(!cpu_tensor_);
+            return buffer_;
+        }
+        size_t device_offset() 
+        {
+            DLPRIM_CHECK(!cpu_tensor_);
+            return offset_; 
+        }
+        void *host_data();
+
+        template<typename T>
+        T *data()
+        {
+            DLPRIM_CHECK(TypeTraits<T>::data_type == dtype_);
+            return static_cast<T*>(host_data());
+        }
+
+        void to_device(cl::CommandQueue &q,bool sync=true);
+        void to_host(cl::CommandQueue &q,bool sync=true);
+
+    private:
+        std::shared_ptr<void> host_;
+        bool cpu_tensor_;
+        int offset_;
+        cl::Buffer buffer_;
+    };
+
+}
+/// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
+

@@ -1,0 +1,38 @@
+cmake_minimum_required(VERSION 3.0)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall -Wextra")
+
+find_path(OCL_PATH CL/cl2.hpp)
+find_library(OCL_LIB OpenCL) 
+
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include") 
+include_directories("${OCL_PATH}")
+
+find_program(PYTHON NAMES python3 python python2)
+if(NOT PYTHON)
+	message(FATAL_ERROR "Can't build without Python interpreter")
+endif(NOT PYTHON)
+
+file(GLOB CL_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.cl)
+file(GLOB CL_HEADERS  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.h)
+add_custom_command(
+                  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp 
+                  DEPENDS
+                  ${CL_SOURCES} ${CL_HEADERS} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/build_source.py
+                  COMMAND 
+                  ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/build_source.py 
+                    -o ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
+                    -I ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels
+                    ${CL_SOURCES}
+                  )
+
+add_library(dlprim SHARED 
+        src/context.cpp
+        src/tensor.cpp
+        src/program_cache.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
+        )
+
+target_link_libraries(dlprim ${OCL_LIB}) 
+
+add_executable(test_context tests/test_context.cpp)
+target_link_libraries(test_context dlprim)
