@@ -5,6 +5,12 @@ namespace dlprim {
     public:
         Error(std::string const &v) : std::runtime_error(v) {}
     };
+
+    class NotImplementedError : public Error {
+    public:
+        NotImplementedError(std::string const &v) : Error(v) {}
+    };
+
     class ValidatioError : public Error {
     public:
         ValidatioError(std::string const &v) : Error(v) {}
@@ -58,7 +64,7 @@ namespace dlprim {
 	constexpr int backward_data = 2;
 	constexpr int backward_param = 3;
 
-	enum class StandardActivations {
+	enum class StandardActivations : int {
 		identity = 0,
 		relu = 1,
 	};

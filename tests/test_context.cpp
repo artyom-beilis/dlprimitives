@@ -17,14 +17,15 @@ int main(int argc,char **argv)
         dp::Tensor a(ctx,dp::Shape(10));
 
         cl::CommandQueue q(ctx.context(),ctx.device());
+    
 
         float *p = a.data<float>();
 
         for(int i=0;i<a.shape()[0];i++)
             p[i] = -5.0 + i;
         a.to_device(q);
-        std::vector<dp::gpu::Parameter> params = {dp::gpu::Parameter("ACTIVATION",int(dp::StandardActivations::relu))};
-        cl::Program const &prg = dp::gpu::Cache::instance().get_program(ctx,"bias",params);
+        cl::Program const &prg = dp::gpu::Cache::instance().get_program(ctx,"bias","ACTIVATION",int(dp::StandardActivations::relu));
+        //cl::Program const &prg = dp::gpu::Cache::build_program(ctx,"bias","ACTIVATION",int(dp::StandardActivations::relu));
         cl::Kernel k(prg,"activation_inplace");
         k.setArg(0,int(a.shape().total_size()));
         k.setArg(1,a.device_buffer());

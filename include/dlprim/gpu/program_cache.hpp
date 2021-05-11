@@ -26,7 +26,44 @@ namespace dlprim {
         class Cache {
         public:
             static Cache &instance();
+            
+            static void fill_params(std::vector<Parameter> &)
+            {
+            }
+
+            template<typename Val,typename... Args>
+            static void fill_params(std::vector<Parameter> &p,std::string const &n,Val v,Args... args)
+            {
+                p.push_back(Parameter(n,v));
+                fill_params(p,args...);
+            }
+
+            template<typename Val,typename... Args>
+            cl::Program const &get_program(Context  &ctx,std::string const &source,std::string const &n1,Val const &v1,Args...args)
+            {
+                std::vector<Parameter> p;
+                fill_params(p,n1,v1,args...);
+                return get_program(ctx,source,p);
+            }
+            cl::Program const &get_program(Context  &ctx,std::string const &source)
+            {
+                std::vector<Parameter> p;
+                return get_program(ctx,source,p);
+            }
             cl::Program const &get_program(Context  &ctx,std::string const &source,std::vector<Parameter> const &params);
+
+            template<typename Val,typename... Args>
+            static cl::Program build_program(Context  &ctx,std::string const &source,std::string const &n1,Val const &v1,Args...args)
+            {
+                std::vector<Parameter> p;
+                fill_params(p,n1,v1,args...);
+                return build_program(ctx,source,p);
+            }
+            static cl::Program build_program(Context  &ctx,std::string const &source)
+            {
+                std::vector<Parameter> p;
+                return build_program(ctx,source,p);
+            }
             static cl::Program build_program(Context &ctx,std::string const &source,std::vector<Parameter> const &params);
         private:
             static std::string make_key(Context &ctx,std::string const &src,std::vector<Parameter> const &params);

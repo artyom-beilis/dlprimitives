@@ -1,69 +1,7 @@
 #pragma once
-#include <dlprim/definitions.hpp>
-#include <dlprim/tensor.hpp>
+#include <dlprim/operator.hpp>
 
-namespace dlprim {
-
-	class Operator {
-	public:
-        Operator(Context const &ctx,CalculationsMode mode = predict) : 
-            ctx_(ctx),
-            mode_(mode)
-        {
-        }
-        Operator(Operator const &) = delete;
-        void operator=(Operator const &) = delete;
-        Operator(Operator &&) = delete;
-        void operator=(Operator &&) = delete;
-
-        virtual ~Operator() {}
-        virtual void mode(CalculationsMode mode)
-        {
-            mode_ = mode;
-        }
-        virtual CalculationsMode mode()
-        {
-            return mode_;
-        }
-
-		virtual void setup(std::vector<TensorSpecs> const &in,
-                           std::vector<TensorSpecs> &out,
-                           std::vector<TensorSpecs> &params,
-                           size_t &workspace) = 0;
-
-        virtual void reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out) = 0;
-
-		virtual void forward(std::vector<Tensor> &input,
-                             std::vector<Tensor> &output,
-                             cl::CommandQueue &q,cl::Event *even = nullptr) = 0;
-
-		virtual void backward(ExecutionContext &ctx,
-                              std::vector<Tensor> &input,
-					          std::vector<Tensor> &output,
-					          std::vector<Tensor> &output_diff,
-					          std::vector<Tensor> &input_diff,
-                              cl::CommandQueue &q,cl::Event *even = nullptr) 
-		{
-			throw dlprim::NotImplemented();
-		}
-
-        std::vector<Tensor> &parameters()
-        {
-            return parameters_;
-        }
-        std::vector<Tensor> &parameters_diff()
-        {
-            return parameters_diff_;
-        }
-
-    protected:
-        Context ctx_;
-        CalculationsMode mode_;
-        std::vector<Tensor> parameters_;
-        std::vector<Tensor> parameters_diff_;
-	};
-	
+namespace dlprim {	
 	struct InnerProductConfig {
         InnerProductConfig(int out,bool b,StandardActivations a=StandardActivations.identity) :
             inputs(-1),

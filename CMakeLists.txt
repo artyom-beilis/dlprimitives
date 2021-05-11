@@ -29,10 +29,14 @@ add_library(dlprim SHARED
         src/context.cpp
         src/tensor.cpp
         src/program_cache.cpp
+        src/functions.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
-target_link_libraries(dlprim ${OCL_LIB}) 
+target_link_libraries(dlprim ${OCL_LIB} openblas) 
 
 add_executable(test_context tests/test_context.cpp)
 target_link_libraries(test_context dlprim)
+
+add_executable(test_functions tests/test_functions.cpp)
+target_link_libraries(test_functions dlprim)

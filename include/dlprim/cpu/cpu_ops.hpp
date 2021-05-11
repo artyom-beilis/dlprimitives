@@ -8,9 +8,9 @@ namespace dlprim {
         inline void apply_activation(T *p,size_t n,StandardActivations a)
         {
             switch(a) {
-                case StandardActivations.identity: 
+                case StandardActivations::identity: 
                     break;
-                case StandardActivations.relu:
+                case StandardActivations::relu:
                     {
                         T zero=T();
                         for(size_t i=0;i<n;i++) {

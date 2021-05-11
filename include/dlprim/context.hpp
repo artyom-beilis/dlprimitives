@@ -56,6 +56,40 @@ namespace dlprim {
         
     };
 
+    class ExecutionContext {
+    public:
+        ExecutionContext() :
+            queue_(nullptr),event_(nullptr), events_(nullptr) {}
+        ExecutionContext(cl::CommandQueue &q) : 
+            queue_(&q),event_(nullptr),events_(nullptr)
+        {
+        }
+        ExecutionContext(cl::CommandQueue &q,cl::Event *event) : 
+            queue_(&q),event_(event),events_(nullptr)
+        {
+        }
+        ExecutionContext(cl::CommandQueue &q,std::vector<cl::Event> *events) : 
+            queue_(&q),event_(nullptr),events_(events)
+        {
+        }
+        ExecutionContext(cl::CommandQueue &q,std::vector<cl::Event> *events,cl::Event *event) : 
+            queue_(&q),event_(event),events_(events)
+        {
+        }
+
+        cl::CommandQueue &queue() const
+        { 
+            DLPRIM_CHECK(queue_ != nullptr);
+            return *queue_; 
+        }
+        cl::Event *event() const { return nullptr; }
+        std::vector<cl::Event> *events() const { return nullptr; }
+    private:
+        cl::CommandQueue *queue_;
+        cl::Event *event_;
+        std::vector<cl::Event> *events_;
+    };
+
 
 } // namespace
 /// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4

@@ -61,8 +61,9 @@ namespace dlprim {
             return static_cast<T*>(host_data());
         }
 
-        void to_device(cl::CommandQueue &q,bool sync=true);
-        void to_host(cl::CommandQueue &q,bool sync=true);
+        
+        void to_device(ExecutionContext const &c,bool sync=true);
+        void to_host(ExecutionContext const &c,bool sync=true);
 
     private:
         std::shared_ptr<void> host_;

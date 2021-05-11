@@ -31,18 +31,18 @@ namespace dlprim {
             host_ = std::shared_ptr<void>(ptr,[](void *) {});
         }
     }
-    void Tensor::to_device(cl::CommandQueue &q,bool sync)
+    void Tensor::to_device(ExecutionContext const &c,bool sync)
     {
-        q.enqueueWriteBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get());
+        c.queue().enqueueWriteBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event());
     }
-    void Tensor::to_host(cl::CommandQueue &q,bool sync)
+    void Tensor::to_host(ExecutionContext const &c,bool sync)
     {
-        q.enqueueReadBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get());
+        c.queue().enqueueReadBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event());
     }
 
     void *Tensor::host_data()
     {
-        DLPRIM_CHECK(!cpu_tensor_);
+        DLPRIM_CHECK(host_.get());
         return host_.get();
     }
 };

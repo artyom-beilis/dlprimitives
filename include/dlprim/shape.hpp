@@ -11,6 +11,15 @@ namespace dlprim {
         Shape(int b,int c): shape_({b,c}),size_(2) {}
         Shape(int b,int c,int h): shape_({b,c,h}),size_(3) {}
         Shape(int b,int c,int h,int w): shape_({b,c,h,w}),size_(4) {}
+        
+        bool operator==(Shape const &other) const
+        {
+            return shape_ == other.shape_ && size_ == other.size_;
+        }
+        bool operator!=(Shape const &other) const
+        {
+            return !(*this == other);
+        }
 
         size_t size_no_batch() const
         {
