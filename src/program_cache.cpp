@@ -31,6 +31,9 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
         throw ValidatioError("Unknow program source " + source);
     cl::Program prg(ctx.context(),ks->second);
     std::ostringstream ss;
+    std::string ocl_version = ctx.platform().getInfo<CL_PLATFORM_VERSION>();
+    if(ocl_version.substr(7,1) >= "2") 
+	    ss << "-cl-std=CL2.0 ";
     for(size_t i=0;i<params.size();i++) {
         if(i > 0)
             ss<<" ";
