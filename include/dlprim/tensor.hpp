@@ -11,6 +11,16 @@ namespace dlprim {
             dtype_(d)
         {
         }
+        
+        bool operator==(TensorSpecs const &other) const
+        {
+            return shape_ == other.shape_ && dtype_ == other.dtype_;
+        }
+        
+        bool operator!=(TensorSpecs const &other) const
+        {
+            return !(*this == other);
+        }
 
         Shape const &shape() const
         {

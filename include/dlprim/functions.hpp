@@ -2,9 +2,14 @@
 #include <dlprim/operator.hpp>
 
 namespace dlprim {	
+    namespace json { class value; }
+    struct SoftMaxConfig {
+        static SoftMaxConfig from_json(json::value const &) { return SoftMaxConfig(); }
+    };
+    
     class SoftMax : public Operator {
     public:
-        SoftMax(Context &ctx,DataType dtype=float_data);
+        SoftMax(Context &ctx,SoftMaxConfig const &cfg=SoftMaxConfig(),DataType dtype=float_data);
         virtual ~SoftMax();
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
@@ -36,6 +41,7 @@ namespace dlprim {
         int nd_range_;
     };
 
+    StandardActivations activation_from_json(json::value const &v);
 
     struct ElementwiseConfig {
         enum Operation {
@@ -47,6 +53,8 @@ namespace dlprim {
         Operation op = elementwise_sum;
         float coeff[2] = {1.0f,1.0f};
         StandardActivations activation = StandardActivations::identity;
+
+        static ElementwiseConfig from_json(json::value const &v);
     };
     
     class Elementwise : public Operator {
@@ -79,6 +87,72 @@ namespace dlprim {
         ElementwiseConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;
+    };
+
+    struct Pooling2DConfig {
+        enum Mode {
+            max = 0,
+            avg = 1
+        };
+
+        Mode mode = max;
+        int kernel[2] = {1,1};
+        int pad[2] = {0,0};
+        int stride[2]={1,1};
+        bool count_include_pad = false;
+        StandardActivations activation;
+        static Pooling2DConfig from_json(json::value const &v);
+    };
+
+    class Pooling2D : public Operator {
+    public:
+        Pooling2D(Context &ctx,Pooling2DConfig config = Pooling2DConfig(),
+                                 DataType dtype=float_data);
+        virtual ~Pooling2D();
+
+		virtual void setup(std::vector<TensorSpecs> const &in,
+                           std::vector<TensorSpecs> &out,
+                           size_t &workspace);
+
+        virtual void reshape(std::vector<Shape> const &in,
+                             std::vector<Shape> &out);
+
+		virtual void forward(std::vector<Tensor> &input,
+                             std::vector<Tensor> &output,
+                             ExecutionContext const &ctx);
+
+        virtual void backward_data(std::vector<Tensor> &output,
+                                   std::vector<Tensor> &input,
+                                   std::vector<Tensor> &output_diff,
+                                   std::vector<Tensor> &intput_diff,
+                                   ExecutionContext const &ctx);
+    private:
+        Shape calc_shape(Shape ins);
+        int calc_output_size(int in_size,int dim);
+   		void forward_gpu(Tensor &in,Tensor &output,ExecutionContext const &ctx);
+        
+        template<typename Dtype,typename ReduceOpts>
+        void forward_cpu(Tensor &in,Tensor &output,ReduceOpts rop);
+        
+        template<typename T>
+        struct MaxRedcue;
+        template<typename T>
+        struct AveReduceFull;
+        template<typename T>
+        struct AveReduceValid;
+        
+        
+        struct ReduceMax;
+        struct ReduceAve;
+        struct NormIdent;
+        struct NormPartIdent;
+        struct NormAve;
+        struct NormPartAve;
+        
+        Pooling2DConfig config_;
+        DataType dtype_;
+        cl::Kernel kernel_;
+        int wg_size_;
     };
     
     

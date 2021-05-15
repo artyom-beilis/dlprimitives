@@ -11,6 +11,15 @@ namespace dlprim {
         Shape(int b,int c): shape_({b,c}),size_(2) {}
         Shape(int b,int c,int h): shape_({b,c,h}),size_(3) {}
         Shape(int b,int c,int h,int w): shape_({b,c,h,w}),size_(4) {}
+        template<typename It>
+        Shape(It begin, It end) : size_(0)
+        {
+            while(begin!=end) {
+                if(size_ >= max_tensor_dim)
+                    throw ValidatioError("Unsupported tensor size");
+                shape_[size_++] = *begin++;
+            }
+        }
         
         bool operator==(Shape const &other) const
         {

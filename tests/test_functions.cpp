@@ -58,7 +58,7 @@ void test_softmax(dp::Context &ctx)
                 for(int j=0;j<features;j++){
                     s+=res[i*features + j];
                 }
-                TEST(fabs(s - 1.0f) < 0.05f);
+                TESTEQF(s,1.0f,0.05f);
                 int max_a_index = 0;
                 int max_b_index = 0;
                 for(int j=1;j<features;j++) {
@@ -219,6 +219,7 @@ void test_eltwise(dp::Context &ctx)
         }
     }
 }
+
 
 
 int main(int argc,char **argv)

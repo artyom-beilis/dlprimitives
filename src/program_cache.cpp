@@ -48,7 +48,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
             log += "\n";
             log += cl_log[i].second;
         }
-        throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + log.substr(0,256),log);
+        throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + log.substr(0,1024),log);
     }
     return prg;
 }

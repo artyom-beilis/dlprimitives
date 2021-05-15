@@ -30,6 +30,8 @@ add_library(dlprim SHARED
         src/tensor.cpp
         src/program_cache.cpp
         src/functions.cpp
+        src/operators_factory.cpp
+        src/json.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
@@ -39,4 +41,8 @@ add_executable(test_context tests/test_context.cpp)
 target_link_libraries(test_context dlprim)
 
 add_executable(test_functions tests/test_functions.cpp)
+add_executable(test_from_template tests/test_from_template.cpp)
+add_executable(test_json tests/json_test.cpp)
 target_link_libraries(test_functions dlprim)
+target_link_libraries(test_from_template dlprim)
+target_link_libraries(test_json dlprim)
