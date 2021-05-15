@@ -53,6 +53,17 @@ namespace dlprim {
 
     template<>
     struct TypeTraits<float> { static constexpr DataType data_type = float_data; };
+    
+    inline DataType string_to_data_type(std::string const &s)
+    {
+        if(s == "float" || s=="float32")
+            return float_data;
+        else if(s == "float16" || s=="half")
+            return half_data;
+        else if(s == "bfloat16")
+            return bfloat16_data;
+        throw ValidatioError("Unknown data type " + s);
+    }
 
     constexpr int size_of_data_type(DataType d)
     {
@@ -68,6 +79,9 @@ namespace dlprim {
 		identity = 0,
 		relu = 1,
 	};
+    
+    StandardActivations activation_from_name(std::string const &name);
+    char const *activation_to_name(StandardActivations act);
 
     enum class CalculationsMode {
         train,

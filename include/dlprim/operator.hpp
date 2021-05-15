@@ -4,6 +4,7 @@
 #include <dlprim/context.hpp>
 
 namespace dlprim {
+    namespace json { class value; }
 
     class Operator {
     public:
@@ -39,6 +40,10 @@ namespace dlprim {
     protected:
         Context ctx_;
     };
+    
+    std::unique_ptr<Operator> create_by_name(Context &ctx,
+                                             std::string const &name,
+                                             json::value const &parameters,DataType dtype=float_data);
 
 
 	class OperatorWithParameters : public Operator {

@@ -3,6 +3,8 @@
 
 #ifndef dtype
 #define dtype float
+#define DTYPE_MAX FLT_MAX
+#define DTYPE_MIN FLT_MIN
 #endif
 
 
