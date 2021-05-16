@@ -32,19 +32,21 @@
 #endif
 
 #if POOL_MODE == 0
-#define START_VAL -DTYPE_MAX
-#define REDUCE(a,b) max((a),(b))
-#define NORMALIZE_FULL(x) (x)
-#define NORMALIZE_PARTIAL(x,dr,dc) (x)
-#define 
+# define START_VAL -DTYPE_MAX
+# define REDUCE(a,b) max((a),(b))
+# define NORMALIZE_FULL(x) (x)
+# define NORMALIZE_PARTIAL(x,dr,dc) (x)
 #elif POOL_MODE == 1
-#define START_VAL 0.0f
-#define REDUCE(a,b) ((a) + (b))
-#define NORMALIZE_FULL(x) ((x) * (1.0f / (POOL_H * POOL_W)))
-#if COUNT_INCLUDE_PAD == 0
-#define NORMALIZE_PARTIAL(x,dr,dc) ((x) * (1.0f /((dr)*(dc))))
+# define START_VAL 0.0f
+# define REDUCE(a,b) ((a) + (b))
+# define NORMALIZE_FULL(x) ((x) * (1.0f / (POOL_H * POOL_W)))
+# if COUNT_INCLUDE_PAD == 0
+#  define NORMALIZE_PARTIAL(x,dr,dc) ((x) * (1.0f /((dr)*(dc))))
+# else
+#  define NORMALIZE_PARTIAL(x,dr,dc) NORMALIZE_FULL(x)
+# endif
 #else
-#define NORMALIZE_PARTIAL(x,dr,dc) NORMALIZE_FULL(x)
+#error "Invalid mode"
 #endif
 
 #ifndef WG_SIZE
@@ -60,10 +62,10 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
     int bc = get_global_id(0);
     int or = get_global_id(1);
     int oc = get_global_id(2);
-    if(bc >= BC || or >= out_H || oc >= O_w)
+    if(bc >= BC || or >= out_H || oc >= out_W)
         return;
 
-    int row0 = or * STEIDE_H - PAD_H;
+    int row0 = or * STRIDE_H - PAD_H;
     int col0 = oc * STRIDE_W - PAD_W;
     int row1 = row0 + POOL_H;
     int col1 = col0 + POOL_W;
@@ -76,10 +78,10 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
     if(row0 >= 0 && col0 >= 0 && row1 <= inp_H && col1 <= inp_W) {
         src += row0 * inp_W + col0;
         #pragma unroll  
-        for(dr=0;dr<POOL_H;dr++) {
+        for(int dr=0;dr<POOL_H;dr++) {
             #pragma unroll
-            for(dc = 0;dc < POOL_W; dc++) {
-                val = REDUCE(val,src[dr * inp_W + dc])
+            for(int dc = 0;dc < POOL_W; dc++) {
+                val = REDUCE(val,src[dr * inp_W + dc]);
             }
         }
         val = NORMALIZE_FULL(val); 

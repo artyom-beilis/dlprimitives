@@ -1,5 +1,5 @@
 #if __OPENCL_VERSION__ >= 200
-#define REDUCE_PREPARE(WG_SIZE,dtype) do {} while()
+#define REDUCE_PREPARE(WG_SIZE,dtype) do {} while(0)
 #define my_work_group_reduce_add(val) do { val = work_group_reduce_add(val); } while(0)
 #define my_work_group_reduce_max(val) do { val = work_group_reduce_max(val); } while(0)
 #else

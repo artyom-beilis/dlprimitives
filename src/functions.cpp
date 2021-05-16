@@ -260,11 +260,11 @@ Pooling2DConfig Pooling2DConfig::from_json(json::value const &v)
 {
     Pooling2DConfig cfg;
     cfg.activation = activation_from_json(v);
-    utils::get_1dNd_from_json(v,"kenrel",cfg.kernel,true);
+    utils::get_1dNd_from_json(v,"kernel",cfg.kernel,true);
     utils::get_1dNd_from_json(v,"stride",cfg.stride);
     utils::get_1dNd_from_json(v,"pad",cfg.pad);
     cfg.count_include_pad = v.get("count_include_pad",cfg.count_include_pad);
-    char const *names[] = { "max", "ave" };
+    char const *names[] = { "max", "avg" };
     cfg.mode = utils::parse_enum(v,"mode",names,cfg.mode);
     return cfg;
 }
@@ -433,6 +433,7 @@ void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
                     val = rop.norm_full(val);
                 else
                     val = rop.norm_valid(val,dr,dc);
+		tgt[out_r*out_w + out_c] = val;
             }
         }
     }

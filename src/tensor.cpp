@@ -13,7 +13,7 @@ namespace dlprim {
     {
         size_t size = memory_size();
         DLPRIM_CHECK(size > 0);
-        if(cpu_tensor_) {
+        //if(cpu_tensor_) {
             void *ptr = 
             #ifndef DLPRIM_WINDOWS
               aligned_alloc(128,size);
@@ -23,12 +23,9 @@ namespace dlprim {
             if(!ptr)
                 throw std::bad_alloc();
             host_ = std::shared_ptr<void>(ptr,[](void *p) { free(p); });
-        }
-        else {
-            buffer_ = cl::Buffer(ctx.context(),CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR,size);
-            cl::CommandQueue q(ctx.context());
-            void *ptr = q.enqueueMapBuffer(buffer_,CL_TRUE,0,0,size);
-            host_ = std::shared_ptr<void>(ptr,[](void *) {});
+        //}
+        if(!cpu_tensor_) {
+            buffer_ = cl::Buffer(ctx.context(),CL_MEM_READ_WRITE,size);
         }
     }
     void Tensor::to_device(ExecutionContext const &c,bool sync)
@@ -46,3 +43,4 @@ namespace dlprim {
         return host_.get();
     }
 };
+/// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4

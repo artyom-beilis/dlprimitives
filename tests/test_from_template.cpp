@@ -117,12 +117,13 @@ int main(int argc,char **argv)
         }
         dp::json::value config;
         int line = -1;
-        if(config.load(f,true,&line)) {
+        if(!config.load(f,true,&line)) {
             std::cerr << "Failed to load json template " << argv[2] << " syntax error at " << line << std::endl;
+	    return 1;
         }
         
         std::string op_name = config.get<std::string>("operator");
-        std::cout << "Running tests for operator " << op_name << std::endl;
+        std::cout << "Running tests for operator " << op_name << " on " << ctx.name() << std::endl;
         dp::json::array &tests = config["tests"].array();
         for(size_t i=0;i<tests.size();i++) {
             std::cout << "- Running test case " << i << " for options " << tests[i]["options"] << std::endl;

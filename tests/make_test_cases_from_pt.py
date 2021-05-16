@@ -51,8 +51,8 @@ def make_eltwise():
     for op,mop in [ ("sum", lambda x,y:x+y),
                     ("prod",lambda x,y:x*y),
                     ("max" ,lambda x,y:torch.maximum(x,y)) ]:
-        for c1 in [ -1.5, 1.0, 2.0 ]:
-            for c2 in [ -3, 1, 5 ]:
+        for c1 in [ -1.5, 2.0 ]:
+            for c2 in [ 1.2 ]:
                 for act,mact in [ ("identity",lambda x:x),
                              ("relu",torch.nn.ReLU()) ]:
                     cases=[]
@@ -84,6 +84,61 @@ def make_eltwise():
     return 'elementwise',report
 
 
+def make_pooling2d():
+    report = {
+        "operator" : "Pooling2D",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for krn,pad,stride in \
+        [ (2,0,2),
+          (3,1,1),
+          ([2,4],[1,0],[1,2]),
+          ([3,5],[1,2],[3,4]) ]:
+          for tp,inc_pad,op in [ 
+                ("max",False,torch.nn.MaxPool2d(krn,stride=stride,padding=pad)),
+                ("avg",False,torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=False)),
+                ("avg",True, torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=True)) 
+            ]:
+            for act,mact in [ ("identity",lambda x:x), ("relu",torch.nn.ReLU()) ]:
+                cases=[]
+                tin = torch.randn(4,16,32,32)
+                tout = op(tin)
+                test = {
+                    "options" : {
+                        "mode": tp,
+                        "activation": act,
+                        "kernel":krn,
+                        "pad" : pad,
+                        "stride" : stride,
+                        "count_include_pad": inc_pad
+                    },
+                    "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+                    "output_tensors": [ { "shape" : list(tout.shape) } ],
+                    "workspce": 0,
+                    "cases": cases
+                }
+                print(test["options"])
+                tests.append(test)
+                final_op = lambda x: mact(op(x))
+                for s in [[2,3,5,5],[1,1,6,6],[1,1,7,7],[1,1,8,8],
+                          [8,32,64,65],[8,256,247,247]]:
+                    print("- ",s)
+                    tin = torch.randn(s)
+                    tout = final_op(tin)
+                    case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
+                    if np.prod(s) < 200:
+                        case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                        case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                    else:
+                        case["use_cpu_reference"]=True
+                    cases.append(case)
+    return "pooling2d",report
+    
+
+
+
+
 def gen(func): 
     torch.random.manual_seed(123)
     save_report(func())
@@ -91,4 +146,5 @@ def gen(func):
 if __name__ == "__main__":
     gen(make_softmax)
     gen(make_eltwise)
+    gen(make_pooling2d)
             
