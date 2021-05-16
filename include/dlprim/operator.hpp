@@ -43,7 +43,7 @@ namespace dlprim {
     
     std::unique_ptr<Operator> create_by_name(Context &ctx,
                                              std::string const &name,
-                                             json::value const &parameters,DataType dtype=float_data);
+                                             json::value const &parameters);
 
 
 	class OperatorWithParameters : public Operator {

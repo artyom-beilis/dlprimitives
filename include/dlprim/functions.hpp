@@ -9,7 +9,7 @@ namespace dlprim {
     
     class SoftMax : public Operator {
     public:
-        SoftMax(Context &ctx,SoftMaxConfig const &cfg=SoftMaxConfig(),DataType dtype=float_data);
+        SoftMax(Context &ctx,SoftMaxConfig const &cfg=SoftMaxConfig());
         virtual ~SoftMax();
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
@@ -60,8 +60,7 @@ namespace dlprim {
     class Elementwise : public Operator {
     public:
         
-        Elementwise(Context &ctx,ElementwiseConfig config = ElementwiseConfig(),
-                                 DataType dtype=float_data);
+        Elementwise(Context &ctx,ElementwiseConfig config = ElementwiseConfig());
         virtual ~Elementwise();
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
@@ -106,8 +105,7 @@ namespace dlprim {
 
     class Pooling2D : public Operator {
     public:
-        Pooling2D(Context &ctx,Pooling2DConfig config = Pooling2DConfig(),
-                                 DataType dtype=float_data);
+        Pooling2D(Context &ctx,Pooling2DConfig config = Pooling2DConfig());
         virtual ~Pooling2D();
 
 		virtual void setup(std::vector<TensorSpecs> const &in,

@@ -9,9 +9,9 @@
 namespace dlprim {
 SoftMax::~SoftMax() {}
 
-SoftMax::SoftMax(Context &ctx,SoftMaxConfig const &,DataType d) : 
+SoftMax::SoftMax(Context &ctx,SoftMaxConfig const &) : 
     Operator(ctx),
-    dtype_(d),wg_size_(0),items_per_wi_(0),sm_range_(-1)
+    dtype_(float_data),wg_size_(0),items_per_wi_(0),sm_range_(-1)
 {
 }
 
@@ -142,10 +142,10 @@ ElementwiseConfig ElementwiseConfig::from_json(json::value const &v)
     return cfg;
 }
 
-Elementwise::Elementwise(Context &ctx,ElementwiseConfig config,DataType dtype) :
+Elementwise::Elementwise(Context &ctx,ElementwiseConfig config) :
     Operator(ctx),
     config_(config),
-    dtype_(dtype)
+    dtype_(float_data)
 {
     DLPRIM_CHECK(dtype_ == float_data);
 }
@@ -270,10 +270,10 @@ Pooling2DConfig Pooling2DConfig::from_json(json::value const &v)
 }
 
 
-Pooling2D::Pooling2D(Context &ctx,Pooling2DConfig config,DataType dtype) :
+Pooling2D::Pooling2D(Context &ctx,Pooling2DConfig config) :
     Operator(ctx),
     config_(config),
-    dtype_(dtype)
+    dtype_(float_data)
 {
     DLPRIM_CHECK(dtype_ == float_data);
     DLPRIM_CHECK(config_.kernel[0] > 0 && config_.kernel[1] > 0);
