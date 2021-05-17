@@ -81,6 +81,7 @@ namespace dlprim {
 	};
     
     StandardActivations activation_from_name(std::string const &name);
+
     char const *activation_to_name(StandardActivations act);
 
     enum class CalculationsMode {

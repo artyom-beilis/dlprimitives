@@ -3,76 +3,51 @@
 
 namespace dlprim {	
 	struct InnerProductConfig {
-        InnerProductConfig(int out,bool b,StandardActivations a=StandardActivations.identity) :
-            inputs(-1),
-            outputs(out),
-            bias(b),
-            activation(a)
-        {
-        }
-        InnerProductConfig(int in,int out,bool b,StandardActivations a=StandardActivations.identity) :
-            inputs(in),
-            outputs(out),
-            bias(b),
-            activation(a)
-        {
-        }
-        int inputs;
-		int outputs;
-		bool bias;
-		StandardActivations activation;
+        int inputs = -1;
+		int outputs = -1;
+		bool bias = true;
+		StandardActivations activation = StandardActivations::identity;
+        static InnerProductConfig from_json(json::value const &v);
 	};
 
 
-    class SoftMax {
-    public:
-        SoftMax(Context &ctx,DataType dtype=float_data);
-   		virtual void reshape(std::vector<Shape> const &in,std::vector<Shape> &out,std::vector<Shape> &param_shapes,size_t &workspace)
-		{
-			DLPRIM_CHECK(in.size() == 1);
-            out.assign({in[0]})
-            param_shapes.clear();
-			workspace = 0;
-		}
-        virtual void forward(std::vector<Tensor> &input,
-                     std::vector<Tensor> &output,
-                     cl::CommandQueue &q,cl::Event *even = nullptr);
-    private:
-        class SoftMaxImpl;
-        std::unque_ptr<SoftMaxImpl> pimpl_;
-    };
-
-	class InnerProduct : public Operator {
+	class InnerProduct : public OperatorWithParameters {
 	public:
 
-        InnerProduct(Context &ctx,InnerProductConfig const &cfg,DataType dtype=float_data);
-        virtual ~InnerProduct() {}
+        InnerProduct(Context &ctx,InnerProductConfig const &cfg,CalculationsMode mode = CalculationsMode::predict);
+        virtual ~InnerProduct(){}
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
-                           std::vector<TensorSpecs> &params,
-                           size_t &workspace) = 0;
+                           size_t &workspace) ;
 
         virtual void reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out) = 0;
+                             std::vector<Shape> &out);
 
-        virtual void forward(std::vector<Tensor> &input,
-                     std::vector<Tensor> &output,
-                     cl::CommandQueue &q,cl::Event *even = nullptr);
+		virtual void forward(std::vector<Tensor> &input,
+                             std::vector<Tensor> &output,
+                             ExecutionContext const &ctx);
 
-        InnerProductConfig &config()
-        {
-            return config_;
-        }
-        Context &context()
-        {
-            return ctx_;
-        }
+        virtual void backward_data(std::vector<Tensor> &output,
+                                   std::vector<Tensor> &input,
+                                   std::vector<Tensor> &output_diff,
+                                   std::vector<Tensor> &intput_diff,
+                                   ExecutionContext const &ctx);
+        
+        virtual void backward_param(std::vector<Tensor> &output,
+                                std::vector<Tensor> &input,
+                                std::vector<Tensor> &output_diff,
+                                std::vector<Tensor> &intput_diff,
+                                ExecutionContext const &ctx);
+
+
 	protected:
-        class InnerProductImpl;
+        void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
+        void forward_cpu(Tensor &in,Tensor &out);
         Context ctx_;
 		InnerProductConfig config_;
-        std::unique_ptr<InnerProductImpl> impl_;
+        DataType dtype_;
+        cl::Kernel kernel_;
 	};
 	
 	struct Convolition2DConfig {

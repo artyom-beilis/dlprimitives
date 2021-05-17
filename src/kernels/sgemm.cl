@@ -10,7 +10,7 @@
 #define BLOCK_SIZE_N 8
 #endif
 #ifndef BLOCK_SIZE_M
-#define BLOCK_SIZE_M 9
+#define BLOCK_SIZE_M 8
 #endif
 
 #ifndef TILE_SIZE_K
@@ -18,7 +18,7 @@
 #endif 
 
 #ifndef TILE_OFFSET
-#define TILE_OFFSET 0
+#define TILE_OFFSET 1
 #endif
 
 

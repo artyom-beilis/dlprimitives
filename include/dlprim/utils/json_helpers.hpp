@@ -41,6 +41,10 @@ namespace utils {
             throw ValidatioError("Invalid filed value for " + name);
         }
     }
+    inline StandardActivations activation_from_json(json::value const &v)
+    {
+        return activation_from_name(v.get("activation","identity"));
+    }
 
 } // util
 } // json

@@ -32,6 +32,7 @@ add_library(dlprim SHARED
         src/functions.cpp
         src/operators_factory.cpp
         src/json.cpp
+        src/inner_product.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 

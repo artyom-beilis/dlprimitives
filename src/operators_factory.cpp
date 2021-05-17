@@ -1,5 +1,6 @@
 #include <dlprim/operator.hpp>
 #include <dlprim/functions.hpp>
+#include <dlprim/operators.hpp>
 #include <dlprim/json.hpp>
 #include <functional>
 
@@ -22,6 +23,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         "Pooling2D", 
         [](Context &ctx,json::value const &p) {
             return new Pooling2D(ctx,Pooling2DConfig::from_json(p));
+        }
+    },
+    {
+        "InnerProduct", 
+        [](Context &ctx,json::value const &p) {
+            return new InnerProduct(ctx,InnerProductConfig::from_json(p));
         }
     }
 };

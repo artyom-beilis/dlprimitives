@@ -119,10 +119,6 @@ void SoftMax::backward_data(std::vector<Tensor> &,
     throw NotImplementedError("softmax::backward_data not implemented");
 }
 
-StandardActivations activation_from_json(json::value const &v)
-{
-    return activation_from_name(v.get("activation","identity"));
-}
 
 ElementwiseConfig ElementwiseConfig::from_json(json::value const &v)
 {
@@ -138,7 +134,7 @@ ElementwiseConfig ElementwiseConfig::from_json(json::value const &v)
         throw ValidatioError("Unsupported Elementwise operation " + op);
     cfg.coeff[0] = v.get("coef1",1.0f);
     cfg.coeff[1] = v.get("coef2",1.0f);
-    cfg.activation = activation_from_json(v);
+    cfg.activation = utils::activation_from_json(v);
     return cfg;
 }
 
@@ -259,7 +255,7 @@ void Elementwise::backward_data(std::vector<Tensor> &,
 Pooling2DConfig Pooling2DConfig::from_json(json::value const &v)
 {
     Pooling2DConfig cfg;
-    cfg.activation = activation_from_json(v);
+    cfg.activation = utils::activation_from_json(v);
     utils::get_1dNd_from_json(v,"kernel",cfg.kernel,true);
     utils::get_1dNd_from_json(v,"stride",cfg.stride);
     utils::get_1dNd_from_json(v,"pad",cfg.pad);
@@ -433,7 +429,7 @@ void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
                     val = rop.norm_full(val);
                 else
                     val = rop.norm_valid(val,dr,dc);
-		tgt[out_r*out_w + out_c] = val;
+                tgt[out_r*out_w + out_c] = val;
             }
         }
     }
