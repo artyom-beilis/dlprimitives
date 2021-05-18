@@ -10,7 +10,6 @@
 #endif
 
 #define LOCAL_ITEMS_LIMIT 32
-
 __kernel 
 __attribute__((reqd_work_group_size(1,WG_SIZE,1)))
 void softmax(int batch,int channels,__global dtype *in,int data_offset,__global dtype *out,int out_offset)

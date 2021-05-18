@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <dlprim/definitions.hpp>
+#include <ostream>
 
 namespace dlprim {
 
@@ -23,7 +24,12 @@ namespace dlprim {
         
         bool operator==(Shape const &other) const
         {
-            return shape_ == other.shape_ && size_ == other.size_;
+            if(size_ != other.size_)
+                return false;
+            for(int i=0;i<size_;i++)
+                if(shape_[i] != other.shape_[i])
+                    return false;
+            return true;
         }
         bool operator!=(Shape const &other) const
         {
@@ -62,5 +68,17 @@ namespace dlprim {
         std::array<int,max_tensor_dim> shape_;
         int size_;
     };
+
+    inline std::ostream &operator<<(std::ostream &o,Shape const &s)
+    {
+        o << '(';
+        for(int i=0;i<s.size();i++) {
+            if(i > 0)
+                o<<',';
+            o << s[i];
+        }
+        o << ')';
+        return o;
+    }
 };
 /// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4

@@ -75,6 +75,10 @@ void    sgemm(    int M,int N,int K,
 #endif
         )
 {
+    A += offset_A;
+    B += offset_B;
+    C += offset_C;
+
     ALIGN_FLOAT4 __local float a_tile[TILE_SIZE_K][BLOCKS_IN_TILE_M][BLOCK_SIZE_M+TILE_OFFSET];
     ALIGN_FLOAT4 __local float b_tile[TILE_SIZE_K][BLOCKS_IN_TILE_N][BLOCK_SIZE_N+TILE_OFFSET];
 
@@ -245,14 +249,14 @@ void    sgemm(    int M,int N,int K,
     }
 #endif    
 
-    
     {
         #pragma unroll
         for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
             #pragma unroll
             for(int dc=0;dc<BLOCK_SIZE_N;dc++) {
-                if(row + dr < M && col+dc < N)
+                if(row + dr < M && col+dc < N) {
                     C[(row+dr)*ldc+col+dc] = ACTIVATION_F(c[dr][dc]);
+                }
             }
         }
     }

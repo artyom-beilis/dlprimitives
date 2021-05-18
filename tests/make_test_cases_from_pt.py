@@ -1,6 +1,7 @@
 import torch
 import json
 import numpy as np
+import argparse
 
 def save_report(r):
     name,js = r
@@ -40,7 +41,7 @@ def make_softmax():
             elif f > 100:
                 case['eps'] = 1e-3
             cases.append(case)
-    return 'softmax',report
+    return report
 
 def make_eltwise():
     report = {
@@ -81,7 +82,7 @@ def make_eltwise():
                         else:
                             case["use_cpu_reference"]=True
                         cases.append(case)
-    return 'elementwise',report
+    return report
 
 
 def make_pooling2d():
@@ -133,18 +134,80 @@ def make_pooling2d():
                     else:
                         case["use_cpu_reference"]=True
                     cases.append(case)
-    return "pooling2d",report
+    return report
     
+def make_inner_product():
+    report = {
+        "operator" : "InnerProduct",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for inp,out in \
+        [ (5,11),
+          (1024,1024),
+          (500,1000) ]:
+          for bias in [True,False]:
+            op = torch.nn.Linear(inp,out,bias=bias) 
+            for act,mact in [ ("identity",lambda x:x), ("relu",torch.nn.ReLU()) ]:
+                params = list(op.parameters())
+                cases=[]
+                tin = torch.randn(10,inp)
+                tout = op(tin)
+                test = {
+                    "init" : "small_frac",
+                    "options" : {
+                        "inputs": inp,
+                        "outputs" : out,
+                        "activation": act,
+                        "bias" : bias
+                    },
+                    "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+                    "output_tensors": [ { "shape" : list(tout.shape) } ],
+                    "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
+                    "workspce": 0,
+                    "cases": cases
+                }
+                if inp * out < 100:
+                    test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
+                else:
+                    test['random_params'] = True
+
+                print(test["options"])
+                tests.append(test)
+                final_op = lambda x: mact(op(x))
+                for s in [[2,inp],[8,inp],[127,inp],[128,inp]]:
+                    print("- ",s)
+                    tin = torch.randn(s)
+                    tout = final_op(tin)
+                    case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
+                    if np.prod(s) < 50:
+                        case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                        case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                    else:
+                        case["use_cpu_reference"]=True
+                    cases.append(case)
+    return report
 
 
 
 
-def gen(func): 
+def gen(name,func): 
     torch.random.manual_seed(123)
-    save_report(func())
+    save_report((name,func()))
 
 if __name__ == "__main__":
-    gen(make_softmax)
-    gen(make_eltwise)
-    gen(make_pooling2d)
-            
+    cases  = { 
+        "softmax" : make_softmax,
+        "elementwise"  : make_eltwise,
+        "pooling2d" : make_pooling2d,
+        "inner_product" : make_inner_product
+    }
+    parse = argparse.ArgumentParser()
+    parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))
+    args = parse.parse_args()
+    if args.case  == 'all':
+        for case in cases:
+            print("Generating ",case)
+            gen(case,cases[case])
+    else:
+        gen(args.case,cases[args.case])

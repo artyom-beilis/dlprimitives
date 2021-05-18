@@ -40,6 +40,12 @@ namespace dlprim {
         DataType dtype_;
     };
 
+    inline std::ostream &operator<<(std::ostream &out,TensorSpecs const &ts)
+    {
+        out << '[' << ts.shape() << ",dtype=" << data_type_to_string(ts.dtype()) << ']';
+        return out;
+    }
+
     class Tensor : public TensorSpecs {
     public:
         

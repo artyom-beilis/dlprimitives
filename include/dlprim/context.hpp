@@ -47,6 +47,13 @@ namespace dlprim {
         {
             return context_;
         }
+        cl::CommandQueue make_queue()
+        {
+            cl::CommandQueue q;
+            if(!is_cpu_context())
+                q=std::move(cl::CommandQueue(context_,device_));
+            return q;
+        }
     private:
         void select_opencl_device(int p,int d);
         cl::Platform platform_;

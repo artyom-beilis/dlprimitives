@@ -6,6 +6,7 @@
 
 namespace dp = dlprim;
 
+
 std::vector<dp::TensorSpecs> tensor_specs_from_json(dp::json::value const &v)
 {
     std::vector<dp::TensorSpecs> r;
@@ -32,6 +33,17 @@ std::vector<dp::Shape> tensor_shapes_from_json(dp::json::value const &v)
 }
 
 std::vector<dp::Tensor> make_tensors(dp::Context &ctx,
+                                     std::vector<dp::TensorSpecs> const &specs)
+{
+    std::vector<dp::Tensor> r;
+    for(size_t i=0;i<specs.size();i++) {
+        r.push_back(dp::Tensor(ctx,specs[i].shape(),specs[i].dtype()));
+    }
+    return r;
+}
+
+
+std::vector<dp::Tensor> make_tensors(dp::Context &ctx,
                                      std::vector<dp::Shape> const &shapes,
                                      std::vector<dp::TensorSpecs> const &specs)
 {
@@ -56,6 +68,21 @@ void copy_tensors(std::vector<dp::Tensor> &tensors,dp::json::value const &v)
         }
     }
 }
+
+void copy_tensors(std::vector<dp::Tensor> &out,std::vector<dp::Tensor> &inp,dp::Context &ctx)
+{
+    TESTEQ(out.size(),inp.size());
+    cl::CommandQueue q = ctx.make_queue();
+        
+    for(size_t i=0;i<out.size();i++) {
+        TESTEQ(out[i].shape(),inp[i].shape());
+        TESTEQ(out[i].dtype(),inp[i].dtype());
+        size_t len = dp::size_of_data_type(out[i].dtype()) * out[i].shape().total_size();
+        memcpy(out[i].host_data(),inp[i].host_data(),len);
+        out[i].to_device(q,true);
+    }
+}
+
 
 void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &reference,float eps)
 {
@@ -87,10 +114,29 @@ void fill_random(dp::Tensor &t)
     }
 }
 
-void initialize_tensors(std::vector<dp::Tensor> &tensors)
+void fill_small_int(dp::Tensor &t,int range,float factor = 1.0)
 {
-    for(auto &t:tensors)
-        fill_random(t);
+    TEST(t.dtype() == dp::float_data);
+    float *p = t.data<float>();
+    for(size_t i=0;i<t.shape().total_size();i++) {
+        int v = int(double(random()) / RAND_MAX * range) - range / 2;
+        p[i]= v * factor;
+    }
+}
+
+
+void initialize_tensors(std::vector<dp::Tensor> &tensors,std::string const &op)
+{
+    for(auto &t:tensors) {
+        if(op == "uniform")
+            fill_random(t);
+        else if(op == "small_int")
+            fill_small_int(t,5,1.0f);
+        else if(op == "small_frac")
+            fill_small_int(t,5,0.25f);
+        else
+            throw std::runtime_error("Unknown methods " + op);
+    }
 }
 
 int main(int argc,char **argv)
@@ -102,13 +148,10 @@ int main(int argc,char **argv)
     try {
         dp::Context cpu_ctx;
         dp::ExecutionContext cpu_e;
+
         dp::Context ctx(argv[1]);
-        dp::ExecutionContext e;
-        cl::CommandQueue q;
-        if(ctx.is_gpu_context()) {
-            q=cl::CommandQueue(ctx.context(),ctx.device());
-            e=dp::ExecutionContext(q);
-        }
+        cl::CommandQueue q = ctx.make_queue();
+        dp::ExecutionContext e(q);
         
         std::ifstream f(argv[2]);
         if(!f) {
@@ -119,7 +162,7 @@ int main(int argc,char **argv)
         int line = -1;
         if(!config.load(f,true,&line)) {
             std::cerr << "Failed to load json template " << argv[2] << " syntax error at " << line << std::endl;
-	    return 1;
+            return 1;
         }
         
         std::string op_name = config.get<std::string>("operator");
@@ -127,16 +170,37 @@ int main(int argc,char **argv)
         dp::json::array &tests = config["tests"].array();
         for(size_t i=0;i<tests.size();i++) {
             std::cout << "- Running test case " << i << " for options " << tests[i]["options"] << std::endl;
+            std::string rnd = tests[i].get("init","uniform");
             std::unique_ptr<dp::Operator> op =     dp::create_by_name(ctx,    op_name,tests[i]["options"]);
             std::unique_ptr<dp::Operator> ref_op = dp::create_by_name(cpu_ctx,op_name,tests[i]["options"]);
+            dp::OperatorWithParameters *pop = dynamic_cast<dp::OperatorWithParameters*>(op.get());
+
             std::vector<dp::TensorSpecs> input_specs = tensor_specs_from_json(tests[i]["setup_tensors"]);
             std::vector<dp::TensorSpecs> output_specs = tensor_specs_from_json(tests[i]["output_tensors"]);
             int ws = tests[i].get("workspace",-1);
-            std::vector<dp::TensorSpecs> res_sepcs;
+            std::vector<dp::TensorSpecs> res_specs;
             size_t res_ws;
-            op->setup(input_specs,res_sepcs,res_ws);
-            TEST(res_sepcs == output_specs);
+            op->setup(input_specs,res_specs,res_ws);
+            TEST(res_specs == output_specs);
             TEST(ws == -1 || res_ws == size_t(ws));
+            ref_op->setup(input_specs,res_specs,res_ws);
+            TEST(res_specs == output_specs);
+            if(!tests[i].find("param_specs").is_undefined()) {
+                TEST(pop != nullptr);
+                std::vector<dp::TensorSpecs> param_specs = tensor_specs_from_json(tests[i]["param_specs"]);
+                TEST(pop->parameters_specs() == param_specs);
+                auto &params = pop->parameters();
+                auto &ref_params = dynamic_cast<dp::OperatorWithParameters &>(*ref_op).parameters();
+                params = make_tensors(ctx,param_specs);
+                ref_params = make_tensors(cpu_ctx,param_specs);
+                if(!tests[i].get("random_params",false)) {
+                    copy_tensors(ref_params,tests[i]["param_tensors"]);
+                }
+                else {
+                    initialize_tensors(ref_params,rnd);
+                }
+                copy_tensors(params,ref_params,ctx);
+            }
             dp::json::array const &cases = tests[i]["cases"].array();
             for(size_t i=0;i<cases.size();i++) {
                 std::cout << "-- test for shape " << cases[i]["in_shapes"] << std::endl;
@@ -153,7 +217,7 @@ int main(int argc,char **argv)
                     copy_tensors(ref_tensors,cases[i]["out_tensors"]);
                 }
                 else {
-                    initialize_tensors(in_tensors);
+                    initialize_tensors(in_tensors,rnd);
                     ref_op->forward(in_tensors,ref_tensors,cpu_e);
                 }
                 if(ctx.is_gpu_context()) {

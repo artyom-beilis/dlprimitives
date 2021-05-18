@@ -30,10 +30,14 @@ namespace dlprim {
     }
     void Tensor::to_device(ExecutionContext const &c,bool sync)
     {
+        if(cpu_tensor_)
+            return;
         c.queue().enqueueWriteBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event());
     }
     void Tensor::to_host(ExecutionContext const &c,bool sync)
     {
+        if(cpu_tensor_)
+            return;
         c.queue().enqueueReadBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event());
     }
 

@@ -1,6 +1,7 @@
 #include <dlprim/operators.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
 #include <cblas.h>
 
@@ -12,6 +13,7 @@ namespace dlprim {
         cfg.inputs = v.get("inputs",cfg.inputs);
         cfg.outputs = v.get<int>("outputs");
         cfg.bias = v.get("bias",cfg.bias);
+        cfg.activation = utils::activation_from_json(v); 
         return cfg;
     }
     
@@ -48,7 +50,7 @@ namespace dlprim {
 
         if(ctx_.is_cpu_context())
             return;
-        
+
         cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"sgemm",
                                         "BIAS", (config_.bias ? 2 : 0),
                                         "BTRANS",1,
@@ -76,7 +78,7 @@ namespace dlprim {
         DLPRIM_CHECK(out[0].shape()[1] == config_.outputs);
         DLPRIM_CHECK(out[0].shape().size() == 2);
         DLPRIM_CHECK(parameters().size()==(1u+unsigned(config_.bias)));
-        DLPRIM_CHECK(parameters()[0].shape() == Shape(config_.inputs,config_.outputs));
+        DLPRIM_CHECK(parameters()[0].shape() == Shape(config_.outputs,config_.inputs));
         if(config_.bias)
             DLPRIM_CHECK(parameters()[1].shape() == Shape(config_.outputs)); 
 
@@ -98,22 +100,26 @@ namespace dlprim {
         Tensor &M = parameters()[0];
 
         int ind=0;
-        kernel_.setArg(ind++,config_.inputs);
-        kernel_.setArg(ind++,config_.outputs);
         kernel_.setArg(ind++,batch);
-        kernel_.setArg(ind++,in.device_buffer());
-        kernel_.setArg(ind++,in.device_offset());
-        kernel_.setArg(ind++,config_.inputs);
-        kernel_.setArg(ind++,M.device_buffer());
-        kernel_.setArg(ind++,M.device_offset());
-        kernel_.setArg(ind++,config_.inputs);
-        kernel_.setArg(ind++,out.device_buffer());
-        kernel_.setArg(ind++,out.device_offset());
         kernel_.setArg(ind++,config_.outputs);
+        kernel_.setArg(ind++,config_.inputs);
+
+        kernel_.setArg(ind++,in.device_buffer());
+        kernel_.setArg(ind++,int(in.device_offset()));
+        kernel_.setArg(ind++,config_.inputs);
+
+        kernel_.setArg(ind++,M.device_buffer());
+        kernel_.setArg(ind++,int(M.device_offset()));
+        kernel_.setArg(ind++,config_.inputs);
+
+        kernel_.setArg(ind++,out.device_buffer());
+        kernel_.setArg(ind++,int(out.device_offset()));
+        kernel_.setArg(ind++,config_.outputs);
+
         if(config_.bias) {
             Tensor &bias = parameters()[1];
             kernel_.setArg(ind++,bias.device_buffer());
-            kernel_.setArg(ind++,bias.device_offset());
+            kernel_.setArg(ind++,int(bias.device_offset()));
         }
         cl::NDRange global(gs0,gs1);
         cl::NDRange local(ls,ls);
@@ -127,7 +133,7 @@ namespace dlprim {
         float *b = out.data<float>();
         float *M = parameters()[0].data<float>();
         cblas_sgemm(CblasRowMajor,CblasNoTrans,CblasTrans,
-                    config_.inputs,config_.outputs,batch,
+                    batch,config_.outputs,config_.inputs,
                     1.0f,
                     a,config_.inputs,
                     M,config_.inputs,

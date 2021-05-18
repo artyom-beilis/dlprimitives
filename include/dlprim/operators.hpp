@@ -44,7 +44,6 @@ namespace dlprim {
 	protected:
         void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out);
-        Context ctx_;
 		InnerProductConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;
