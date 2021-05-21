@@ -12,6 +12,11 @@ if(NOT PYTHON)
 	message(FATAL_ERROR "Can't build without Python interpreter")
 endif(NOT PYTHON)
 
+find_package(HDF5)
+include_directories(${HDF5_INCLUDE_DIR})
+
+
+
 file(GLOB CL_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.cl)
 file(GLOB CL_HEADERS  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.h)
 add_custom_command(
@@ -32,11 +37,12 @@ add_library(dlprim SHARED
         src/functions.cpp
         src/operators_factory.cpp
         src/json.cpp
+        src/net.cpp
         src/inner_product.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
-target_link_libraries(dlprim ${OCL_LIB} openblas) 
+target_link_libraries(dlprim ${OCL_LIB} openblas ${HDF5_LIBRARIES} hdf5_cpp) 
 
 add_executable(test_context tests/test_context.cpp)
 target_link_libraries(test_context dlprim)
@@ -44,6 +50,8 @@ target_link_libraries(test_context dlprim)
 add_executable(test_functions tests/test_functions.cpp)
 add_executable(test_from_template tests/test_from_template.cpp)
 add_executable(test_json tests/json_test.cpp)
+add_executable(mnist tests/mnist.cpp)
 target_link_libraries(test_functions dlprim)
 target_link_libraries(test_from_template dlprim)
+target_link_libraries(mnist dlprim)
 target_link_libraries(test_json dlprim)

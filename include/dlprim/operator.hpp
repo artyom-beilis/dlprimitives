@@ -37,8 +37,14 @@ namespace dlprim {
                                    std::vector<Tensor> &output_diff,
                                    std::vector<Tensor> &intput_diff,
                                    ExecutionContext const &ctx) = 0;
+
+        virtual void set_workspace(Tensor const &ts = Tensor()) 
+        {
+            workspace_ = ts;
+        }
     protected:
         Context ctx_;
+        Tensor workspace_;
     };
     
     std::unique_ptr<Operator> create_by_name(Context &ctx,
@@ -72,12 +78,12 @@ namespace dlprim {
         
         void setup_parameters(std::vector<TensorSpecs> &&parameters)
         {
-            parameters_specs_ = std::move(parameters);
+            parameter_specs_ = std::move(parameters);
         }
 
-        std::vector<TensorSpecs> &parameters_specs()
+        std::vector<TensorSpecs> &parameter_specs()
         {
-            return parameters_specs_;
+            return parameter_specs_;
         }
 
         std::vector<Tensor> &parameters()
@@ -91,7 +97,7 @@ namespace dlprim {
 
     protected:
         CalculationsMode mode_;
-        std::vector<TensorSpecs> parameters_specs_;
+        std::vector<TensorSpecs> parameter_specs_;
         std::vector<Tensor> parameters_;
         std::vector<Tensor> parameters_diff_;
 	};

@@ -84,6 +84,38 @@ namespace dlprim {
         {
         }
 
+        ExecutionContext generate_series_context(size_t id,size_t total) const
+        {
+            if(total <= 1)
+                return *this;
+            if(id == 0)
+                return first_context();
+            if(id + 1 >= total)
+                return last_context();
+            return middle_context();
+        }
+
+        ExecutionContext first_context() const
+        {
+            if(queue_ == nullptr)
+                return ExecutionContext();
+            return ExecutionContext(queue(),events_);
+        }
+        
+        ExecutionContext middle_context() const
+        {
+            if(queue_ == nullptr) 
+                return ExecutionContext();
+            return ExecutionContext(queue());
+        }
+         
+        ExecutionContext last_context() const
+        {
+            if(queue_ == nullptr)
+                return ExecutionContext();
+            return ExecutionContext(queue(),event_);
+        }
+
         cl::CommandQueue &queue() const
         { 
             DLPRIM_CHECK(queue_ != nullptr);

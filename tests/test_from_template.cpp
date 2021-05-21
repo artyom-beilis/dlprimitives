@@ -188,7 +188,7 @@ int main(int argc,char **argv)
             if(!tests[i].find("param_specs").is_undefined()) {
                 TEST(pop != nullptr);
                 std::vector<dp::TensorSpecs> param_specs = tensor_specs_from_json(tests[i]["param_specs"]);
-                TEST(pop->parameters_specs() == param_specs);
+                TEST(pop->parameter_specs() == param_specs);
                 auto &params = pop->parameters();
                 auto &ref_params = dynamic_cast<dp::OperatorWithParameters &>(*ref_op).parameters();
                 params = make_tensors(ctx,param_specs);

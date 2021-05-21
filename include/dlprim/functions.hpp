@@ -88,18 +88,22 @@ namespace dlprim {
         cl::Kernel kernel_;
     };
 
-    struct Pooling2DConfig {
+    struct PoolingBase {
         enum Mode {
             max = 0,
             avg = 1
         };
 
         Mode mode = max;
+
+        static PoolingBase from_json(json::value const &v);
+    };
+
+    struct Pooling2DConfig : public PoolingBase {
         int kernel[2] = {1,1};
         int pad[2] = {0,0};
         int stride[2]={1,1};
         bool count_include_pad = false;
-        StandardActivations activation;
         static Pooling2DConfig from_json(json::value const &v);
     };
 

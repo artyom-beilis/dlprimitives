@@ -97,7 +97,7 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
         }
         val = NORMALIZE_PARTIAL(val, min(row1,inp_H)-max(row0,0), min(col1,inp_W) - max(col0,0));
     }
-    tgt[or * out_W + oc] = ACTIVATION_F(val);
+    tgt[or * out_W + oc] = val;
 }
 
 

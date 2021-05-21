@@ -251,17 +251,22 @@ void Elementwise::backward_data(std::vector<Tensor> &,
     throw NotImplementedError("Elementwise::backward_data not implemented");
 }
 
+PoolingBase PoolingBase::from_json(json::value const &v)
+{
+    PoolingBase cfg;
+    char const *names[] = { "max", "avg" };
+    cfg.mode = utils::parse_enum(v,"mode",names,cfg.mode);
+    return cfg;
+}
 
 Pooling2DConfig Pooling2DConfig::from_json(json::value const &v)
 {
     Pooling2DConfig cfg;
-    cfg.activation = utils::activation_from_json(v);
+    static_cast<PoolingBase &>(cfg) = PoolingBase::from_json(v);
     utils::get_1dNd_from_json(v,"kernel",cfg.kernel,true);
     utils::get_1dNd_from_json(v,"stride",cfg.stride);
     utils::get_1dNd_from_json(v,"pad",cfg.pad);
     cfg.count_include_pad = v.get("count_include_pad",cfg.count_include_pad);
-    char const *names[] = { "max", "avg" };
-    cfg.mode = utils::parse_enum(v,"mode",names,cfg.mode);
     return cfg;
 }
 
@@ -302,8 +307,7 @@ void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs
                                         "PAD_H",config_.pad[0],
                                         "PAD_W",config_.pad[1],
                                         "POOL_MODE",int(config_.mode),
-                                        "COUNT_INCLUDE_PAD",int(config_.count_include_pad),
-                                        "ACTIVATION",int(config_.activation));
+                                        "COUNT_INCLUDE_PAD",int(config_.count_include_pad));
     kernel_ = cl::Kernel(prog,"pooling");
 }
 
@@ -433,8 +437,6 @@ void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
             }
         }
     }
-    
-    cpu::apply_activation(out.data<Dtype>(),out.shape().total_size(),config_.activation);
 }
 
 void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)

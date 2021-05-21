@@ -57,6 +57,8 @@ namespace dlprim {
         Tensor(Tensor &&) = default;
         Tensor &operator=(Tensor &&) = default;
         ~Tensor() {}
+
+        void reshape(Shape const &ns);
         
         cl::Buffer &device_buffer() 
         { 
@@ -86,6 +88,7 @@ namespace dlprim {
         bool cpu_tensor_;
         int offset_;
         cl::Buffer buffer_;
+        size_t capacity_;
     };
 
 }
