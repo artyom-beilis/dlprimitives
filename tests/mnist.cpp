@@ -60,6 +60,7 @@ int main(int argc,char **argv)
         return 1;
     }
     dp::Context ctx(argv[1]);
+    std::cout << "Using: " << ctx.name() << std::endl;
     
     std::string net_js = argv[2];
     std::string net_h5 = argv[3];
@@ -82,6 +83,10 @@ int main(int argc,char **argv)
     int total = 0;
     double total_time = 0;
     while((n = reader.get_batch(labels.data(),data.data<float>(),batch)) > 0) {
+        if(n != batch) {
+            data.reshape(dp::Shape(n,1,28,28));
+            net.reshape();
+        }
         auto start = std::chrono::system_clock::now();
         data.to_device(q,false);
         net.forward(q);

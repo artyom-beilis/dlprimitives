@@ -94,7 +94,7 @@ namespace dlprim {
         constexpr int tile_size = 128;
         constexpr int block_size = 8;
         int ls = tile_size / block_size; // blocksize/tile-size
-        int gs0 = (config_.inputs  + tile_size - 1) / tile_size * tile_size / block_size;
+        int gs0 = (batch           + tile_size - 1) / tile_size * tile_size / block_size;
         int gs1 = (config_.outputs + tile_size - 1) / tile_size * tile_size / block_size;
 
         Tensor &M = parameters()[0];
