@@ -91,8 +91,9 @@ namespace dlprim {
                                 std::vector<Tensor> &intput_diff,
                                 ExecutionContext const &ctx);
 
-
+        Shape get_output_shape(Shape const &in);
 	protected:
+        int get_im2col_width();
         void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out);
 		Convolition2DConfig config_;
