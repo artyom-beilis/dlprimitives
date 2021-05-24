@@ -50,15 +50,56 @@ namespace dlprim {
 	};
 	
 	struct Convolition2DConfig {
-		int channels;
-		int features;
-		int kernel[2];
-		int stride[2];
-		int dilate[2];
-		int pad[2];
-		int groups;
-		bool bias;
-		StandardActivations activation;
+		int channels_in = -1;
+		int channels_out = -1;
+		int kernel[2] = {1,1};
+		int stride[2] = {1,1};
+		int dilate[2] = {1,1};
+		int pad[2] = {0,0};
+		int groups = {1};
+		bool bias = true;
+		StandardActivations activation=StandardActivations::identity;
+        static Convolition2DConfig from_json(json::value const &v);
+	};
+
+	class Convolition2D : public OperatorWithParameters {
+	public:
+
+        Convolition2D(Context &ctx,Convolition2DConfig const &cfg,CalculationsMode mode = CalculationsMode::predict);
+        virtual ~Convolition2D(){}
+
+		virtual void setup(std::vector<TensorSpecs> const &in,
+                           std::vector<TensorSpecs> &out,
+                           size_t &workspace) ;
+
+        virtual void reshape(std::vector<Shape> const &in,
+                             std::vector<Shape> &out);
+
+		virtual void forward(std::vector<Tensor> &input,
+                             std::vector<Tensor> &output,
+                             ExecutionContext const &ctx);
+
+        virtual void backward_data(std::vector<Tensor> &output,
+                                   std::vector<Tensor> &input,
+                                   std::vector<Tensor> &output_diff,
+                                   std::vector<Tensor> &intput_diff,
+                                   ExecutionContext const &ctx);
+        
+        virtual void backward_param(std::vector<Tensor> &output,
+                                std::vector<Tensor> &input,
+                                std::vector<Tensor> &output_diff,
+                                std::vector<Tensor> &intput_diff,
+                                ExecutionContext const &ctx);
+
+
+	protected:
+        void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
+        void forward_cpu(Tensor &in,Tensor &out);
+		Convolition2DConfig config_;
+        DataType dtype_;
+        cl::Kernel gemm_kernel_;
+        cl::Kernel im2col_kernel_;
+        size_t ws_size_;
 	};
 
 }
