@@ -1,5 +1,6 @@
 #include <dlprim/tensor.hpp>
 
+
 namespace dlprim {
     Tensor::Tensor() :
        cpu_tensor_(true),
