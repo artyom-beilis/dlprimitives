@@ -49,7 +49,7 @@ namespace dlprim {
         cl::Kernel kernel_;
 	};
 	
-	struct Convolition2DConfig {
+	struct Convolution2DConfig {
 		int channels_in = -1;
 		int channels_out = -1;
 		int kernel[2] = {1,1};
@@ -59,14 +59,14 @@ namespace dlprim {
 		int groups = {1};
 		bool bias = true;
 		StandardActivations activation=StandardActivations::identity;
-        static Convolition2DConfig from_json(json::value const &v);
+        static Convolution2DConfig from_json(json::value const &v);
 	};
 
-	class Convolition2D : public OperatorWithParameters {
+	class Convolution2D : public OperatorWithParameters {
 	public:
 
-        Convolition2D(Context &ctx,Convolition2DConfig const &cfg,CalculationsMode mode = CalculationsMode::predict);
-        virtual ~Convolition2D(){}
+        Convolution2D(Context &ctx,Convolution2DConfig const &cfg,CalculationsMode mode = CalculationsMode::predict);
+        virtual ~Convolution2D(){}
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
@@ -96,7 +96,9 @@ namespace dlprim {
         int get_im2col_width();
         void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out);
-		Convolition2DConfig config_;
+        void im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in);
+		
+        Convolution2DConfig config_;
         DataType dtype_;
         cl::Kernel gemm_kernel_;
         cl::Kernel im2col_kernel_;

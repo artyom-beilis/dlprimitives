@@ -17,7 +17,7 @@ namespace dlprim {
         {
             while(begin!=end) {
                 if(size_ >= max_tensor_dim)
-                    throw ValidatioError("Unsupported tensor size");
+                    throw ValidationError("Unsupported tensor size");
                 shape_[size_++] = *begin++;
             }
         }

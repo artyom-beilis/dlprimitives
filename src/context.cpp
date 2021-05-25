@@ -11,7 +11,7 @@ namespace dlprim {
             return StandardActivations::identity;
         if(name == "relu")
             return StandardActivations::relu;
-        throw ValidatioError("Invalid cativation name:" + name);
+        throw ValidationError("Invalid cativation name:" + name);
     }
     char const *activation_to_name(StandardActivations act)
     {
@@ -21,7 +21,7 @@ namespace dlprim {
         case StandardActivations::relu:
             return "relu";
         }
-        throw ValidatioError("Internal error invalid cativation");
+        throw ValidationError("Internal error invalid cativation");
     }
 
     
@@ -36,7 +36,7 @@ namespace dlprim {
         char demim = 0;
         ss >>p >> demim >> d;
         if(!ss || demim != ':' || !ss.eof()) {
-            throw ValidatioError("Invalid device identification expecting one of `cpu` or `paltform_no:device_no`");
+            throw ValidationError("Invalid device identification expecting one of `cpu` or `paltform_no:device_no`");
         }
         type_ = gpu;
         select_opencl_device(p,d);
@@ -64,13 +64,13 @@ namespace dlprim {
         std::vector<cl::Platform> platforms;
         cl::Platform::get(&platforms);
         if(p < 0 || size_t(p) >= platforms.size()) {
-            throw ValidatioError("No such platform id " + std::to_string(p) + " total " + std::to_string(platforms.size()) + " avaliblie");
+            throw ValidationError("No such platform id " + std::to_string(p) + " total " + std::to_string(platforms.size()) + " avaliblie");
         }
         std::vector<cl::Device> devices;
         platform_ = platforms[p];
         platform_.getDevices(CL_DEVICE_TYPE_ALL, &devices);
         if(d < 0 || size_t(d) >= devices.size()) {
-            throw ValidatioError("No such device id " + std::to_string(d) + " for platform " 
+            throw ValidationError("No such device id " + std::to_string(d) + " for platform " 
                                  + std::to_string(p) + " total " + std::to_string(devices.size()) + " avaliblie");
         }
         device_ = devices[d];

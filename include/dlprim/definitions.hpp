@@ -11,9 +11,9 @@ namespace dlprim {
         NotImplementedError(std::string const &v) : Error(v) {}
     };
 
-    class ValidatioError : public Error {
+    class ValidationError : public Error {
     public:
-        ValidatioError(std::string const &v) : Error(v) {}
+        ValidationError(std::string const &v) : Error(v) {}
     };
 
     class BuildError : public Error {
@@ -28,7 +28,7 @@ namespace dlprim {
     };
 
     #define DLPRIM_CHECK(x) \
-    do { if(!(x)) throw ValidatioError(std::string("Failed " #x " at " __FILE__ ) + std::to_string(__LINE__) ); } while(0)
+    do { if(!(x)) throw ValidationError(std::string("Failed " #x " at " __FILE__ ":") + std::to_string(__LINE__) ); } while(0)
 
     enum DataType {
         double_data   = 4 + (0 << 3),
@@ -62,7 +62,7 @@ namespace dlprim {
             return half_data;
         else if(s == "bfloat16")
             return bfloat16_data;
-        throw ValidatioError("Unknown data type " + s);
+        throw ValidationError("Unknown data type " + s);
     }
     inline std::string data_type_to_string(DataType dt)
     {

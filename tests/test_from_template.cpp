@@ -183,7 +183,14 @@ int main(int argc,char **argv)
             op->setup(input_specs,res_specs,res_ws);
             TEST(res_specs == output_specs);
             TEST(ws == -1 || res_ws == size_t(ws));
-            ref_op->setup(input_specs,res_specs,res_ws);
+            if(res_ws > 0) {
+                op->set_workspace(dp::Tensor(ctx,dp::Shape(res_ws),dp::uint8_data));
+            }
+            size_t ref_ws;
+            ref_op->setup(input_specs,res_specs,ref_ws);
+            if(ref_ws) {
+                ref_op->set_workspace(dp::Tensor(cpu_ctx,dp::Shape(ref_ws),dp::uint8_data));
+            }
             TEST(res_specs == output_specs);
             if(!tests[i].find("param_specs").is_undefined()) {
                 TEST(pop != nullptr);

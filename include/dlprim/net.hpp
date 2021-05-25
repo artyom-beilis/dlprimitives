@@ -46,7 +46,7 @@ namespace dlprim {
         {
             auto p=tensors_.find(name);
             if(p == tensors_.end())
-                throw ValidatioError("Unknown tensor name:" + name);
+                throw ValidationError("Unknown tensor name:" + name);
             return p->second;
         }
         
@@ -54,7 +54,7 @@ namespace dlprim {
         {
             auto p=parameters_.find(name);
             if(p == parameters_.end())
-                throw ValidatioError("Unknown parameter name:" + name);
+                throw ValidationError("Unknown parameter name:" + name);
             return p->second;
         }
 

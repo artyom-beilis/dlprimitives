@@ -28,7 +28,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
 {
     auto ks = kernel_sources.find(source);
     if(ks == kernel_sources.end())
-        throw ValidatioError("Unknow program source " + source);
+        throw ValidationError("Unknow program source " + source);
     cl::Program prg(ctx.context(),ks->second);
     std::ostringstream ss;
     std::string ocl_version = ctx.platform().getInfo<CL_PLATFORM_VERSION>();

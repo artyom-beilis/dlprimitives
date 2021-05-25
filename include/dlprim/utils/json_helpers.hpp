@@ -14,7 +14,7 @@ namespace utils {
             if(val == names[i])
                 return static_cast<T>(i);
         }
-        throw ValidatioError("Invalid value " + val + " for filed " + name);
+        throw ValidationError("Invalid value " + val + " for filed " + name);
     }
     template<typename T,size_t S>
     void get_1dNd_from_json(json::value const &v,std::string const &name,T (&vals)[S],bool required=false)
@@ -22,7 +22,7 @@ namespace utils {
         json::value const &tmp = v.find(name);
         if(tmp.is_undefined()) {
             if(required)
-                throw ValidatioError("Missing value in json " + name);
+                throw ValidationError("Missing value in json " + name);
             return;
         }
         else if(tmp.type()==json::is_number) {
@@ -33,12 +33,12 @@ namespace utils {
         else if(tmp.type()==json::is_array) {
             auto ar = tmp.get_value<std::vector<T> >();
             if(ar.size() != S)
-                throw ValidatioError("Array size of filed " + name + " must be " + std::to_string(S));
+                throw ValidationError("Array size of filed " + name + " must be " + std::to_string(S));
             for(size_t i=0;i<S;i++)
                 vals[i] = ar[i];
         }
         else {
-            throw ValidatioError("Invalid filed value for " + name);
+            throw ValidationError("Invalid filed value for " + name);
         }
     }
     inline StandardActivations activation_from_json(json::value const &v)

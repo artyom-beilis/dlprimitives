@@ -131,7 +131,7 @@ ElementwiseConfig ElementwiseConfig::from_json(json::value const &v)
     else if(op == "max")
         cfg.op = elementwise_max;
     else
-        throw ValidatioError("Unsupported Elementwise operation " + op);
+        throw ValidationError("Unsupported Elementwise operation " + op);
     cfg.coeff[0] = v.get("coef1",1.0f);
     cfg.coeff[1] = v.get("coef2",1.0f);
     cfg.activation = utils::activation_from_json(v);

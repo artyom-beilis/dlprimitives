@@ -15,7 +15,7 @@ namespace dlprim {
     void Net::add_input_tensor(std::string const &name,TensorSpecs const &ts)
     {
         if(!tensor_specs_.insert(std::make_pair(name,ts)).second) {
-            throw ValidatioError("Tensor " + name + " already exists");
+            throw ValidationError("Tensor " + name + " already exists");
         }
     }
 
@@ -43,18 +43,18 @@ namespace dlprim {
                 if(ds_shape != tensor.shape()) {
                     std::ostringstream ss;
                     ss << "Tensor shape mistmatch for " << name << " expecting " << tensor.shape() << " got " << ds_shape;
-                    throw ValidatioError(ss.str());
+                    throw ValidationError(ss.str());
                 }
                 if(tensor.dtype() == float_data) {
                     dataset.read(tensor.data<float>(),H5::PredType::NATIVE_FLOAT);
                 }
                 else {
-                    throw ValidatioError("FIXME load float16 from hdf5");
+                    throw ValidationError("FIXME load float16 from hdf5");
                 }
             }
         }
         catch(H5::Exception const &e) {
-            throw ValidatioError("Failed to load HDF5 file " + fname + ": " + std::string(e.getCDetailMsg()));
+            throw ValidationError("Failed to load HDF5 file " + fname + ": " + std::string(e.getCDetailMsg()));
         }
 
         
@@ -92,7 +92,7 @@ namespace dlprim {
         json::value net;
         int line=-1;
         if(!net.load(f,true,&line)) {
-            throw ValidatioError("Failed to load json from " + name + ", syntax error at line " + std::to_string(line));
+            throw ValidationError("Failed to load json from " + name + ", syntax error at line " + std::to_string(line));
         }
         load_from_json(net);
     }
@@ -108,19 +108,19 @@ namespace dlprim {
         conn.op = std::move(op);
         conn.name = name;
         if(connections_index_.find(name) != connections_index_.end()) {
-            throw ValidatioError("Operator with name " + name + " exists");
+            throw ValidationError("Operator with name " + name + " exists");
         }
         for(size_t i=0;i<inputs.size();i++) {
             auto spec_it = tensor_specs_.find(inputs[i]);
             if(spec_it == tensor_specs_.end()) {
-                throw ValidatioError("No such tensor " + inputs[i]);
+                throw ValidationError("No such tensor " + inputs[i]);
             }
             conn.input_specs.push_back(spec_it->second);
         }
         conn.input_names = inputs;
         conn.op->setup(conn.input_specs,conn.output_specs,conn.ws_size);
         if(conn.output_specs.size() != outputs.size()) {
-            throw ValidatioError("Operator " + name + " expects to have " + std::to_string(conn.output_specs.size()) + 
+            throw ValidationError("Operator " + name + " expects to have " + std::to_string(conn.output_specs.size()) + 
                    " outputs, but only " + std::to_string(outputs.size()) + " provided");
         }
         conn.output_names = outputs;
@@ -134,10 +134,10 @@ namespace dlprim {
                     std::ostringstream ss;
                     ss << "Tensor " << outputs[i] << " is already defined with spec " << p->second << " but operator "
                        << name << " requires following output specs " << conn.output_specs[i];
-                    throw ValidatioError(ss.str());
+                    throw ValidationError(ss.str());
                 }
                 if(std::find(inputs.begin(),inputs.end(),outputs[i]) == inputs.end()) {
-                    throw ValidatioError("Output " + outputs[i] + " for operator " + name + " aleady exists "
+                    throw ValidationError("Output " + outputs[i] + " for operator " + name + " aleady exists "
                             " howover it isn't as as input, output tensor can't have different sources other "
                             " then self/in-place operations ");
                 }
@@ -145,7 +145,7 @@ namespace dlprim {
             OperatorWithParameters *pop = dynamic_cast<OperatorWithParameters *>(conn.op.get());
             if(!pop) {
                 if(!parameters.empty()) {
-                    throw ValidatioError("Operator " + name + " does not have parameters. But names are provided");
+                    throw ValidationError("Operator " + name + " does not have parameters. But names are provided");
                 }
             }
             else {
@@ -153,7 +153,7 @@ namespace dlprim {
                 if(params_no < parameters.size()) {
                     std::ostringstream ss;
                     ss << "Too many parameter names for operaror " << name << " expecting " << params_no << " got " << parameters.size();
-                    throw ValidatioError(ss.str());
+                    throw ValidationError(ss.str());
                 }
                 conn.parameter_names = parameters;
                 conn.parameter_names.resize(params_no);
@@ -171,7 +171,7 @@ namespace dlprim {
                             std::ostringstream ss;
                             ss << "Conflicting requirements for parameters specifications " << p->second << " vs " 
                                << pop->parameter_specs()[i] << " for " << pname;
-                            throw ValidatioError(ss.str());
+                            throw ValidationError(ss.str());
                         }
                     }
                 }

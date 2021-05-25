@@ -185,6 +185,81 @@ def make_inner_product():
                     cases.append(case)
     return report
 
+def _at(x,n):
+    if isinstance(x,(tuple,list)):
+        return x[n]
+    return x
+
+def make_conv2d():
+    report = {
+        "operator" : "Convolution2D",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for kernel,pad,stride,dilate,cin,cout,bias,groups,relu in \
+        [ 
+            (3, 1, 1, 1, 3, 8,False,1,False), 
+            (3, 1, 1, 1, 3, 8,True, 1, True), 
+            (3, 1, 1, 1, 3, 8,True, 1, True), 
+            (1, 0, 1, 1, 3, 5,False,1,False),
+            (1, 0, 2, 1, 3, 5,False,1,False),
+            ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False),
+            (5, 2, 1, 1, 16,32,True,1,False),
+            (11,2, 4, 1, 16,32,True,1,False),
+        ]:
+
+        convop = torch.nn.Conv2d(cin,cout,kernel,stride=stride,padding=pad,dilation=dilate,groups=groups, bias=bias)
+        params = list(convop.parameters())
+        if relu:
+            op = lambda x:(torch.nn.ReLU())(convop(x))
+        else:
+            op = convop
+        cases=[]
+        tin = torch.randn(64,cin,256,256)
+        tout = op(tin)
+        test = {
+            "init" : "small_frac",
+            "options" : {
+                "kernel": kernel,
+                "pad" : pad,
+                "stride" : stride,
+                "dilate" : dilate,
+                "bias" : bias,
+                "channels_in" : cin,
+                "channels_out" : cout
+            },
+            "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+            "output_tensors": [ { "shape" : list(tout.shape) } ],
+            "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
+            "cases": cases
+        }
+        if np.prod(params[0].shape) < 1000:
+            pred_param=True
+            test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
+        else:
+            pred_param=False
+            test['random_params'] = True
+        if relu:
+            test["options"]["activation"] = "relu"
+        print(test["options"],"predefined params",pred_param)
+        tests.append(test)
+        for s in [[3,cin,4,4],[2,cin,7,7],[2,cin,10,10],[2,cin,19,19],[2,cin,20,20],[2,cin,32,32],
+                  [64,cin,64,64],[53,cin,100,100]]:
+            lkh,lkw = _at(kernel,0)*_at(dilate,0), _at(kernel,1)*_at(dilate,1)
+            if s[2] + _at(pad,0) < lkh or s[3] + _at(pad,1) < lkw:
+                continue
+            tin = torch.randn(s)
+            tout = op(tin)
+            case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
+            if np.prod(s) < 5000 and pred_param:
+                case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                print("- ",s,"predefined")
+            else:
+                case["use_cpu_reference"]=True
+                print("- ",s,"cpu as ref")
+            cases.append(case)
+    return report
 
 
 
@@ -197,7 +272,8 @@ if __name__ == "__main__":
         "softmax" : make_softmax,
         "elementwise"  : make_eltwise,
         "pooling2d" : make_pooling2d,
-        "inner_product" : make_inner_product
+        "inner_product" : make_inner_product,
+        "conv2d" : make_conv2d,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))

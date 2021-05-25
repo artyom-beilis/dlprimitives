@@ -10,7 +10,7 @@ import h5py
 import json
 
 
-class Net(nn.Module):
+class Net1(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.fc1 = nn.Linear(28*28, 512)
@@ -73,6 +73,100 @@ class Net(nn.Module):
         x = F.relu(self.fc1(torch.flatten(x,1)))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
+        output = F.log_softmax(x, dim=1)
+        return output
+
+class Net2(nn.Module):
+    def __init__(self):
+        super(Net2, self).__init__()
+        self.cnv1 = nn.Conv2d(1, 16,3,padding=1)
+        self.cnv2 = nn.Conv2d(16,32,3,padding=1)
+        self.fc1 = nn.Linear(32 * 28 // 4 * 28 // 4, 256)
+        self.fc2 = nn.Linear(256, 10)
+        
+        self.p1   = nn.MaxPool2d(2,stride=2)
+        self.p2   = nn.MaxPool2d(2,stride=2)
+
+        self.mjs = dict(
+            inputs = [dict(shape=[64,1,28,28],name='data')],
+            operators = [
+                dict(name="cnv1",
+                     type="Convolution2D",
+                     inputs=["data"],
+                     outputs=["cnv1"],
+                     options = dict(
+                        channels_out = 16,
+                        kernel=3,
+                        pad=1,
+                        activation="relu"
+                    )
+                ),
+                dict(name="p1",
+                     type="Pooling2D",
+                     inputs=["cnv1"],outputs=["p1"],
+                     options = dict(kernel=2,stride=2)),
+                dict(name="cnv2",
+                     type="Convolution2D",
+                     inputs=["p1"],
+                     outputs=["cnv2"],
+                     options = dict(
+                        channels_out = 32,
+                        kernel=3,
+                        pad=1,
+                        activation="relu"
+                    )
+                ),
+                dict(name="p2",
+                     type="Pooling2D",
+                     inputs=["cnv2"],outputs=["p2"],
+                     options = dict(kernel=2,stride=2)),
+                dict(name="fc1",
+                     type="InnerProduct",
+                     inputs=['p2'],
+                     outputs=['fc1'],
+                     options = dict(
+                        outputs=256,
+                        activation='relu'
+                     )
+                ),
+                dict(name="fc2",
+                     type="InnerProduct",
+                     inputs=['fc1'],
+                     outputs=['fc2'],
+                     options = dict(
+                        outputs=10,
+                     )
+                ),
+                dict(name="prob",
+                     type="SoftMax",
+                     inputs=["fc2"],
+                     outputs=["prob"]
+                )
+            ]
+        )
+
+    def save_dp_net(self,file_name):
+        with open(file_name,'w') as f:
+            json.dump(self.mjs,f,indent=4)
+
+    def _add_fc(self,h,fc,name):
+        for n,param in enumerate(fc.parameters()):
+            ds = h.create_dataset('%s.%d' % (name,n),param.shape)
+            ds[:] = param.cpu().data.numpy()
+        
+    def save_dp_weights(self,file_name):
+        h = h5py.File(file_name,'w')
+        self._add_fc(h,self.cnv1,'cnv1')
+        self._add_fc(h,self.cnv2,'cnv2')
+        self._add_fc(h,self.fc1,'fc1')
+        self._add_fc(h,self.fc2,'fc2')
+        h.close()
+
+    def forward(self, x):
+        x = self.p1(F.relu(self.cnv1(x)))
+        x = self.p2(F.relu(self.cnv2(x)))
+        x = F.relu(self.fc1(torch.flatten(x,1)))
+        x = self.fc2(x)
         output = F.log_softmax(x, dim=1)
         return output
 
@@ -164,7 +258,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(dataset1,**train_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
-    model = Net().to(device)
+    model = Net2().to(device)
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
