@@ -274,7 +274,9 @@ namespace dlprim {
 
     void Net::forward(ExecutionContext const &e)
     {
+        ExecGuard g(e,"forward");
         for(size_t i=0;i<connections_.size();i++) {
+            ExecGuard g(e,connections_[i].name.c_str());
             ExecutionContext ec = e.generate_series_context(i,connections_.size());
             connections_[i].op->forward(connections_[i].input_tensors,connections_[i].output_tensors,ec);
         }

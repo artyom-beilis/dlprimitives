@@ -123,7 +123,7 @@ namespace dlprim {
         }
         cl::NDRange global(gs0,gs1);
         cl::NDRange local(ls,ls);
-        ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,global,local,ctx.events(),ctx.event());
+        ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,global,local,ctx.events(),ctx.event("ip_gemm"));
     }
 
     void InnerProduct::forward_cpu(Tensor &in,Tensor &out)

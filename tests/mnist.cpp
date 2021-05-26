@@ -55,8 +55,14 @@ int argmax(float *p,int n)
 
 int main(int argc,char **argv)
 {
-    if(argc!=6) {
-        std::cerr << "Usage device net.json net.h5 minst_data mnist_labels" << std::endl;
+    bool enable_profiling = false;
+    if(argc >= 2 && argv[1]==std::string("-t")) {
+        enable_profiling = true;
+        argv++;
+        argc--;
+    }
+    if(argc<6) {
+        std::cerr << "Usage [-t] device net.json net.h5 minst_data mnist_labels" << std::endl;
         return 1;
     }
     dp::Context ctx(argv[1]);
@@ -78,21 +84,64 @@ int main(int argc,char **argv)
     int batch = data.shape()[0];
     std::vector<int> labels(batch);
     int n;
-    cl::CommandQueue q=ctx.make_queue();
+
+    cl::CommandQueue queue=ctx.make_queue(enable_profiling ? CL_QUEUE_PROFILING_ENABLE : 0);
+    std::shared_ptr<dp::TimingData> timing;
+    dp::ExecutionContext q(queue);
+    if(enable_profiling) {
+        timing.reset(new dp::TimingData);
+        q.enable_timing(timing);
+    }
     int correct = 0;
     int total = 0;
+    int total_batches = 0;
     double total_time = 0;
+    bool reported = false;
     while((n = reader.get_batch(labels.data(),data.data<float>(),batch)) > 0) {
         if(n != batch) {
             data.reshape(dp::Shape(n,1,28,28));
             net.reshape();
         }
+        if(timing)
+            timing->reset();
         auto start = std::chrono::system_clock::now();
         data.to_device(q,false);
         net.forward(q);
         prob.to_host(q,true);
         auto stop = std::chrono::system_clock::now();
+        if(total != 0 && !reported && timing) {
+            double total_event_time = 0;
+            for(auto &d : timing->events()) {
+                try {
+                    auto end =   d->event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
+                    auto start = d->event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+                    double time = (end - start) * 1e-3;
+                    total_event_time += time;
+                    int s = d->section;
+                    std::stack<char const *> sections;
+                    while(s!=-1) {
+                        auto &sec = timing->sections().at(s);
+                        sections.push(sec.name);
+                        s=sec.parent;
+                    }
+                    while(!sections.empty()) {
+                        std::cout << sections.top() << ":";
+                        sections.pop();
+                    }
+                    std::cout << d->name;
+                    if(d->index != -1)
+                        std::cout << '[' << d->index << ']';
+                    std::cout << "  " << time << " us" << std::endl;
+                }
+                catch(cl::Error const &e) {
+                    std::cerr << "Failed for " << d->name << " " << e.what() << e.err() << std::endl;
+                }
+            }
+            std::cout << "Total GPU " << total_event_time << " us , real " << std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count() * 1e6 << " us" << std::endl;
+            reported = true;
+        }
         total_time += std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();
+        total_batches ++;
         for(int i=0;i<n;i++) {
             int pred = argmax(prob.data<float>() + 10*i,10);
             #ifdef PRINT_LOG
@@ -116,5 +165,6 @@ int main(int argc,char **argv)
     }
     std::cout << "Correct " << correct << " out of " << total << " = " << (100.0 * correct / total) <<"%" << std::endl;
     std::cout << "Time per sample: " << (total_time / total * 1e6) << "us" << std::endl;
+    std::cout << "Time per batch:  " << (total_time / total_batches * 1e6) << "us" << std::endl;
 
 }

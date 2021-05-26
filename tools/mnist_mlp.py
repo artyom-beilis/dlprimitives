@@ -7,12 +7,13 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 import h5py
+import time
 import json
 
 
 class Net1(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
+        super(Net1, self).__init__()
         self.fc1 = nn.Linear(28*28, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 10)
@@ -53,7 +54,8 @@ class Net1(nn.Module):
             ]
         )
 
-    def save_dp_net(self,file_name):
+    def save_dp_net(self,file_name,batch):
+        self.mjs['inputs'][0]['shape'][0] = batch
         with open(file_name,'w') as f:
             json.dump(self.mjs,f,indent=4)
 
@@ -145,7 +147,8 @@ class Net2(nn.Module):
             ]
         )
 
-    def save_dp_net(self,file_name):
+    def save_dp_net(self,file_name,batch):
+        self.mjs['inputs'][0]['shape'][0] = batch
         with open(file_name,'w') as f:
             json.dump(self.mjs,f,indent=4)
 
@@ -193,18 +196,25 @@ def test(model, device, test_loader):
     test_loss = 0
     correct = 0
     with torch.no_grad():
+        total_time = 0
+        total_items = 0
         for data, target in test_loader:
+            start = time.time()
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
+            end = time.time()
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
+            total_time += end - start
+            total_items += data.shape[0]
 
     test_loss /= len(test_loader.dataset)
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
+    print(" %5.3fus per sample " % (total_time / total_items * 1e6))
 
 
 def main():
@@ -212,7 +222,7 @@ def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=5, metavar='N',
                         help='number of epochs to train (default: 5)')
@@ -269,7 +279,7 @@ def main():
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
-        model.save_dp_net('mnist_dp.json')
+        model.save_dp_net('mnist_dp.json',args.test_batch_size)
         model.save_dp_weights('mnist_dp.h5')
 
 

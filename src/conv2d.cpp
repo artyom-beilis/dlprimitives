@@ -4,6 +4,7 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
 #include <cblas.h>
+#include <boost/compute/event.hpp>
 
 namespace dlprim {
    
@@ -179,13 +180,13 @@ namespace dlprim {
 
             ExecutionContext ec1 = ec.generate_series_context(i*2+0,batch*2);
             ExecutionContext ec2 = ec.generate_series_context(i*2+1,batch*2);
-
+            
             ec.queue().enqueueNDRangeKernel(im2col_kernel_,cl::NullRange,
                                                            cl::NDRange(config_.channels_out,
                                                                        out.shape()[2],
                                                                        out.shape()[3]),
                                                            cl::NullRange,
-                                                           ec1.events(),ec1.event());
+                                                           ec1.events(),ec1.event("im2col",i));
 
 
             
@@ -197,7 +198,9 @@ namespace dlprim {
             cl::NDRange global(gs0,gs1);
             cl::NDRange local(ls,ls);
 
-            ec.queue().enqueueNDRangeKernel(gemm_kernel_,cl::NullRange,global,local,ec2.events(),ec2.event());
+            ec.queue().enqueueNDRangeKernel(gemm_kernel_,cl::NullRange,global,local,
+                            ec2.events(),
+                            ec2.event("gemm",i));
         }
     }
 

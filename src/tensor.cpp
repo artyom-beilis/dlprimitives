@@ -42,13 +42,13 @@ namespace dlprim {
     {
         if(cpu_tensor_)
             return;
-        c.queue().enqueueWriteBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event());
+        c.queue().enqueueWriteBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event("write"));
     }
     void Tensor::to_host(ExecutionContext const &c,bool sync)
     {
         if(cpu_tensor_)
             return;
-        c.queue().enqueueReadBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event());
+        c.queue().enqueueReadBuffer(buffer_, sync ? CL_TRUE : CL_FALSE, 0, memory_size(), host_.get(),c.events(),c.event("read"));
     }
 
     void *Tensor::host_data()

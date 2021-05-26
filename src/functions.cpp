@@ -91,7 +91,7 @@ void SoftMax::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const 
     
     cl::NDRange gr(in_shape[0],nd_range_);
     cl::NDRange wg(1,wg_size_);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event());
+    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("softmax"));
 }
 
 void SoftMax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, ExecutionContext const &ctx)
@@ -238,7 +238,7 @@ void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext con
     
     cl::NDRange gr((size + 255) / 256 * 256);
     cl::NDRange wg(256);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event());
+    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("eltwise"));
     
 }
 
@@ -465,7 +465,7 @@ void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     cl::NDRange gr((bc + wg_size_ - 1) / wg_size_ * wg_size_,out_h,out_w);
     cl::NDRange wg(wg_size_,1,1);
     
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event());
+    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("pooling"));
     
 }
 
