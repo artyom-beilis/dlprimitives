@@ -40,6 +40,7 @@ add_library(dlprim SHARED
         src/net.cpp
         src/inner_product.cpp
         src/conv2d.cpp
+        src/gemm.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 

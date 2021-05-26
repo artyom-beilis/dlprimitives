@@ -188,7 +188,7 @@ namespace dlprim {
         { 
             DLPRIM_CHECK(queue_ != nullptr);
             return *queue_; 
-        }
+        }   
         cl::Event *event(char const *name = "unknown", int id = -1) const 
         { 
             if(timing_) {

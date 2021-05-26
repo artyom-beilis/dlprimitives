@@ -1,6 +1,7 @@
 #include <dlprim/operators.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <dlprim/gpu/gemm.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
 #include <cblas.h>
@@ -15,6 +16,9 @@ namespace dlprim {
         cfg.bias = v.get("bias",cfg.bias);
         cfg.activation = utils::activation_from_json(v); 
         return cfg;
+    }
+    InnerProduct::~InnerProduct()
+    {
     }
     
     InnerProduct::InnerProduct(Context &ctx,InnerProductConfig const &cfg,CalculationsMode mode) :
@@ -50,13 +54,13 @@ namespace dlprim {
 
         if(ctx_.is_cpu_context())
             return;
-
-        cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"sgemm",
-                                        "BIAS", (config_.bias ? 2 : 0),
-                                        "BTRANS",1,
-                                        "ACTIVATION",int(config_.activation));
-        kernel_ = cl::Kernel(prog,"sgemm");
-
+        
+        gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
+            ctx_,dtype_,false,true,
+            batch,config_.outputs,config_.inputs,
+            (config_.bias ? gpu::GEMM::bias_N : gpu::GEMM::no_bias),
+            config_.activation            
+        ));
     }
 
     void InnerProduct::reshape(std::vector<Shape> const &in,
@@ -91,39 +95,22 @@ namespace dlprim {
     void InnerProduct::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     {
         int batch = in.shape()[0];
-        constexpr int tile_size = 128;
-        constexpr int block_size = 8;
-        int ls = tile_size / block_size; // blocksize/tile-size
-        int gs0 = (batch           + tile_size - 1) / tile_size * tile_size / block_size;
-        int gs1 = (config_.outputs + tile_size - 1) / tile_size * tile_size / block_size;
-
         Tensor &M = parameters()[0];
 
-        int ind=0;
-        kernel_.setArg(ind++,batch);
-        kernel_.setArg(ind++,config_.outputs);
-        kernel_.setArg(ind++,config_.inputs);
-
-        kernel_.setArg(ind++,in.device_buffer());
-        kernel_.setArg(ind++,int(in.device_offset()));
-        kernel_.setArg(ind++,config_.inputs);
-
-        kernel_.setArg(ind++,M.device_buffer());
-        kernel_.setArg(ind++,int(M.device_offset()));
-        kernel_.setArg(ind++,config_.inputs);
-
-        kernel_.setArg(ind++,out.device_buffer());
-        kernel_.setArg(ind++,int(out.device_offset()));
-        kernel_.setArg(ind++,config_.outputs);
-
+        int bias_offset = 0;
+        cl::Buffer *bias_buffer = nullptr;
+        
         if(config_.bias) {
             Tensor &bias = parameters()[1];
-            kernel_.setArg(ind++,bias.device_buffer());
-            kernel_.setArg(ind++,int(bias.device_offset()));
+            bias_buffer = &bias.device_buffer();
         }
-        cl::NDRange global(gs0,gs1);
-        cl::NDRange local(ls,ls);
-        ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,global,local,ctx.events(),ctx.event("ip_gemm"));
+        
+        gemm_->gemm(batch,config_.outputs,config_.inputs,
+                    in.device_buffer(),in.device_offset(),config_.inputs,
+                    M.device_buffer(),M.device_offset(),config_.inputs,
+                    out.device_buffer(),out.device_offset(),config_.outputs,
+                    bias_buffer,bias_offset,
+                    ctx.queue(),ctx.events(),ctx.event("ip_gemm"));
     }
 
     void InnerProduct::forward_cpu(Tensor &in,Tensor &out)
