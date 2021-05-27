@@ -50,11 +50,11 @@
 #endif
 
 #ifndef WG_SIZE
-#define WG_SIZE 256
+#define WG_SIZE 8
 #endif
 
 __kernel
-__attribute__((reqd_work_group_size(WG_SIZE,1,1)))
+__attribute__((reqd_work_group_size(1,WG_SIZE,WG_SIZE)))
 void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
              __global const dtype *src,int src_offset,
              __global dtype *tgt,int tgt_offset)

@@ -43,10 +43,49 @@
 
 #define ALIGN_FLOAT4 __attribute__ ((aligned (16)))
 
-#if BTRANS == 0
-#define get_B(r,c) (B[(r)*ldb + (c)])
+#ifndef CONVGEMM
+#define CONVGEMM 0
+#endif
+
+#if CONVGEMM == 0
+
+#  if BTRANS == 0
+#    define get_B(r,c) (B[(r)*ldb + (c)])
+#  else
+#    define get_B(r,c) (B[(c)*ldb + (r)])
+#  endif
 #else
-#define get_B(r,c) (B[(c)*ldb + (r)])
+float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
+{
+    int channel = matrix_col / (KERN_H * KERN_W);
+    int k_index = matrix_col % (KERN_H * KERN_W);
+    
+    int dy = k_index / KERN_W;
+    int dx = k_index % KERN_W;
+    
+    int b  = matrix_row / (IMG_COLS * IMG_ROWS);
+    int rc = matrix_row % (IMG_COLS * IMG_ROWS);
+
+    int r  = rc / IMG_COLS;
+    int c  = rc % IMG_COLS;
+
+    int y_pos = -PAD_H + r * STRIDE_H;
+    int x_pos = -PAD_W + c * STRIDE_W;
+
+    int y = y_pos + dy * DILATE_H;
+    int x = x_pos + dx * DILATE_W;
+
+    if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) {
+        return ptr[((b *  CHANNELS_IN + channel) * SRC_ROWS + y) * SRC_COLS + x];
+    }
+    return 0;
+}
+
+#  if BTRANS == 0
+#    define get_B(r,c) get_img_value(B,r,c)
+#  else
+#    define get_B(r,c) get_img_value(B,c,r)
+#  endif
 #endif
 
 #if  ATRANS == 0
@@ -223,6 +262,7 @@ void    sgemm(    int M,int N,int K,
 #if BIAS != 0
     bias += offset_bias;
 #endif
+
 #if BIAS == 1
     {
         float offset;
@@ -249,6 +289,25 @@ void    sgemm(    int M,int N,int K,
     }
 #endif    
 
+#if IM2COL_OCHAN > 0
+    {
+        #pragma unroll
+        for(int dc=0;dc<BLOCK_SIZE_N;dc++) {
+            if(col + dc > N)
+                continue;
+            int matrix_col = col + dc;
+            int batch = matrix_col / IM2COL_OCHAN;
+            int incol = matrix_col % IM2COL_OCHAN;
+            int offset = batch * IM2COL_OCHAN * M + incol;
+            #pragma unroll
+            for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
+                if(row+dr < M) {
+                    C[(row + dr)*ldc + offset] = ACTIVATION_F(c[dr][dc]);
+                }
+            }
+        }
+    }
+#else
     {
         #pragma unroll
         for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
@@ -260,6 +319,7 @@ void    sgemm(    int M,int N,int K,
             }
         }
     }
+#endif
 }
 
 

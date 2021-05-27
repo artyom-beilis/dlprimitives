@@ -1,5 +1,6 @@
 #include <dlprim/tensor.hpp>
 
+#include <iostream>
 
 namespace dlprim {
     Tensor::Tensor() :
@@ -22,8 +23,10 @@ namespace dlprim {
             #else
               _aligned_malloc(size,128);
             #endif
-            if(!ptr)
+            if(!ptr) {
+                std::cerr << "Allocated size " << size << " " << shape_.total_size() << std::endl;
                 throw std::bad_alloc();
+            }
             host_ = std::shared_ptr<void>(ptr,[](void *p) { free(p); });
         //}
         if(!cpu_tensor_) {

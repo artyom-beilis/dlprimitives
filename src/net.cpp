@@ -39,7 +39,7 @@ namespace dlprim {
                 int ndims = dsp.getSimpleExtentNdims();
                 std::vector<hsize_t> dims(ndims);
                 dsp.getSimpleExtentDims(dims.data(),nullptr);
-                Shape ds_shape(dims.begin(),dims.end());
+                Shape ds_shape=Shape::from_range(dims.begin(),dims.end());
                 if(ds_shape != tensor.shape()) {
                     std::ostringstream ss;
                     ss << "Tensor shape mistmatch for " << name << " expecting " << tensor.shape() << " got " << ds_shape;
@@ -65,7 +65,7 @@ namespace dlprim {
         json::array const &inputs = v["inputs"].array();
         for(auto const &input:inputs) {
             auto const &vsp = input.get<std::vector<int> >("shape");
-            Shape sp(vsp.begin(),vsp.end());
+            Shape sp=Shape::from_range(vsp.begin(),vsp.end());
             DataType dt(string_to_data_type(input.get("dtype","float")));
             TensorSpecs spec(sp,dt);
             std::string name = input.get("name","data");

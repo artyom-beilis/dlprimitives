@@ -79,7 +79,7 @@ namespace dlprim {
         DLPRIM_CHECK(out.size() == 1);
         DLPRIM_CHECK(in[0].shape()[0] == out[0].shape()[0]);
         DLPRIM_CHECK(int(in[0].shape().size_no_batch()) == config_.inputs);
-        DLPRIM_CHECK(out[0].shape()[1] == config_.outputs);
+        DLPRIM_CHECK(int(out[0].shape()[1]) == config_.outputs);
         DLPRIM_CHECK(out[0].shape().size() == 2);
         DLPRIM_CHECK(parameters().size()==(1u+unsigned(config_.bias)));
         DLPRIM_CHECK(parameters()[0].shape() == Shape(config_.outputs,config_.inputs));

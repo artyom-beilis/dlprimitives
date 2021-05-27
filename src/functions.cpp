@@ -62,15 +62,15 @@ void SoftMax::forward_cpu(Tensor &input,Tensor &output)
     Shape in_shape = input.shape();
     float *in  = input.data<float>();
     float *out = output.data<float>();
-    for(int i=0;i<in_shape[0];i++) {
+    for(int i=0;i<int(in_shape[0]);i++) {
         float maxv = in[0];
-        for(int j=1;j<in_shape[1];j++)
+        for(int j=1;j<int(in_shape[1]);j++)
             maxv = std::max(in[j],maxv);
         float sum = 0.0f;
-        for(int j=0;j<in_shape[1];j++) 
+        for(int j=0;j<int(in_shape[1]);j++) 
             sum += out[j] = expf(in[j] - maxv);
         float factor = 1.0f/sum;
-        for(int j=0;j<in_shape[1];j++) 
+        for(int j=0;j<int(in_shape[1]);j++) 
             out[j] *= factor;
         in += in_shape[1];
         out+= in_shape[1];
@@ -81,8 +81,8 @@ void SoftMax::forward_cpu(Tensor &input,Tensor &output)
 void SoftMax::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const &ctx)
 {
     Shape in_shape = input.shape();
-    DLPRIM_CHECK(in_shape[1] == sm_range_);
-    kernel_.setArg(0,in_shape[0]);
+    DLPRIM_CHECK(int(in_shape[1]) == sm_range_);
+    kernel_.setArg(0,int(in_shape[0]));
     kernel_.setArg(1,sm_range_);
     kernel_.setArg(2,input.device_buffer());
     kernel_.setArg(3,int(input.device_offset()));
@@ -297,7 +297,7 @@ void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs
     ws = 0;
     if(ctx_.is_cpu_context())
         return;
-    wg_size_ = 256;
+    wg_size_ = 8;
     cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"pooling",
                                         "WG_SIZE",wg_size_,
                                         "POOL_H",config_.kernel[0],
@@ -461,9 +461,9 @@ void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     kernel_.setArg(p++,out.device_buffer());
     kernel_.setArg(p++,int(out.device_offset()));
 
-    
-    cl::NDRange gr((bc + wg_size_ - 1) / wg_size_ * wg_size_,out_h,out_w);
-    cl::NDRange wg(wg_size_,1,1);
+     
+    cl::NDRange wg(1,wg_size_,wg_size_);
+    cl::NDRange gr = gpu::round_range(bc,out_h,out_w,wg);
     
     ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("pooling"));
     

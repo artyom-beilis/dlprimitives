@@ -81,9 +81,10 @@ class Net1(nn.Module):
 class Net2(nn.Module):
     def __init__(self):
         super(Net2, self).__init__()
-        self.cnv1 = nn.Conv2d(1, 16,3,padding=1)
-        self.cnv2 = nn.Conv2d(16,32,3,padding=1)
-        self.fc1 = nn.Linear(32 * 28 // 4 * 28 // 4, 256)
+        self.cnv1 = nn.Conv2d(1, 32,5,padding=2)
+        self.cnv2 = nn.Conv2d(32,64,5,padding=2)
+        self.fc1 = nn.Linear(64 * 28 // 4 * 28 // 4, 256)
+        #self.fc1 = nn.Linear(32 * 4*4, 256)
         self.fc2 = nn.Linear(256, 10)
         
         self.p1   = nn.MaxPool2d(2,stride=2)
@@ -97,9 +98,9 @@ class Net2(nn.Module):
                      inputs=["data"],
                      outputs=["cnv1"],
                      options = dict(
-                        channels_out = 16,
-                        kernel=3,
-                        pad=1,
+                        channels_out = 32,
+                        kernel=list(self.cnv1.kernel_size),
+                        pad=list(self.cnv1.padding),
                         activation="relu"
                     )
                 ),
@@ -112,9 +113,9 @@ class Net2(nn.Module):
                      inputs=["p1"],
                      outputs=["cnv2"],
                      options = dict(
-                        channels_out = 32,
-                        kernel=3,
-                        pad=1,
+                        channels_out = 64,
+                        kernel=list(self.cnv2.kernel_size),
+                        pad=list(self.cnv2.padding),
                         activation="relu"
                     )
                 ),

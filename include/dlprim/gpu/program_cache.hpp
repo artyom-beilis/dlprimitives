@@ -7,6 +7,35 @@
 namespace dlprim {
     namespace gpu {
 
+        inline int round_up(int x,int y)
+        {
+            return (x+(y-1))/y*y;
+        }
+
+        inline cl::NDRange round_range(int x,cl::NDRange const &l)
+        {
+            auto const *size = l.get();
+            x=round_up(x,size[0]);
+            return cl::NDRange(x);
+        }
+        
+        inline cl::NDRange round_range(int x,int y,cl::NDRange const &l)
+        {
+            auto const *size = l.get();
+            x=round_up(x,size[0]);
+            y=round_up(y,size[1]);
+            return cl::NDRange(x,y);
+        }
+
+        inline cl::NDRange round_range(int x,int y,int z,cl::NDRange const &l)
+        {
+            auto const *size = l.get();
+            x=round_up(x,size[0]);
+            y=round_up(y,size[1]);
+            z=round_up(z,size[2]);
+            return cl::NDRange(x,y,z);
+        }
+
         extern std::map<std::string,std::string> kernel_sources;
 
         struct Parameter {

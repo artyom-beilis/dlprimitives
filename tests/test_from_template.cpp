@@ -13,7 +13,7 @@ std::vector<dp::TensorSpecs> tensor_specs_from_json(dp::json::value const &v)
     dp::json::array const &ts = v.array();
     for(dp::json::value const &spec : ts) {
         std::vector<int> vsp = spec.get<std::vector<int> >("shape");
-        dp::Shape sp(vsp.begin(),vsp.end());
+        dp::Shape sp=dp::Shape::from_range(vsp.begin(),vsp.end());
         dp::DataType dtype = dp::string_to_data_type(spec.get<std::string>("dtype","float"));
         r.push_back(dp::TensorSpecs(sp,dtype));
     }
@@ -26,7 +26,7 @@ std::vector<dp::Shape> tensor_shapes_from_json(dp::json::value const &v)
     dp::json::array const &sps = v.array();
     for(dp::json::value const &jsp : sps) {
         std::vector<int> vsp = jsp.get_value<std::vector<int> >();
-        dp::Shape sp(vsp.begin(),vsp.end());
+        dp::Shape sp=dp::Shape::from_range(vsp.begin(),vsp.end());
         r.push_back(sp);
     }
     return r;
@@ -241,8 +241,14 @@ int main(int argc,char **argv)
                 compare_tensors(out_tensors,ref_tensors,cases[i].get<double>("eps",1e-5));
             }
         }
+
+        std::cout << "Testing " << argv[2] << " completed sucesefully" << std::endl;
         
         return 0;
+    }
+    catch(cl::Error const &e) {
+        std::cerr << "FAILED: " << e.what() << " " << e.err()<< std::endl;
+        return 1;
     }
     catch(std::exception const &e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

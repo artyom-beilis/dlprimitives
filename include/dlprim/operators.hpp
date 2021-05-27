@@ -96,7 +96,7 @@ namespace dlprim {
 
         Shape get_output_shape(Shape const &in);
 	protected:
-        void get_gemm(Shape const &out);
+        void get_gemm(Shape const &in,Shape const &out);
         int get_im2col_width();
         void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out);
@@ -107,7 +107,8 @@ namespace dlprim {
         std::unique_ptr<gpu::GEMM> gemm_;
         cl::Kernel im2col_kernel_;
         size_t ws_size_;
-        int out_h_,out_w_;
+        size_t out_h_,out_w_;
+        size_t in_h_,in_w_;
 	};
 
 }

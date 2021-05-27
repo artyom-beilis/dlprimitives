@@ -36,7 +36,19 @@ namespace gpu {
             bool trans_a,bool trans_b,
             int M,int N,int K,
             int bias = 0,
-            StandardActivations act = StandardActivations::identity);
+            StandardActivations act = StandardActivations::identity,
+            int im2col_chan = 0);
+
+        static std::unique_ptr<GEMM> get_optimal_conv_gemm(
+            Context &ctx,DataType dtype,
+            bool trans_a,bool trans_b,
+            int M,int N,int K,
+            int kernel[2],int dilate[2],int padding[2],int stride[2],
+            int src_channels,int src_rows,int src_cols,
+            int tgt_rows,int tgt_cols,
+            int bias = 0,
+            StandardActivations act = StandardActivations::identity,
+            int im2col_chan = 0);
         
     };
 

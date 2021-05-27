@@ -8,18 +8,21 @@ namespace dlprim {
     class Shape {
     public:
         Shape() : shape_{},size_(0) {}
-        Shape(int b): shape_({b}),size_(1) {}
-        Shape(int b,int c): shape_({b,c}),size_(2) {}
-        Shape(int b,int c,int h): shape_({b,c,h}),size_(3) {}
-        Shape(int b,int c,int h,int w): shape_({b,c,h,w}),size_(4) {}
+        Shape(size_t b): shape_({b}),size_(1) {}
+        Shape(size_t b,size_t c): shape_({b,c}),size_(2) {}
+        Shape(size_t b,size_t c,size_t h): shape_({b,c,h}),size_(3) {}
+        Shape(size_t b,size_t c,size_t h,size_t w): shape_({b,c,h,w}),size_(4) {}
+       
         template<typename It>
-        Shape(It begin, It end) : size_(0)
+        static Shape from_range(It begin, It end)
         {
+            Shape s;
             while(begin!=end) {
-                if(size_ >= max_tensor_dim)
+                if(s.size_ >= max_tensor_dim)
                     throw ValidationError("Unsupported tensor size");
-                shape_[size_++] = *begin++;
+                s.shape_[s.size_++] = *begin++;
             }
+            return s;
         }
         
         bool operator==(Shape const &other) const
@@ -52,7 +55,7 @@ namespace dlprim {
                 return 0;
             size_t r=1;
             for(int i=0;i<size_;i++) {
-                r*=shape_[i];
+                r*=size_t(shape_[i]);
             }
             return r;
         }
@@ -60,12 +63,12 @@ namespace dlprim {
         {
             return size_;
         }
-        int operator[](int i) const
+        size_t operator[](int i) const
         {
             return shape_[i];
         }
     private:
-        std::array<int,max_tensor_dim> shape_;
+        std::array<size_t,max_tensor_dim> shape_;
         int size_;
     };
 

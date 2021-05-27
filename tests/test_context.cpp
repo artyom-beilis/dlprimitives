@@ -21,7 +21,7 @@ int main(int argc,char **argv)
 
         float *p = a.data<float>();
 
-        for(int i=0;i<a.shape()[0];i++)
+        for(unsigned i=0;i<a.shape()[0];i++)
             p[i] = -5.0 + i;
         a.to_device(q);
         cl::Program const &prg = dp::gpu::Cache::instance().get_program(ctx,"bias","ACTIVATION",int(dp::StandardActivations::relu));
@@ -33,7 +33,7 @@ int main(int argc,char **argv)
         q.enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(a.shape().total_size()),cl::NullRange,nullptr,nullptr);
         a.to_host(q,false);
         q.finish();
-        for(int i=0;i<a.shape()[0];i++) {
+        for(unsigned i=0;i<a.shape()[0];i++) {
             std::cerr << p[i] << std::endl;
         }
     }

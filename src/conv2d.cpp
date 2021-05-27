@@ -7,6 +7,8 @@
 #include <cblas.h>
 #include <boost/compute/event.hpp>
 
+#define MERGED_GEMM
+
 namespace dlprim {
    
 
@@ -30,8 +32,8 @@ namespace dlprim {
     {
         DLPRIM_CHECK(in.size() == 4);
         int batch = in[0];
-        DLPRIM_CHECK(in[1] == config_.channels_in);
-        int ihw[2] = { in[2], in[3] };
+        DLPRIM_CHECK(int(in[1]) == config_.channels_in);
+        int ihw[2] = { int(in[2]), int(in[3]) };
         int ohw[2];
         for(int i=0;i<2;i++)        
             ohw[i] = (ihw[i] + 2 * config_.pad[i] - config_.dilate[i] * (config_.kernel[i] - 1) - 1) /  config_.stride[i] + 1;
@@ -55,6 +57,7 @@ namespace dlprim {
         DLPRIM_CHECK(dtype_==float_data);
         DLPRIM_CHECK(config_.groups == 1);
         out_h_ = out_w_ = -1;
+        in_h_ = in_w_ = -1;
     }
     
     Convolution2D::~Convolution2D()
@@ -90,14 +93,19 @@ namespace dlprim {
             params.push_back(TensorSpecs(Shape(config_.channels_out),dtype_));
         setup_parameters(std::move(params));
 
-        ws_size_ = workspace = get_im2col_width() * output_shape[2] * output_shape[3] * size_of_data_type(dtype_);
-
-        if(ctx_.is_cpu_context())
+        if(ctx_.is_cpu_context()) {
+            ws_size_ = workspace =  output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
             return;
+        }
+        
+        get_gemm(in[0].shape(),out[0].shape());
 
-        get_gemm(out[0].shape());
+#ifndef MERGED_GEMM
+        
+        ws_size_ = workspace = in_shape[0] * get_im2col_width() * output_shape[2] * output_shape[3] * size_of_data_type(dtype_);
 
         cl::Program const &prog2 = gpu::Cache::instance().get_program(ctx_,"im2col",
+                                        "CHANNELS",config_.channels_in / config_.groups,
                                         "KERN_H",config_.kernel[0],
                                         "KERN_W",config_.kernel[1],
                                         "PAD_H",config_.pad[0],
@@ -108,28 +116,47 @@ namespace dlprim {
                                         "DILATE_W",config_.dilate[1]);
 
         im2col_kernel_ = cl::Kernel(prog2,"im2col");
+#else
+        ws_size_ = workspace =  0;
+#endif        
 
     }
     
-    void Convolution2D::get_gemm(Shape const &out)
+    void Convolution2D::get_gemm(Shape const &in,Shape const &out)
     {
-        if(out_h_ == out[2] && out_w_ == out[3])
+        if(out_h_ == out[2] && out_w_ == out[3] && in_h_ == in[2] && out_w_ == in[3])
             return;
         out_h_ = out[2];
         out_w_ = out[3];
+        in_h_ = in[2];
+        in_w_ = in[3];
         
         if(ctx_.is_cpu_context())
             return;
         
         int M = config_.channels_out;
-        int N = out_h_*out_w_;
+        int N = out_h_*out_w_ * out[0];
         int K = get_im2col_width(); 
+
+#ifndef MERGED_GEMM
         auto gemm = gpu::GEMM::get_optimal_gemm(
             ctx_,dtype_,false,true,
-            M,N,K,
+            M,N*out[0],K,
             (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
-            config_.activation
+            config_.activation,
+            out_h_ * out_w_
         );
+#else
+        auto gemm = gpu::GEMM::get_optimal_conv_gemm(
+            ctx_,dtype_,false,true,
+            M,N*out[0],K,
+            config_.kernel,config_.dilate,config_.pad,config_.stride,
+            config_.channels_in,in[2],in[3],out[2],out[3],
+            (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
+            config_.activation,
+            out_h_ * out_w_
+        );
+#endif        
         gemm_ = std::move(gemm);
     }
 
@@ -138,7 +165,7 @@ namespace dlprim {
     {
         DLPRIM_CHECK(in.size() == 1);
         out.assign({get_output_shape(in[0])});
-        get_gemm(out[0]);
+        get_gemm(in[0],out[0]);
     }
 
     void Convolution2D::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,
@@ -160,23 +187,68 @@ namespace dlprim {
             forward_gpu(in[0],out[0],ectx);
     }
 
+    #ifdef MERGED_GEMM
+    void Convolution2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ec)
+    {
+        int batch = in.shape()[0];
+        int M = config_.channels_out;
+        int N = out.shape()[2]*out.shape()[3];
+        int K = get_im2col_width(); 
+        
+        cl::Buffer *bias_buffer = nullptr;
+        int bias_offset = 0;
+        
+        if(config_.bias) {
+            Tensor &bias = parameters()[1];
+            bias_buffer = &bias.device_buffer();
+            bias_offset = bias.device_offset();
+        }
+        gemm_->gemm(M,N*batch,K,
+            parameters()[0].device_buffer(),
+            parameters()[0].device_offset(),
+            K,
+            in.device_buffer(),
+            in.device_offset(),
+            K,
+            out.device_buffer(),
+            out.device_offset(),
+            N,
+            bias_buffer,
+            bias_offset,
+            ec.queue(),ec.events(),ec.event("conv_gemm"));
+    }
+
+    #else
+
     void Convolution2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ec)
     {
         int batch = in.shape()[0];
 
         int ind = 0;
-        int img_offset_index;
-        im2col_kernel_.setArg(ind++,config_.channels_in / config_.groups);
-        im2col_kernel_.setArg(ind++,in.shape()[2]);
-        im2col_kernel_.setArg(ind++,in.shape()[3]);
+        im2col_kernel_.setArg(ind++,batch);
+        im2col_kernel_.setArg(ind++,int(in.shape()[2]));
+        im2col_kernel_.setArg(ind++,int(in.shape()[3]));
 
-        im2col_kernel_.setArg(ind++,out.shape()[2]);
-        im2col_kernel_.setArg(ind++,out.shape()[3]);
+        im2col_kernel_.setArg(ind++,int(out.shape()[2]));
+        im2col_kernel_.setArg(ind++,int(out.shape()[3]));
         im2col_kernel_.setArg(ind++,in.device_buffer());
-        img_offset_index = ind++;
+        im2col_kernel_.setArg(ind++,int(in.device_offset()));
         im2col_kernel_.setArg(ind++,workspace_.device_buffer());
         im2col_kernel_.setArg(ind++,int(workspace_.device_offset()));
+        
+        ExecutionContext ec1 = ec.generate_series_context(0,2);
 
+        int bc = config_.channels_in * batch;
+        int rows = out.shape()[2];
+        int cols = out.shape()[3];
+        cl::NDRange lr(1,8,8);
+        cl::NDRange gr=gpu::round_range(bc,rows,cols,lr);
+
+        std::cerr << bc << " " << rows << " " << cols << " " << ws_size_ << std::endl;
+
+        ec.queue().enqueueNDRangeKernel(im2col_kernel_,cl::NullRange,gr,lr,
+                                                       ec1.events(),ec1.event("im2col"));
+        
         ind = 0;
         int M = config_.channels_out;
         int N = out.shape()[2]*out.shape()[3];
@@ -190,40 +262,27 @@ namespace dlprim {
             bias_buffer = &bias.device_buffer();
             bias_offset = bias.device_offset();
         }
-        
-        for(int i=0;i<batch;i++) {
-            int inp_offset = i * in.shape().size_no_batch() + in.device_offset();
-            int out_offset = i * out.shape().size_no_batch() + out.device_offset();
-
-            im2col_kernel_.setArg(img_offset_index,inp_offset);
-
-            ExecutionContext ec1 = ec.generate_series_context(i*2+0,batch*2);
-            ExecutionContext ec2 = ec.generate_series_context(i*2+1,batch*2);
-            
-            ec.queue().enqueueNDRangeKernel(im2col_kernel_,cl::NullRange,
-                                                           cl::NDRange(config_.channels_out,
-                                                                       out.shape()[2],
-                                                                       out.shape()[3]),
-                                                           cl::NullRange,
-                                                           ec1.events(),ec1.event("im2col",i));
 
 
-            gemm_->gemm(M,N,K,
-                parameters()[0].device_buffer(),
-                parameters()[0].device_offset(),
-                K,
-                workspace_.device_buffer(),
-                workspace_.device_offset(),
-                K,
-                out.device_buffer(),
-                out_offset,
-                N,
-                bias_buffer,
-                bias_offset,
-                ec.queue(),ec2.events(),ec2.event("gemm",i)
-            );
-        }
+        ExecutionContext ec2 = ec.generate_series_context(1,2);
+
+        gemm_->gemm(M,N*batch,K,
+            parameters()[0].device_buffer(),
+            parameters()[0].device_offset(),
+            K,
+            workspace_.device_buffer(),
+            workspace_.device_offset(),
+            K,
+            out.device_buffer(),
+            out.device_offset(),
+            N,
+            bias_buffer,
+            bias_offset,
+            ec.queue(),ec2.events(),ec2.event("gemm"));
     }
+
+    #endif
+
 
     void Convolution2D::im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in)
     {
