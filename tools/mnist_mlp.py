@@ -280,6 +280,8 @@ def main():
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
+        inp = torch.randn(args.test_batch_size,1,28,28).to(device)
+        torch.onnx.export(model,inp,'mnist.onnx',verbose=True,input_names=['data'])
         model.save_dp_net('mnist_dp.json',args.test_batch_size)
         model.save_dp_weights('mnist_dp.h5')
 
