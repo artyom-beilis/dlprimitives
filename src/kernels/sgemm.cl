@@ -293,7 +293,7 @@ void    sgemm(    int M,int N,int K,
     {
         #pragma unroll
         for(int dc=0;dc<BLOCK_SIZE_N;dc++) {
-            if(col + dc > N)
+            if(col + dc >= N)
                 continue;
             int matrix_col = col + dc;
             int batch = matrix_col / IM2COL_OCHAN;
