@@ -158,6 +158,7 @@ int main(int argc,char **argv)
         dp::ExecutionContext q(queue);
         std::vector<std::string> names;
         int n = 0;
+        std::ofstream rep("report_dp.csv");
         for(int i=4;i<argc;i++) {
             load_image(data,n,argv[i],cfg);
             names.push_back(argv[i]);
@@ -175,16 +176,22 @@ int main(int argc,char **argv)
                 float *probv = prob.data<float>() + cfg.classes*j;
                 int pred = argmax(probv,cfg.classes);
                 std::cout << names[j] << "," << pred << ",";
+                rep << names[j] << "," << pred << ",";
                 if(cfg.class_names.empty()) {
                     std::cout << "class_" << pred; 
+                    rep <<  "class_" << pred;
                 }
                 else {
                     std::cout << cfg.class_names[pred];
+                    rep << cfg.class_names[pred];
                 }
                 for(int k=0;k<cfg.classes;k++) {
-                    std::cout << "," << probv[k];
+                    if(k < 5)
+                        std::cout << "," << probv[k];
+                    rep << "," << probv[k];
                 }
                 std::cout << std::endl;
+                rep << std::endl;
             }
             n=0;
             names.clear();

@@ -145,7 +145,7 @@ def get_operators(model,inputs,params):
                     )
             operators.append(op)
         else:
-            raise("Unsupported operation: " + str(n.op_type));
+            raise Exception("Unsupported operation: " + str(n.op_type) + " with attributes " + json.dumps(attrs));
         if op_len == len(operators):
             print("Skipped or modified last op from %s" % str(n.op_type))
         else:
@@ -166,7 +166,7 @@ def make_h5(file_name,params):
     finally:
         h.close()
     
-def main(o_path):
+def convert_onnx_to_dlprim(o_path,js,h5):    
     model = onnx.load_model(o_path)
     inputs,outputs,params = get_inputs(model)
     print("Inputs",inputs)
@@ -179,10 +179,10 @@ def main(o_path):
         operators = operators
     )
     print("Saving network")
-    with open('model_dp.json','w') as  f:
+    with open(js,'w') as  f:
         json.dump(dp,f,indent=4)
     print("Saving weights")
-    make_h5('model_dp.h5',params) 
+    make_h5(h5,params) 
     print("Done")
 
 
@@ -190,5 +190,5 @@ def main(o_path):
     
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    convert_onnx_to_dlprim(sys.argv[1],"model_dp.json","model_dp.h5")
 

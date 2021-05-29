@@ -1,6 +1,7 @@
 #include <dlprim/net.hpp>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 
 namespace dp = dlprim;
 
@@ -8,8 +9,8 @@ int main(int argc,char **argv)
 {
     try {
         bool enable_profiling = false;
-        int warm = 10;
-        int iters = 100;
+        int warm = 5;
+        int iters = 20;
         while(argc >= 2 && argv[1][0] == '-') {
             std::string flag = argv[1];
             if(flag == "-t") {
@@ -81,6 +82,8 @@ int main(int argc,char **argv)
             for(size_t j=0;j<res.size();j++)
                 res[j].to_host(q,j+1 == res.size());
             auto stop = std::chrono::system_clock::now();
+            auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();
+            std::cout << "Step " << std::setw(2) << i << " " << passed * 1e3 << std::endl;
             if(i == 0 && timing) {
                 double total_event_time = 0;
                 for(auto &d : timing->events()) {
@@ -112,10 +115,10 @@ int main(int argc,char **argv)
                 std::cout << "Total GPU " << total_event_time << " ms , real " << std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count() * 1e3 << " ms" << std::endl;
             }
             if(i>=0) {
-                total_time += std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();
+                total_time += passed;
                 total_batches ++;
+                total += data[0].shape()[0];
             }
-            total += data[0].shape()[0];
         }
         std::cout << "Time per sample: " << (total_time / total * 1e3) << "ms" << std::endl;
         std::cout << "Time per batch:  " << (total_time / total_batches * 1e3) << "ms" << std::endl;
