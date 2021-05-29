@@ -75,7 +75,10 @@ class Net1(nn.Module):
         x = F.relu(self.fc1(torch.flatten(x,1)))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        output = F.log_softmax(x, dim=1)
+        if self.training:
+            output = F.log_softmax(x, dim=1)
+        else:
+            output = F.softmax(x,dim=1)
         return output
 
 class Net2(nn.Module):
@@ -171,7 +174,10 @@ class Net2(nn.Module):
         x = self.p2(F.relu(self.cnv2(x)))
         x = F.relu(self.fc1(torch.flatten(x,1)))
         x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
+        if self.training:
+            output = F.log_softmax(x, dim=1)
+        else:
+            output = F.softmax(x,dim=1)
         return output
 
 
@@ -279,9 +285,10 @@ def main():
         scheduler.step()
 
     if args.save_model:
+        model.eval()
         torch.save(model.state_dict(), "mnist_cnn.pt")
         inp = torch.randn(args.test_batch_size,1,28,28).to(device)
-        torch.onnx.export(model,inp,'mnist.onnx',verbose=True,input_names=['data'])
+        torch.onnx.export(model,inp,'mnist.onnx',verbose=True,input_names=['data'],output_names=['prob'])
         model.save_dp_net('mnist_dp.json',args.test_batch_size)
         model.save_dp_weights('mnist_dp.h5')
 

@@ -19,6 +19,7 @@ namespace dlprim {
         void load_from_json_file(std::string const &name);
 
         void add_input_tensor(std::string const &name,TensorSpecs const &ts);
+        void mark_output_tensor(std::string const &name);
 
         void load_parameters_from_hdf5(std::string const &fname,bool allow_missing=false);
 
@@ -60,6 +61,31 @@ namespace dlprim {
 
         void forward(ExecutionContext const &ectx);
 
+        std::vector<std::string> const &input_names()
+        {
+            return inputs_;
+        }
+
+        std::vector<std::string> const &output_names()
+        {
+            return outputs_;
+        }
+
+        Tensor &input(unsigned id)
+        {
+            if(id >= inputs_.size())
+                throw ValidationError("Invalid input id");
+            return tensor(inputs_[id]);
+        }
+
+        Tensor &output(unsigned id)
+        {
+            if(id >= outputs_.size())
+                throw ValidationError("Invalid output id");
+            return tensor(outputs_[id]);
+        }
+        
+
     private:
         struct Connection {
             std::string name;
@@ -79,6 +105,7 @@ namespace dlprim {
         void setup_ws();
         void allocate_tensors();
 
+
         Context ctx_;
         std::map<std::string,TensorSpecs> tensor_specs_;
         std::map<std::string,TensorSpecs> parameter_specs_;
@@ -89,5 +116,7 @@ namespace dlprim {
         Tensor workspace_;
         std::map<std::string,Tensor> tensors_;
         std::map<std::string,Tensor> parameters_;
+        std::vector<std::string> inputs_;
+        std::vector<std::string> outputs_;
     };
 };

@@ -3,14 +3,26 @@ import onnx
 import json
 import argparse
 import h5py
+import numpy as np
 
 def get_inputs(model):
     params = dict()
     inputs = []
+    outputs = []
     for i in model.graph.initializer:
         name = i.name
-        shape = i.dims
-        params[name] = dict( shape = shape )
+        shape = list(i.dims)
+        print("Loading tensor %s/%s" % (name,shape))
+        if i.data_type!= 1:
+            raise Exception("Only floats are supported")
+        if i.float_data:
+            value = np.array(list(i.float_data))
+        elif i.raw_data:
+            value = np.frombuffer(i.raw_data,dtype=np.float32).copy()
+        else:
+            raise Exception("Can't read data: " + name)
+        value = value.reshape(shape).astype(np.float32)
+        params[name] = dict( shape = shape, value = value )
 
     for inp in model.graph.input:
         name = str(inp.name)
@@ -18,7 +30,9 @@ def get_inputs(model):
             continue
         shape = [int(d.dim_value) for d in inp.type.tensor_type.shape.dim]
         inputs.append(dict(shape=shape,name=name))
-    return inputs,params
+    for out in model.graph.output:
+        outputs.append(str(out.name))
+    return inputs,outputs,params
 
 def get_attrs(attrs):
     res = dict()
@@ -50,6 +64,7 @@ def get_operators(model,inputs,params):
     actdic = {
         "Relu" : 'relu'
     }
+    op_len = 0
     for n in model.graph.node:
         attrs = get_attrs(n.attribute)
         if n.op_type == 'Conv':
@@ -98,42 +113,79 @@ def get_operators(model,inputs,params):
                 operators[-1]['outputs'][0] = n.output[0]
             else:
                 raise Exception("Need previous operator to add %s " % opt_name)
-        elif n.op_type == 'Flatten':
+        elif n.op_type in ('Flatten','Dropout'):
+            assert operators[-1]['outputs'][0] == n.input[0]
             operators[-1]['outputs'][0] = n.output[0]
-        elif n.op_type == 'MaxPool': 
+        elif n.op_type == 'Softmax':
+            assert attrs['axis'] == 1
+            op = dict(name = n.name,
+                      type = 'SoftMax',
+                      inputs = [n.input[0]],
+                      outputs = list(n.output),
+                    )
+            operators.append(op)
+        elif n.op_type == 'MaxPool' or n.op_type == 'AveragePool': 
             assert attrs.get('ceil_mode',0) == 0
             assert tuple(attrs.get('dilations',[1,1])) == (1,1)
             pads = get_pads(attrs)
             kern = attrs['kernel_shape']
             strides = attrs['strides']
+            count_include_pad = attrs.get('count_include_pad',0)
             op = dict(name = n.name,
-                      type = 'Pooling',
+                      type = 'Pooling2D',
                       inputs = [n.input[0]],
                       outputs = list(n.output),
                       options = dict(
                         kernel = kern,
                         stride = strides,
                         pad = pads,
-                        mode = 'max'
+                        count_include_pad = count_include_pad,
+                        mode = ('max' if n.op_type == 'MaxPool' else 'avg')
                       )
                     )
             operators.append(op)
         else:
-            print("Unknown",n.op_type)
+            raise("Unsupported operation: " + str(n.op_type));
+        if op_len == len(operators):
+            print("Skipped or modified last op from %s" % str(n.op_type))
+        else:
+            last = operators[-1]
+            print("Adding operator %s from %s with options %s" % 
+                (last['type'],n.op_type,json.dumps(last.get("options",{}))))
+        op_len = len(operators)
     return operators 
-        
-        
+
+def make_h5(file_name,params):
+    h = h5py.File(file_name,'w')
+    try:
+        for name in params:
+            shape = params[name]['shape']
+            value = params[name]['value']
+            ds = h.create_dataset(name,shape)
+            ds[:] = value
+    finally:
+        h.close()
+    
 def main(o_path):
     model = onnx.load_model(o_path)
-    inputs,params = get_inputs(model)
+    inputs,outputs,params = get_inputs(model)
+    print("Inputs",inputs)
+    print("Outputs",outputs)
     operators = get_operators(model,inputs,params)
 
     dp = dict(
         inputs = inputs,
+        outputs = outputs,
         operators = operators
     )
+    print("Saving network")
     with open('model_dp.json','w') as  f:
         json.dump(dp,f,indent=4)
+    print("Saving weights")
+    make_h5('model_dp.h5',params) 
+    print("Done")
+
+
     
     
 

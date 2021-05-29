@@ -17,6 +17,14 @@ namespace dlprim {
         if(!tensor_specs_.insert(std::make_pair(name,ts)).second) {
             throw ValidationError("Tensor " + name + " already exists");
         }
+        inputs_.push_back(name);
+    }
+    void Net::mark_output_tensor(std::string const &name)
+    {
+        if(tensor_specs_.find(name) == tensor_specs_.end()) {
+            throw ValidationError("mark_output_tensor::No such tensor name " + name);
+        }
+        outputs_.push_back(name);
     }
 
     void Net::load_parameters_from_hdf5(std::string const &fname,bool allow_missing)
@@ -83,6 +91,10 @@ namespace dlprim {
             json::value const &opts = op.find("options").is_undefined() ? empty_options : op["options"];
             std::unique_ptr<Operator> oper = create_by_name(ctx_,type,opts);
             add_operator(std::move(oper),name,inputs,outputs,params);
+        }
+        std::vector<std::string> outputs = v.get<std::vector<std::string> >("outputs");
+        for(auto const &name : outputs) {
+            mark_output_tensor(name);
         }
     }
 

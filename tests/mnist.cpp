@@ -27,6 +27,14 @@ public:
         while(max > 0 && !img_.eof()) {
             img_.read((char*)buf,img_size);
             lbl_.read(&lbl,1);
+            static int count;
+            count ++;
+            if(count < 50) {
+                std::ofstream tmp("digit_" + std::to_string(count) + "_" + std::to_string(int(lbl)) + ".pgm");
+                tmp << "P5\n28 28\n255\n";
+                tmp.write((char*)(buf),img_size);
+                tmp.close();
+            }
             if(img_.gcount()!=img_size || lbl_.gcount() != 1)
                 break;
             for(int i=0;i<img_size;i++) {
@@ -79,8 +87,8 @@ int main(int argc,char **argv)
     net.setup();
     net.load_parameters_from_hdf5(net_h5);
     net.copy_parameters_to_device();
-    dp::Tensor data = net.tensor("data");
-    dp::Tensor prob = net.tensor("prob");
+    dp::Tensor data = net.input(0);
+    dp::Tensor prob = net.output(0);
     int batch = data.shape()[0];
     std::vector<int> labels(batch);
     int n;
