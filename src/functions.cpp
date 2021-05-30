@@ -15,11 +15,12 @@ SoftMax::SoftMax(Context &ctx,SoftMaxConfig const &) :
 {
 }
 
-void SoftMax::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,size_t &ws)
+void SoftMax::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,std::vector<TensorSpecs> &par,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
     DLPRIM_CHECK(in[0].shape().size() == 2);
     DLPRIM_CHECK(in[0].dtype() == float_data);
+    par.clear();
     out = in;
     ws = 0;
     if(ctx_.is_cpu_context())
@@ -94,7 +95,7 @@ void SoftMax::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const 
     ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("softmax"));
 }
 
-void SoftMax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, ExecutionContext const &ctx)
+void SoftMax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &, Tensor &,ExecutionContext const &ctx)
 {
     DLPRIM_CHECK(input.size()==1);
     DLPRIM_CHECK(output.size()==1); 
@@ -108,15 +109,6 @@ void SoftMax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, Ex
     else {
         forward_gpu(input[0],output[0],ctx);
     }
-}
-
-void SoftMax::backward_data(std::vector<Tensor> &,
-                            std::vector<Tensor> &,
-                            std::vector<Tensor> &,
-                            std::vector<Tensor> &,
-                            ExecutionContext const &)
-{
-    throw NotImplementedError("softmax::backward_data not implemented");
 }
 
 
@@ -150,13 +142,14 @@ Elementwise::~Elementwise()
 {
 }
 
-void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,size_t &ws)
+void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,std::vector<TensorSpecs> &p,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==2);
     DLPRIM_CHECK(in[0].dtype() == dtype_);
     DLPRIM_CHECK(in[1].dtype() == dtype_);
     DLPRIM_CHECK(in[0].shape() == in[1].shape());
     out.assign({in[0]});
+    p.clear();
     ws = 0;
     if(ctx_.is_cpu_context())
         return;
@@ -173,7 +166,7 @@ void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
     out.assign({in[0]});
 }
 
-void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, ExecutionContext const &e)
+void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &,Tensor &,ExecutionContext const &e)
 {
     DLPRIM_CHECK(input.size()==2);
     DLPRIM_CHECK(output.size()==1); 
@@ -242,14 +235,6 @@ void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext con
     
 }
 
-void Elementwise::backward_data(std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                ExecutionContext const &)
-{
-    throw NotImplementedError("Elementwise::backward_data not implemented");
-}
 
 PoolingBase PoolingBase::from_json(json::value const &v)
 {
@@ -287,13 +272,14 @@ Pooling2D::~Pooling2D()
 {
 }
 
-void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,size_t &ws)
+void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,std::vector<TensorSpecs> &p,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
     DLPRIM_CHECK(in[0].dtype() == dtype_);
     Shape ins = in[0].shape();
     Shape outs = calc_shape(ins);
     out.assign({TensorSpecs(outs,dtype_)});
+    p.clear();
     ws = 0;
     if(ctx_.is_cpu_context())
         return;
@@ -364,7 +350,7 @@ struct Pooling2D::AveReduceFull
 };
 
 
-void Pooling2D::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, ExecutionContext const &e)
+void Pooling2D::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &,Tensor &,ExecutionContext const &e)
 {
     DLPRIM_CHECK(input.size()==1);
     DLPRIM_CHECK(output.size()==1); 
@@ -468,16 +454,6 @@ void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("pooling"));
     
 }
-
-void Pooling2D::backward_data(  std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                ExecutionContext const &)
-{
-    throw NotImplementedError("Elementwise::backward_data not implemented");
-}
-
 
 
 

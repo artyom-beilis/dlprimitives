@@ -14,39 +14,29 @@ namespace dlprim {
 	};
 
 
-	class InnerProduct : public OperatorWithParameters {
+	class InnerProduct : public Operator {
 	public:
 
-        InnerProduct(Context &ctx,InnerProductConfig const &cfg,CalculationsMode mode = CalculationsMode::predict);
+        InnerProduct(Context &ctx,InnerProductConfig const &cfg);
         virtual ~InnerProduct();
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
-                           size_t &workspace) ;
+                           std::vector<TensorSpecs> &parameters,
+                           size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
                              std::vector<Shape> &out);
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
+                             std::vector<Tensor> &parameters,
+                             Tensor &workspace,
                              ExecutionContext const &ctx);
 
-        virtual void backward_data(std::vector<Tensor> &output,
-                                   std::vector<Tensor> &input,
-                                   std::vector<Tensor> &output_diff,
-                                   std::vector<Tensor> &intput_diff,
-                                   ExecutionContext const &ctx);
-        
-        virtual void backward_param(std::vector<Tensor> &output,
-                                std::vector<Tensor> &input,
-                                std::vector<Tensor> &output_diff,
-                                std::vector<Tensor> &intput_diff,
-                                ExecutionContext const &ctx);
-
-
 	protected:
-        void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
-        void forward_cpu(Tensor &in,Tensor &out);
+        void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
+        void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias);
 		InnerProductConfig config_;
         DataType dtype_;
         std::unique_ptr<gpu::GEMM> gemm_;
@@ -65,41 +55,33 @@ namespace dlprim {
         static Convolution2DConfig from_json(json::value const &v);
 	};
 
-	class Convolution2D : public OperatorWithParameters {
+	class Convolution2D : public Operator {
 	public:
 
-        Convolution2D(Context &ctx,Convolution2DConfig const &cfg,CalculationsMode mode = CalculationsMode::predict);
+        Convolution2D(Context &ctx,Convolution2DConfig const &cfg);
         virtual ~Convolution2D();
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
-                           size_t &workspace) ;
+                           std::vector<TensorSpecs> &parameters,
+                           size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
                              std::vector<Shape> &out);
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
+                             std::vector<Tensor> &parameters,
+                             Tensor &workspace,
                              ExecutionContext const &ctx);
 
-        virtual void backward_data(std::vector<Tensor> &output,
-                                   std::vector<Tensor> &input,
-                                   std::vector<Tensor> &output_diff,
-                                   std::vector<Tensor> &intput_diff,
-                                   ExecutionContext const &ctx);
-        
-        virtual void backward_param(std::vector<Tensor> &output,
-                                std::vector<Tensor> &input,
-                                std::vector<Tensor> &output_diff,
-                                std::vector<Tensor> &intput_diff,
-                                ExecutionContext const &ctx);
 
         Shape get_output_shape(Shape const &in);
 	protected:
         void get_gemm(Shape const &in,Shape const &out);
         int get_im2col_width();
-        void forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx);
-        void forward_cpu(Tensor &in,Tensor &out);
+        void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
+        void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws);
         void im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in);
 		
         Convolution2DConfig config_;

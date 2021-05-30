@@ -4,6 +4,7 @@ import json
 import argparse
 import h5py
 import numpy as np
+import argparse
 
 def get_inputs(model):
     params = dict()
@@ -190,5 +191,10 @@ def convert_onnx_to_dlprim(o_path,js,h5):
     
 
 if __name__ == "__main__":
-    convert_onnx_to_dlprim(sys.argv[1],"model_dp.json","model_dp.h5")
+    p = argparse.ArgumentParser()
+    p.add_argument('--model',required=True)
+    p.add_argument('--js',default='model_dp.js')
+    p.add_argument('--h5',default='model_dp.h5')
+    r = p.parse_args()
+    convert_onnx_to_dlprim(r.model,r.js,r.h5)
 

@@ -173,31 +173,30 @@ int main(int argc,char **argv)
             std::string rnd = tests[i].get("init","uniform");
             std::unique_ptr<dp::Operator> op =     dp::create_by_name(ctx,    op_name,tests[i]["options"]);
             std::unique_ptr<dp::Operator> ref_op = dp::create_by_name(cpu_ctx,op_name,tests[i]["options"]);
-            dp::OperatorWithParameters *pop = dynamic_cast<dp::OperatorWithParameters*>(op.get());
 
             std::vector<dp::TensorSpecs> input_specs = tensor_specs_from_json(tests[i]["setup_tensors"]);
             std::vector<dp::TensorSpecs> output_specs = tensor_specs_from_json(tests[i]["output_tensors"]);
             int ws = tests[i].get("workspace",-1);
-            std::vector<dp::TensorSpecs> res_specs;
+            std::vector<dp::TensorSpecs> res_specs,res_param_specs,ref_specs,ref_param_specs;
             size_t res_ws;
-            op->setup(input_specs,res_specs,res_ws);
+            dp::Tensor res_ws_tensor;
+            op->setup(input_specs,res_specs,res_param_specs,res_ws);
             TEST(res_specs == output_specs);
             TEST(ws == -1 || res_ws == size_t(ws));
             if(res_ws > 0) {
-                op->set_workspace(dp::Tensor(ctx,dp::Shape(res_ws),dp::uint8_data));
+                res_ws_tensor = dp::Tensor(ctx,dp::Shape(res_ws),dp::uint8_data);
             }
             size_t ref_ws;
-            ref_op->setup(input_specs,res_specs,ref_ws);
+            ref_op->setup(input_specs,ref_specs,ref_param_specs,ref_ws);
+            dp::Tensor ref_ws_tensor;
             if(ref_ws) {
-                ref_op->set_workspace(dp::Tensor(cpu_ctx,dp::Shape(ref_ws),dp::uint8_data));
+                ref_ws_tensor = dp::Tensor(cpu_ctx,dp::Shape(ref_ws),dp::uint8_data);
             }
             TEST(res_specs == output_specs);
+            std::vector<dp::Tensor> params,ref_params;
             if(!tests[i].find("param_specs").is_undefined()) {
-                TEST(pop != nullptr);
                 std::vector<dp::TensorSpecs> param_specs = tensor_specs_from_json(tests[i]["param_specs"]);
-                TEST(pop->parameter_specs() == param_specs);
-                auto &params = pop->parameters();
-                auto &ref_params = dynamic_cast<dp::OperatorWithParameters &>(*ref_op).parameters();
+                TEST(res_param_specs == param_specs);
                 params = make_tensors(ctx,param_specs);
                 ref_params = make_tensors(cpu_ctx,param_specs);
                 if(!tests[i].get("random_params",false)) {
@@ -225,13 +224,13 @@ int main(int argc,char **argv)
                 }
                 else {
                     initialize_tensors(in_tensors,rnd);
-                    ref_op->forward(in_tensors,ref_tensors,cpu_e);
+                    ref_op->forward(in_tensors,ref_tensors,ref_params,ref_ws_tensor,cpu_e);
                 }
                 if(ctx.is_gpu_context()) {
                     for(dp::Tensor &tensor : in_tensors)
                         tensor.to_device(e,false);
                 }
-                op->forward(in_tensors,out_tensors,e);
+                op->forward(in_tensors,out_tensors,params,res_ws_tensor,e);
                 if(ctx.is_gpu_context()) {
                     for(dp::Tensor &tensor : out_tensors)
                         tensor.to_host(e,false);

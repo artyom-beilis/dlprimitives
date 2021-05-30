@@ -130,7 +130,7 @@ namespace dlprim {
             conn.input_specs.push_back(spec_it->second);
         }
         conn.input_names = inputs;
-        conn.op->setup(conn.input_specs,conn.output_specs,conn.ws_size);
+        conn.op->setup(conn.input_specs,conn.output_specs,conn.parameter_specs,conn.ws_size);
         if(conn.output_specs.size() != outputs.size()) {
             throw ValidationError("Operator " + name + " expects to have " + std::to_string(conn.output_specs.size()) + 
                    " outputs, but only " + std::to_string(outputs.size()) + " provided");
@@ -154,37 +154,29 @@ namespace dlprim {
                             " then self/in-place operations ");
                 }
             }
-            OperatorWithParameters *pop = dynamic_cast<OperatorWithParameters *>(conn.op.get());
-            if(!pop) {
-                if(!parameters.empty()) {
-                    throw ValidationError("Operator " + name + " does not have parameters. But names are provided");
-                }
+            unsigned params_no = conn.parameter_specs.size();
+            if(params_no < parameters.size()) {
+                std::ostringstream ss;
+                ss << "Too many parameter names for operaror " << name << " expecting " << params_no << " got " << parameters.size();
+                throw ValidationError(ss.str());
             }
-            else {
-                unsigned params_no = pop->parameter_specs().size();
-                if(params_no < parameters.size()) {
-                    std::ostringstream ss;
-                    ss << "Too many parameter names for operaror " << name << " expecting " << params_no << " got " << parameters.size();
-                    throw ValidationError(ss.str());
+            conn.parameter_names = parameters;
+            conn.parameter_names.resize(params_no);
+            for(size_t i=0;i<conn.parameter_names.size();i++) {
+                std::string &pname = conn.parameter_names[i];
+                if(pname.empty() || pname == "auto") {
+                    conn.parameter_names[i] = name + "." + std::to_string(i);
                 }
-                conn.parameter_names = parameters;
-                conn.parameter_names.resize(params_no);
-                for(size_t i=0;i<conn.parameter_names.size();i++) {
-                    std::string &pname = conn.parameter_names[i];
-                    if(pname.empty() || pname == "auto") {
-                        conn.parameter_names[i] = name + "." + std::to_string(i);
-                    }
-                    auto p = parameter_specs_.find(pname);
-                    if(p==parameter_specs_.end()) {
-                        parameter_specs_[pname] = pop->parameter_specs()[i];
-                    }
-                    else {
-                        if(p->second != pop->parameter_specs()[i]) {
-                            std::ostringstream ss;
-                            ss << "Conflicting requirements for parameters specifications " << p->second << " vs " 
-                               << pop->parameter_specs()[i] << " for " << pname;
-                            throw ValidationError(ss.str());
-                        }
+                auto p = parameter_specs_.find(pname);
+                if(p==parameter_specs_.end()) {
+                    parameter_specs_[pname] = conn.parameter_specs[i];
+                }
+                else {
+                    if(p->second != conn.parameter_specs[i]) {
+                        std::ostringstream ss;
+                        ss << "Conflicting requirements for parameters specifications " << p->second << " vs " 
+                           << conn.parameter_specs[i] << " for " << pname;
+                        throw ValidationError(ss.str());
                     }
                 }
             }
@@ -210,10 +202,6 @@ namespace dlprim {
             workspace_ = Tensor(ctx_,Shape(ws),uint8_data);
         else
             workspace_ = Tensor();
-        for(auto &c : connections_) {
-            if(c.ws_size > 0)
-                c.op->set_workspace(workspace_);
-        }
     }
 
     void Net::allocate_tensors()
@@ -237,11 +225,9 @@ namespace dlprim {
 
             if(conn.parameter_names.empty())
                 continue;
-            OperatorWithParameters &pop = dynamic_cast<OperatorWithParameters&>(*conn.op);
-            std::vector<Tensor> &tensors = pop.parameters();
-            tensors.clear();
+            conn.parameters.clear();
             for(auto const &name : conn.parameter_names) {
-                tensors.push_back(parameters_[name]);
+                conn.parameters.push_back(parameters_[name]);
             }
         }
     }
@@ -272,14 +258,10 @@ namespace dlprim {
     void Net::clear_memory()
     {
         for(auto &conn : connections_) {
-            conn.op->set_workspace();
-            OperatorWithParameters *pop = dynamic_cast<OperatorWithParameters *>(conn.op.get());
-            if(pop) {
-                pop->parameters().clear();
-            }
             conn.input_tensors.clear();
             conn.output_tensors.clear();
         }
+        workspace_ = Tensor();
         tensors_.clear();
         parameters_.clear();
     }
@@ -290,7 +272,12 @@ namespace dlprim {
         for(size_t i=0;i<connections_.size();i++) {
             ExecGuard g(e,connections_[i].name.c_str());
             ExecutionContext ec = e.generate_series_context(i,connections_.size());
-            connections_[i].op->forward(connections_[i].input_tensors,connections_[i].output_tensors,ec);
+            connections_[i].op->forward(
+                connections_[i].input_tensors,
+                connections_[i].output_tensors,
+                connections_[i].parameters,
+                workspace_,
+                ec);
         }
     }
 

@@ -14,21 +14,18 @@ namespace dlprim {
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
-                           size_t &workspace) ;
+                           std::vector<TensorSpecs> &parameters,
+                           size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
                              std::vector<Shape> &out);
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
+                             std::vector<Tensor> &parameters,
+                             Tensor &workspace,
                              ExecutionContext const &ctx);
 
-        virtual void backward_data(std::vector<Tensor> &output,
-                                   std::vector<Tensor> &input,
-                                   std::vector<Tensor> &output_diff,
-                                   std::vector<Tensor> &intput_diff,
-                                   ExecutionContext const &ctx);
-        
     private:
    		void forward_gpu(Tensor &input,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &input,Tensor &output);
@@ -65,6 +62,7 @@ namespace dlprim {
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
+                           std::vector<TensorSpecs> &parameters,
                            size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
@@ -72,13 +70,11 @@ namespace dlprim {
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
+                             std::vector<Tensor> &parameters,
+                             Tensor &workspace,
                              ExecutionContext const &ctx);
 
-        virtual void backward_data(std::vector<Tensor> &output,
-                                   std::vector<Tensor> &input,
-                                   std::vector<Tensor> &output_diff,
-                                   std::vector<Tensor> &intput_diff,
-                                   ExecutionContext const &ctx);
+
         
     private:
    		void forward_gpu(Tensor &a,Tensor &b,Tensor &output,ExecutionContext const &ctx);
@@ -114,6 +110,7 @@ namespace dlprim {
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
+                           std::vector<TensorSpecs> &parameters,
                            size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
@@ -121,13 +118,10 @@ namespace dlprim {
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
+                             std::vector<Tensor> &parameters,
+                             Tensor &workspace,
                              ExecutionContext const &ctx);
 
-        virtual void backward_data(std::vector<Tensor> &output,
-                                   std::vector<Tensor> &input,
-                                   std::vector<Tensor> &output_diff,
-                                   std::vector<Tensor> &intput_diff,
-                                   ExecutionContext const &ctx);
     private:
         Shape calc_shape(Shape ins);
         int calc_output_size(int in_size,int dim);

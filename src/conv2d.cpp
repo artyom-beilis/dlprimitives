@@ -48,8 +48,8 @@ namespace dlprim {
     }
 
 
-    Convolution2D::Convolution2D(Context &ctx,Convolution2DConfig const &cfg,CalculationsMode mode) :
-        OperatorWithParameters(ctx,mode),
+    Convolution2D::Convolution2D(Context &ctx,Convolution2DConfig const &cfg) :
+        Operator(ctx),
         config_(cfg),
         dtype_(float_data)
     {
@@ -66,6 +66,7 @@ namespace dlprim {
     
     void Convolution2D::setup(std::vector<TensorSpecs> const &in,
                               std::vector<TensorSpecs> &out,
+                              std::vector<TensorSpecs> &params,
                               size_t &workspace)
     {
         DLPRIM_CHECK(in.size() == 1);
@@ -82,7 +83,6 @@ namespace dlprim {
         Shape output_shape = get_output_shape(in_shape);
         out.assign({TensorSpecs(output_shape,dtype_)});
 
-        std::vector<TensorSpecs> params;
         Shape params_shape(config_.channels_out,
                            config_.channels_in / config_.groups,
                            config_.kernel[0],
@@ -91,7 +91,6 @@ namespace dlprim {
         params.push_back(TensorSpecs(params_shape,dtype_));
         if(config_.bias) 
             params.push_back(TensorSpecs(Shape(config_.channels_out),dtype_));
-        setup_parameters(std::move(params));
 
         if(ctx_.is_cpu_context()) {
             ws_size_ = workspace =  output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
@@ -168,7 +167,7 @@ namespace dlprim {
         get_gemm(in[0],out[0]);
     }
 
-    void Convolution2D::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,
+    void Convolution2D::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,std::vector<Tensor> &parameters,Tensor &ws,
             ExecutionContext const &ectx)
     {
         DLPRIM_CHECK(in.size() == 1);
@@ -176,19 +175,25 @@ namespace dlprim {
         Shape in_shape = in[0].shape();
         Shape out_shape = out[0].shape();
         DLPRIM_CHECK(out_shape == get_output_shape(in_shape));
-        DLPRIM_CHECK(parameters().size()==(1u+unsigned(config_.bias)));
-        DLPRIM_CHECK(parameters()[0].shape() == Shape(config_.channels_out,config_.channels_in / config_.groups,config_.kernel[0],config_.kernel[1]));
-        if(config_.bias)
-            DLPRIM_CHECK(parameters()[1].shape() == Shape(config_.channels_out)); 
+        DLPRIM_CHECK(parameters.size()==(1u+unsigned(config_.bias)));
+        DLPRIM_CHECK(parameters[0].shape() == Shape(config_.channels_out,config_.channels_in / config_.groups,config_.kernel[0],config_.kernel[1]));
+        Tensor &W = parameters[0];
+        Tensor *bias = nullptr;
+        if(config_.bias) {
+            DLPRIM_CHECK(parameters[1].shape() == Shape(config_.channels_out)); 
+            bias = &parameters[1];
+        }
 
-        if(ctx_.is_cpu_context())
-            forward_cpu(in[0],out[0]);
+        if(ctx_.is_cpu_context()) {
+            DLPRIM_CHECK(ws.shape().total_size() > 0);
+            forward_cpu(in[0],out[0],W,bias,ws.host_data());
+        }
         else
-            forward_gpu(in[0],out[0],ectx);
+            forward_gpu(in[0],out[0],W,bias,ectx);
     }
 
     #ifdef MERGED_GEMM
-    void Convolution2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ec)
+    void Convolution2D::forward_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
     {
         int batch = in.shape()[0];
         int M = config_.channels_out;
@@ -199,13 +204,12 @@ namespace dlprim {
         int bias_offset = 0;
         
         if(config_.bias) {
-            Tensor &bias = parameters()[1];
-            bias_buffer = &bias.device_buffer();
-            bias_offset = bias.device_offset();
+            bias_buffer = &bias->device_buffer();
+            bias_offset = bias->device_offset();
         }
         gemm_->gemm(M,N*batch,K,
-            parameters()[0].device_buffer(),
-            parameters()[0].device_offset(),
+            W.device_buffer(),
+            W.device_offset(),
             K,
             in.device_buffer(),
             in.device_offset(),
@@ -328,11 +332,11 @@ namespace dlprim {
         }
     }
 
-    void Convolution2D::forward_cpu(Tensor &in,Tensor &out)
+    void Convolution2D::forward_cpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
     {
         int batch = in.shape()[0];
-        float *imcols = static_cast<float *>(workspace_.host_data());
-        float *kernel = parameters()[0].data<float>();
+        float *imcols = static_cast<float *>(ws);
+        float *kernel = W.data<float>();
         int im2col_rows = out.shape()[2]*out.shape()[3];
         int kernel_cols = config_.channels_in * config_.kernel[0] * config_.kernel[1];
         int in_size_no_batch = in.shape().size_no_batch();
@@ -350,7 +354,7 @@ namespace dlprim {
 					omg,
 					im2col_rows);
             if(config_.bias) {
-                float *bias = parameters()[1].data<float>();
+                float *bias = bias_tensor->data<float>();
                 int plane_size = out.shape()[2]*out.shape()[3];
                 for(int i=0;i<config_.channels_out;i++) {
                     cblas_saxpy(plane_size,1.0f,bias + i,0,omg + plane_size*i,1);
@@ -358,22 +362,5 @@ namespace dlprim {
             }
         }
         cpu::apply_activation(out.data<float>(),out.shape().total_size(),config_.activation);
-    }
-    void Convolution2D::backward_data(std::vector<Tensor> &,
-                                   std::vector<Tensor> &,
-                                   std::vector<Tensor> &,
-                                   std::vector<Tensor> &,
-                                   ExecutionContext const &)
-    {
-        throw NotImplementedError("Convolition2D::backward_data");
-    }
-        
-    void Convolution2D::backward_param(std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                std::vector<Tensor> &,
-                                ExecutionContext const &)
-    {
-        throw NotImplementedError("Convolition2D::backward_param");
     }
 } // dlprim

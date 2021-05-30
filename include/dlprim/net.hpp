@@ -99,6 +99,9 @@ namespace dlprim {
             std::vector<std::string> output_names;
             std::vector<Tensor>      output_tensors;
             std::vector<TensorSpecs> output_specs;
+            
+            std::vector<TensorSpecs> parameter_specs;
+            std::vector<Tensor>      parameters;
             size_t ws_size;
         };
 
