@@ -1,5 +1,5 @@
 #pragma once
-#include <dlprim/operators.hpp>
+#include <dlprim/operator.hpp>
 #include <map>
 #include <vector>
 

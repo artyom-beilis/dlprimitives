@@ -26,6 +26,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
+        "GlobalPooling", 
+        [](Context &ctx,json::value const &p) {
+            return new GlobalPooling(ctx,GlobalPoolingConfig::from_json(p));
+        }
+    },
+    {
         "InnerProduct", 
         [](Context &ctx,json::value const &p) {
             return new InnerProduct(ctx,InnerProductConfig::from_json(p));

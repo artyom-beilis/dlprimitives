@@ -125,6 +125,25 @@ def get_operators(model,inputs,params):
                       outputs = list(n.output),
                     )
             operators.append(op)
+        elif n.op_type == 'Add':
+            op = dict(name = n.name,
+                      type = 'Elementwise',
+                      inputs = list(n.input),
+                      outputs = list(n.output),
+                      options = dict( operation = 'sum')
+            )
+            operators.append(op)
+        elif n.op_type in ('GlobalAveragePool','GlobalMaxPool'):
+            op = dict(name = n.name,
+                      type = 'GlobalPooling',
+                      inputs = [n.input[0]],
+                      outputs = list(n.output),
+                      options = dict(
+                        mode = ('max' if n.op_type == 'GlobalMaxPool' else 'avg')
+                      )
+                    )
+            operators.append(op)
+             
         elif n.op_type == 'MaxPool' or n.op_type == 'AveragePool': 
             assert attrs.get('ceil_mode',0) == 0
             assert tuple(attrs.get('dilations',[1,1])) == (1,1)

@@ -1,6 +1,8 @@
 #pragma once
 #include <stdexcept>
 namespace dlprim {
+    namespace json { class value; }
+
     class Error : public std::runtime_error {
     public:
         Error(std::string const &v) : std::runtime_error(v) {}
@@ -104,6 +106,7 @@ namespace dlprim {
 	};
     
     StandardActivations activation_from_name(std::string const &name);
+    StandardActivations activation_from_json(json::value const &v);
 
     char const *activation_to_name(StandardActivations act);
 

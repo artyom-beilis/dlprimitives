@@ -1,4 +1,4 @@
-#include <dlprim/operators.hpp>
+#include <dlprim/ops/conv2d.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/gpu/gemm.hpp>

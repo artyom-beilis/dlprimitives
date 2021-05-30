@@ -42,7 +42,7 @@ void softmax(int batch,int channels,__global dtype *in,int data_offset,__global 
     #else
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c+i < channels) {
-                val = max(val,in[c+1]);
+                val = max(val,in[c+i]);
             }
         }
     #endif

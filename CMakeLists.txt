@@ -34,12 +34,14 @@ add_library(dlprim SHARED
         src/context.cpp
         src/tensor.cpp
         src/program_cache.cpp
-        src/functions.cpp
         src/operators_factory.cpp
         src/json.cpp
         src/net.cpp
-        src/inner_product.cpp
-        src/conv2d.cpp
+        src/ops/inner_product.cpp
+        src/ops/conv2d.cpp
+        src/ops/softmax.cpp
+        src/ops/elementwise.cpp
+        src/ops/pooling.cpp
         src/gemm.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
