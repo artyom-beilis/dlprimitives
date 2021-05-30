@@ -31,8 +31,8 @@ def benchmark_model(model,batch,device,warm,iters):
             total_time += end-start
             total_items += batch
             total_batches += 1
-    print("Time per batch %1.3fms" %(total_time / total_batches *1e3))
     print("Time per item  %1.3fms" %(total_time / total_items *1e3))
+    print("Time per batch %1.3fms" %(total_time / total_batches *1e3))
 
 def export_model(model,batch,path):
     inp = torch.randn(batch,3,224,224)
