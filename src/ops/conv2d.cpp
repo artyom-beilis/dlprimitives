@@ -7,8 +7,6 @@
 #include <cblas.h>
 #include <boost/compute/event.hpp>
 
-#define MERGED_GEMM
-
 namespace dlprim {
    
 
@@ -55,7 +53,8 @@ namespace dlprim {
     {
         DLPRIM_CHECK(config_.channels_out > 0);
         DLPRIM_CHECK(dtype_==float_data);
-        DLPRIM_CHECK(config_.groups == 1);
+        DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
+        DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
         out_h_ = out_w_ = -1;
         in_h_ = in_w_ = -1;
     }
@@ -99,25 +98,7 @@ namespace dlprim {
         
         get_gemm(in[0].shape(),out[0].shape());
 
-#ifndef MERGED_GEMM
-        
-        ws_size_ = workspace = in_shape[0] * get_im2col_width() * output_shape[2] * output_shape[3] * size_of_data_type(dtype_);
-
-        cl::Program const &prog2 = gpu::Cache::instance().get_program(ctx_,"im2col",
-                                        "CHANNELS",config_.channels_in / config_.groups,
-                                        "KERN_H",config_.kernel[0],
-                                        "KERN_W",config_.kernel[1],
-                                        "PAD_H",config_.pad[0],
-                                        "PAD_W",config_.pad[1],
-                                        "STRIDE_H",config_.stride[0],
-                                        "STRIDE_W",config_.stride[1],
-                                        "DILATE_H",config_.dilate[0],
-                                        "DILATE_W",config_.dilate[1]);
-
-        im2col_kernel_ = cl::Kernel(prog2,"im2col");
-#else
         ws_size_ = workspace =  0;
-#endif        
 
     }
     
@@ -133,30 +114,40 @@ namespace dlprim {
         if(ctx_.is_cpu_context())
             return;
         
-        int M = config_.channels_out;
-        int N = out_h_*out_w_ * out[0];
-        int K = get_im2col_width(); 
+        if(config_.groups > 1) {
+            int M = config_.channels_out / config_.groups;
+            int N = out_h_*out_w_;
+            int K = get_im2col_width(); 
 
-#ifndef MERGED_GEMM
-        auto gemm = gpu::GEMM::get_optimal_gemm(
-            ctx_,dtype_,false,true,
-            M,N*out[0],K,
-            (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
-            config_.activation,
-            out_h_ * out_w_
-        );
-#else
-        auto gemm = gpu::GEMM::get_optimal_conv_gemm(
-            ctx_,dtype_,false,true,
-            M,N*out[0],K,
-            config_.kernel,config_.dilate,config_.pad,config_.stride,
-            config_.channels_in,in[2],in[3],out[2],out[3],
-            (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
-            config_.activation,
-            out_h_ * out_w_
-        );
-#endif        
-        gemm_ = std::move(gemm);
+            auto gemm = gpu::GEMM::get_optimal_conv_gemm(
+                ctx_,dtype_,false,true,
+                M,N,K,
+                config_.kernel,config_.dilate,config_.pad,config_.stride,
+                config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
+                (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
+                config_.activation,
+                out_h_ * out_w_
+            );
+
+            gemm_ = std::move(gemm);
+        }
+        else {
+            int M = config_.channels_out;
+            int N = out_h_*out_w_ * out[0];
+            int K = get_im2col_width(); 
+
+            auto gemm = gpu::GEMM::get_optimal_conv_gemm(
+                ctx_,dtype_,false,true,
+                M,N,K,
+                config_.kernel,config_.dilate,config_.pad,config_.stride,
+                config_.channels_in,in[2],in[3],out[2],out[3],
+                (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
+                config_.activation,
+                out_h_ * out_w_
+            );
+
+            gemm_ = std::move(gemm);
+        }
     }
 
     void Convolution2D::reshape(std::vector<Shape> const &in,
@@ -188,11 +179,58 @@ namespace dlprim {
             DLPRIM_CHECK(ws.shape().total_size() > 0);
             forward_cpu(in[0],out[0],W,bias,ws.host_data());
         }
-        else
-            forward_gpu(in[0],out[0],W,bias,ectx);
+        else {
+            if(config_.groups > 1)
+                forward_gpu_grouped(in[0],out[0],W,bias,ectx);
+            else
+                forward_gpu(in[0],out[0],W,bias,ectx);
+        }
+    }
+    
+
+
+    void Convolution2D::forward_gpu_grouped(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
+    {
+        int M = config_.channels_out / config_.groups;
+        int N = out.shape()[2]*out.shape()[3];
+        int K = get_im2col_width(); 
+        int batch = in.shape()[0];
+        int groups = config_.groups;
+        
+        cl::Buffer *bias_buffer = nullptr;
+        int bias_offset = 0;
+        
+        if(config_.bias) {
+            bias_buffer = &bias->device_buffer();
+            bias_offset = bias->device_offset();
+        }
+        int chstep_in  = config_.channels_in  / config_.groups;
+        int chstep_out = config_.channels_out / config_.groups;
+        int step_input  = chstep_in  *  in.shape()[2]  * in.shape()[3];
+        int step_output = chstep_out * out.shape()[2] * out.shape()[3];
+        int step_kernel = chstep_out * chstep_in * config_.kernel[0] * config_.kernel[1];
+
+        int index = 0;
+        for(int b=0;b<batch;b++) {
+            for(int g=0;g<groups;g++,index++) {
+                ExecutionContext ectmp = ec.generate_series_context(index,batch*groups);
+                gemm_->gemm(M,N,K,
+                    W.device_buffer(),
+                    W.device_offset() + g * step_kernel,
+                    K,
+                    in.device_buffer(),
+                    in.device_offset() + index * step_input,
+                    K,
+                    out.device_buffer(),
+                    out.device_offset() + index * step_output,
+                    N,
+                    bias_buffer,
+                    bias_offset + g* chstep_out,
+                    ectmp.queue(),ectmp.events(),ectmp.event("conv_gemm"));
+            }
+        }
     }
 
-    #ifdef MERGED_GEMM
     void Convolution2D::forward_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
     {
         int batch = in.shape()[0];
@@ -222,71 +260,6 @@ namespace dlprim {
             ec.queue(),ec.events(),ec.event("conv_gemm"));
     }
 
-    #else
-
-    void Convolution2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ec)
-    {
-        int batch = in.shape()[0];
-
-        int ind = 0;
-        im2col_kernel_.setArg(ind++,batch);
-        im2col_kernel_.setArg(ind++,int(in.shape()[2]));
-        im2col_kernel_.setArg(ind++,int(in.shape()[3]));
-
-        im2col_kernel_.setArg(ind++,int(out.shape()[2]));
-        im2col_kernel_.setArg(ind++,int(out.shape()[3]));
-        im2col_kernel_.setArg(ind++,in.device_buffer());
-        im2col_kernel_.setArg(ind++,int(in.device_offset()));
-        im2col_kernel_.setArg(ind++,workspace_.device_buffer());
-        im2col_kernel_.setArg(ind++,int(workspace_.device_offset()));
-        
-        ExecutionContext ec1 = ec.generate_series_context(0,2);
-
-        int bc = config_.channels_in * batch;
-        int rows = out.shape()[2];
-        int cols = out.shape()[3];
-        cl::NDRange lr(1,8,8);
-        cl::NDRange gr=gpu::round_range(bc,rows,cols,lr);
-
-        std::cerr << bc << " " << rows << " " << cols << " " << ws_size_ << std::endl;
-
-        ec.queue().enqueueNDRangeKernel(im2col_kernel_,cl::NullRange,gr,lr,
-                                                       ec1.events(),ec1.event("im2col"));
-        
-        ind = 0;
-        int M = config_.channels_out;
-        int N = out.shape()[2]*out.shape()[3];
-        int K = get_im2col_width(); 
-        
-        cl::Buffer *bias_buffer = nullptr;
-        int bias_offset = 0;
-        
-        if(config_.bias) {
-            Tensor &bias = parameters()[1];
-            bias_buffer = &bias.device_buffer();
-            bias_offset = bias.device_offset();
-        }
-
-
-        ExecutionContext ec2 = ec.generate_series_context(1,2);
-
-        gemm_->gemm(M,N*batch,K,
-            parameters()[0].device_buffer(),
-            parameters()[0].device_offset(),
-            K,
-            workspace_.device_buffer(),
-            workspace_.device_offset(),
-            K,
-            out.device_buffer(),
-            out.device_offset(),
-            N,
-            bias_buffer,
-            bias_offset,
-            ec.queue(),ec2.events(),ec2.event("gemm"));
-    }
-
-    #endif
-
 
     void Convolution2D::im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in)
     {
@@ -303,12 +276,13 @@ namespace dlprim {
         int cols = outs[3];
         int src_rows = in[2];
         int src_cols = in[3];
-        for(int chan = 0;chan < config_.channels_in;chan ++) {
+        int channels_in = in[1];
+        for(int chan = 0;chan < channels_in;chan ++) {
             for(int r=0;r<rows;r++) {
                 for(int c=0;c<cols;c++) {
                     int mat_row = r * cols + c;
                     int mat_col = chan * (kern_h * kern_w);
-                    float *mat = mat_in + mat_row * config_.channels_in * (kern_h * kern_w) + mat_col;
+                    float *mat = mat_in + mat_row * channels_in * (kern_h * kern_w) + mat_col;
                     int y_pos = -pad_h + r * stride_h;
                     int x_pos = -pad_w + c * stride_w;
                     float *img = img_in + src_cols * (chan * src_rows + y_pos) + x_pos;
@@ -338,26 +312,33 @@ namespace dlprim {
         float *imcols = static_cast<float *>(ws);
         float *kernel = W.data<float>();
         int im2col_rows = out.shape()[2]*out.shape()[3];
-        int kernel_cols = config_.channels_in * config_.kernel[0] * config_.kernel[1];
+        int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
         int in_size_no_batch = in.shape().size_no_batch();
         int out_size_no_batch = out.shape().size_no_batch();
+        int step_groups_out = config_.channels_out / config_.groups;
+        int step_groups_in  = config_.channels_in  / config_.groups;
+        int step_kernel = step_groups_out * step_groups_in * config_.kernel[0] * config_.kernel[1];
+        Shape  in_shape(in.shape()[0],in.shape()[1]/config_.groups,in.shape()[2],in.shape()[3]);
+        Shape out_shape(out.shape()[0],out.shape()[1]/config_.groups,out.shape()[2],out.shape()[3]);
         for(int b=0;b<batch;b++) {
-            float *img = in.data<float>() + in_size_no_batch*b;
-            float *omg = out.data<float>() + out_size_no_batch*b;
-            im2col(in.shape(),out.shape(),img,imcols);
-			cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasTrans,
-					config_.channels_out,im2col_rows,kernel_cols,
-					1.0f,
-					kernel,kernel_cols,
-					imcols,kernel_cols,
-					0.0f,
-					omg,
-					im2col_rows);
-            if(config_.bias) {
-                float *bias = bias_tensor->data<float>();
-                int plane_size = out.shape()[2]*out.shape()[3];
-                for(int i=0;i<config_.channels_out;i++) {
-                    cblas_saxpy(plane_size,1.0f,bias + i,0,omg + plane_size*i,1);
+            for(int g=0;g<config_.groups;g++) {
+                float *img = in.data<float>()  + in_size_no_batch *b + g * step_groups_in * in.shape()[2] * in.shape()[3];
+                float *omg = out.data<float>() + out_size_no_batch*b + g * step_groups_out * out.shape()[2] * out.shape()[3];
+                im2col(in_shape,out_shape,img,imcols);
+                cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasTrans,
+                        config_.channels_out / config_.groups,im2col_rows,kernel_cols,
+                        1.0f,
+                        kernel + step_kernel * g,kernel_cols,
+                        imcols,kernel_cols,
+                        0.0f,
+                        omg,
+                        im2col_rows);
+                if(config_.bias) {
+                    float *bias = bias_tensor->data<float>() + g * step_groups_out;
+                    int plane_size = out.shape()[2]*out.shape()[3];
+                    for(int i=0;i<step_groups_out;i++) {
+                        cblas_saxpy(plane_size,1.0f,bias + i,0,omg + plane_size*i,1);
+                    }
                 }
             }
         }

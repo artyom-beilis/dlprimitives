@@ -241,6 +241,8 @@ def make_conv2d():
             (3, 1, 1, 1, 3, 8,True, 1, True), 
             (1, 0, 1, 1, 3, 5,False,1,False),
             (1, 0, 2, 1, 3, 5,False,1,False),
+            (3, 1, 1, 1, 4, 8,True,2,False), 
+            (3, 1, 1, 1, 8, 8,True,8,False), 
             ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False),
             (5, 2, 1, 1, 16,32,True,1,False),
             (11,2, 4, 1, 16,32,True,1,False),
@@ -264,7 +266,8 @@ def make_conv2d():
                 "dilate" : dilate,
                 "bias" : bias,
                 "channels_in" : cin,
-                "channels_out" : cout
+                "channels_out" : cout,
+                "groups" : groups
             },
             "setup_tensors" : [ { "shape" : list(tin.shape) } ],
             "output_tensors": [ { "shape" : list(tout.shape) } ],
