@@ -47,8 +47,10 @@ def get_attrs(attrs):
             res[name] = a.i
         elif a.type == 7:
             res[name] = list(a.ints)
+        elif a.type == 3:
+            res[name] = str(a.s)
         else:
-            raise Exception("Unknow type ",a.type)
+            raise Exception("Unknow type ",a.type,str(a))
     return res
 
 def get_pads(attrs):
@@ -66,6 +68,10 @@ def get_operators(model,inputs,params):
         "Relu" : 'relu'
     }
     op_len = 0
+    print("================")
+    for n in model.graph.node:
+        print(n.op_type,n.name)
+    print("================")
     for n in model.graph.node:
         attrs = get_attrs(n.attribute)
         if n.op_type == 'Conv':

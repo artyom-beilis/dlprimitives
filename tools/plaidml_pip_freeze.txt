@@ -1,0 +1,16 @@
+cffi==1.14.5
+click==8.0.1
+enum34==1.1.10
+importlib-metadata==4.4.0
+numpy==1.19.5
+onnx==1.2.1
+onnx-plaidml==0.6.3
+Pillow==8.2.0
+pkg-resources==0.0.0
+plaidml==0.7.0
+protobuf==3.17.1
+pycparser==2.20
+six==1.16.0
+typing==3.7.4.3
+typing-extensions==3.10.0.0
+zipp==3.4.1

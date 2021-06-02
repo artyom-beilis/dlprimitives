@@ -34,9 +34,17 @@ def benchmark_model(model,batch,device,warm,iters):
     print("Time per item  %1.3fms" %(total_time / total_items *1e3))
     print("Time per batch %1.3fms" %(total_time / total_batches *1e3))
 
-def export_model(model,batch,path):
+def export_model(model,batch,path,opset,ir):
     inp = torch.randn(batch,3,224,224)
-    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"])
+    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset)
+    import onnx
+    #from onnx import version_converter
+    model = onnx.load_model(path)
+    model.ir_version = ir
+    onnx.save(model, path)
+
+
+    
 
 
 
@@ -85,7 +93,7 @@ def main(args):
     m = getattr(torchvision.models,args.model)(pretrained = True)
 
     if args.export:
-        export_model(m,args.batch,args.export)
+        export_model(m,args.batch,args.export,args.onnx_opset,args.onnx_ir)
     m.to(args.device)
     if args.benchmark:
         benchmark_model(m,args.batch,args.device,args.warm,args.iters)
@@ -98,6 +106,8 @@ if __name__ == '__main__':
     p.add_argument('--device',default='cuda')
     p.add_argument('--export')
     p.add_argument('--benchmark',action='store_true')
+    p.add_argument('--onnx-opset',default=7)
+    p.add_argument('--onnx-ir',default=3)
     p.add_argument('--batch',default=16)
     p.add_argument('--warm',default=5)
     p.add_argument('--iters',default=20)
