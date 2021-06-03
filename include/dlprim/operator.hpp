@@ -6,9 +6,17 @@
 namespace dlprim {
     namespace json { class value; }
 
+    struct TensorAndGradient {
+        bool requires_gradient=true;
+        Tensor data;
+        Tensor grad;
+    };
+
     class Operator {
     public:
-        Operator(Context const &ctx) : ctx_(ctx)
+        Operator(Context const &ctx) : 
+            ctx_(ctx),
+            mode_(CalculationsMode::predict)
         {
         }
 
@@ -16,6 +24,15 @@ namespace dlprim {
         {
         }
 
+        virtual char const *operator_type() const = 0;
+        
+        ///
+        /// Can be called with both train and predict before setup() is called.
+        /// afterwards if original mode was train - it can be switched to predict and back
+        /// but if original mode was predict it can't be switched to train.
+        ///
+        /// Default is predict
+        ///
         virtual void mode(CalculationsMode mode)
         {
             mode_ = mode;
@@ -44,10 +61,19 @@ namespace dlprim {
                              std::vector<Tensor> &parameters,
                              Tensor &workspace,
                              ExecutionContext const &ctx) = 0;
+		
+        virtual void backward(std::vector<TensorAndGradient> & /*input*/,
+                              std::vector<TensorAndGradient> & /*output*/,
+                              std::vector<TensorAndGradient> & /*parameters*/,
+                              Tensor &/*workspace*/,
+                              ExecutionContext const &/*ctx*/)
+        {
+            throw NotImplementedError("backpropogation is not implemented for " + std::string(operator_type()));
+        }
 
     protected:
-        CalculationsMode mode_ = CalculationsMode::predict;
         Context ctx_;
+        CalculationsMode mode_;
     };
     
     std::unique_ptr<Operator> create_by_name(Context &ctx,

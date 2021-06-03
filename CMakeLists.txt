@@ -36,9 +36,11 @@ add_library(dlprim SHARED
         src/program_cache.cpp
         src/operators_factory.cpp
         src/json.cpp
+        src/activation.cpp
         src/net.cpp
         src/ops/inner_product.cpp
         src/ops/conv2d.cpp
+        src/ops/activation.cpp
         src/ops/softmax.cpp
         src/ops/elementwise.cpp
         src/ops/pooling.cpp

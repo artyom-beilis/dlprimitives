@@ -19,6 +19,10 @@ namespace dlprim {
         InnerProduct(Context &ctx,InnerProductConfig const &cfg);
         virtual ~InnerProduct();
 
+        virtual char const *operator_type() const
+        {
+            return "InnerProduct";
+        }
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
                            std::vector<TensorSpecs> &parameters,

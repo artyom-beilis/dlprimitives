@@ -24,6 +24,10 @@ namespace dlprim {
         Convolution2D(Context &ctx,Convolution2DConfig const &cfg);
         virtual ~Convolution2D();
 
+        virtual char const *operator_type() const
+        {
+            return "Convolution2D";
+        }
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
                            std::vector<TensorSpecs> &parameters,

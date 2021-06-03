@@ -2,29 +2,20 @@
 #include <dlprim/operator.hpp>
 namespace dlprim {	
     namespace json { class value; }
-    struct ElementwiseConfig {
-        enum Operation {
-            elementwise_sum,
-            elementwise_prod,
-            elementwise_max
-        };
-        
-        Operation op = elementwise_sum;
-        float coeff[2] = {1.0f,1.0f};
+    struct ActivationConfig {
         StandardActivations activation = StandardActivations::identity;
-
-        static ElementwiseConfig from_json(json::value const &v);
+        static ActivationConfig from_json(json::value const &v);
     };
    
-    class Elementwise : public Operator {
+    class Activation : public Operator {
     public:
         
-        Elementwise(Context &ctx,ElementwiseConfig config = ElementwiseConfig());
-        virtual ~Elementwise();
+        Activation(Context &ctx,ActivationConfig config = ActivationConfig());
+        virtual ~Activation();
         
         virtual char const *operator_type() const
         {
-            return "Elementwise";
+            return "Activation";
         }
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
@@ -44,9 +35,9 @@ namespace dlprim {
 
         
     private:
-   		void forward_gpu(Tensor &a,Tensor &b,Tensor &output,ExecutionContext const &ctx);
-        void forward_cpu(Tensor &a,Tensor &b,Tensor &output);
-        ElementwiseConfig config_;
+   		void forward_gpu(Tensor &a,Tensor &output,ExecutionContext const &ctx);
+        void forward_cpu(Tensor &a,Tensor &output);
+        ActivationConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;
     };

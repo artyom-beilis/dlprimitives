@@ -30,7 +30,7 @@ def make_softmax():
                 "out_shapes" : [[b,f]],
             }
             if b <= 5 and f <= 32:
-                inp = torch.randn(b,f) - 0.5
+                inp = torch.randn(b,f)
                 out = sm(inp)
                 case["in_tensors"] = [inp.reshape((-1,)).tolist()]
                 case["out_tensors"] = [out.reshape((-1,)).tolist()]
@@ -74,14 +74,47 @@ def make_eltwise():
                     for shape in [[5,2],[32,6,16,16],[128,256,16,16],[10023]]:
                         case = dict(in_shapes = [ shape, shape] ,out_shapes = [shape])
                         if np.prod(shape) < 100:
-                            a = torch.randn(*shape) - 0.5
-                            b = torch.randn(*shape) - 0.5
+                            a = torch.randn(*shape)
+                            b = torch.randn(*shape)
                             c = final_op(a,b)
                             case["in_tensors"] = [a.reshape((-1,)).tolist(),b.reshape((-1,)).tolist()]
                             case["out_tensors"] = [c.reshape((-1,)).tolist()]
                         else:
                             case["use_cpu_reference"]=True
                         cases.append(case)
+    return report
+
+def make_activation():
+    report = {
+        "operator" : "Activation",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for act,op in [ ("relu", torch.nn.ReLU()),
+                    ("tanh", torch.nn.Tanh()),
+                    ("sigmoid",torch.nn.Sigmoid()),
+                    ("identity", (lambda x:x) ) ]:
+        cases=[]
+        test = {
+            "options" : {
+                "activation": act,
+            },
+            "setup_tensors" : [ {"shape":[10,50]}  ],
+            "output_tensors" : [ {"shape":[10,50]} ],
+            "workspce": 0,
+            "cases": cases
+        }
+        tests.append(test)
+        for shape in [[5,2],[32,6,16,16],[128,256,16,16],[10023]]:
+            case = dict(in_shapes = [ shape ] ,out_shapes = [shape])
+            if np.prod(shape) < 100:
+                a = torch.randn(*shape)
+                c = op(a)
+                case["in_tensors"]  = [a.reshape((-1,)).tolist()]
+                case["out_tensors"] = [c.reshape((-1,)).tolist()]
+            else:
+                case["use_cpu_reference"]=True
+            cases.append(case)
     return report
 
 
@@ -316,6 +349,7 @@ if __name__ == "__main__":
         "global_pooling" : make_global_pooling,
         "inner_product" : make_inner_product,
         "conv2d" : make_conv2d,
+        "activation" : make_activation,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))
