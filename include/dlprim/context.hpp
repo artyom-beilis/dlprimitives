@@ -3,6 +3,7 @@
 #include <dlprim/definitions.hpp>
 #include <chrono>
 #include <stack>
+#include <map>
 #include <memory>
 
 namespace dlprim {
@@ -46,6 +47,9 @@ namespace dlprim {
             return device_;
         }
 
+        bool check_device_extension(std::string const &name);
+        std::string const &device_extensions();
+
         cl::Context &context()
         {
             return context_;
@@ -63,7 +67,8 @@ namespace dlprim {
         cl::Device device_;
         cl::Context context_;
         DeviceType type_;;
-        
+        std::map<std::string,bool> ext_cache_;
+        std::string ext_;
     };
 
     class TimingData {

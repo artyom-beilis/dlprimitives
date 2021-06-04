@@ -50,6 +50,30 @@ namespace dlprim {
         select_opencl_device(platform,device);
     }
 
+    bool Context::check_device_extension(std::string const &name)
+    {
+        bool res;
+        auto p = ext_cache_.find(name);
+        if(p == ext_cache_.end()) {
+            res = device_extensions().find(name) != std::string::npos;
+            ext_cache_[name] = res;
+        }
+        else {
+            res = p->second;
+        }
+        return res;
+    }
+
+    std::string const &Context::device_extensions()
+    {
+        if(is_cpu_context())
+            return ext_;
+        if(ext_.empty())
+            ext_ = device().getInfo<CL_DEVICE_EXTENSIONS>();
+        return ext_;
+    }
+
+
     std::string Context::name() const
     {
         if(is_cpu_context())
