@@ -5,25 +5,6 @@
 
 namespace dlprim {
     
-    StandardActivations activation_from_name(std::string const &name)
-    {
-        if(name == "identity")
-            return StandardActivations::identity;
-        if(name == "relu")
-            return StandardActivations::relu;
-        throw ValidationError("Invalid cativation name:" + name);
-    }
-    char const *activation_to_name(StandardActivations act)
-    {
-        switch(act) {
-        case StandardActivations::identity:
-            return "identity";
-        case StandardActivations::relu:
-            return "relu";
-        }
-        throw ValidationError("Internal error invalid cativation");
-    }
-
     
     Context::Context(std::string const &dev_id)
     {

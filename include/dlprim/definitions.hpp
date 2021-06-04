@@ -103,12 +103,13 @@ namespace dlprim {
 	enum class StandardActivations : int {
 		identity = 0,
 		relu = 1,
+        tanh = 2,
+        sigmoid = 3,
 	};
     
     StandardActivations activation_from_name(std::string const &name);
-    StandardActivations activation_from_json(json::value const &v);
-
     char const *activation_to_name(StandardActivations act);
+
 
     enum class CalculationsMode {
         train,

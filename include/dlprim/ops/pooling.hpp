@@ -28,6 +28,10 @@ namespace dlprim {
         Pooling2D(Context &ctx,Pooling2DConfig config = Pooling2DConfig());
         virtual ~Pooling2D();
 
+        virtual char const *operator_type() const
+        {
+            return "Pooling2D";
+        }
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
                            std::vector<TensorSpecs> &parameters,
@@ -85,6 +89,10 @@ namespace dlprim {
         GlobalPooling(Context &ctx,GlobalPoolingConfig const &config = GlobalPoolingConfig());
         virtual ~GlobalPooling();
         
+        virtual char const *operator_type() const
+        {
+            return "GlobalPooling";
+        }
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
                            std::vector<TensorSpecs> &parameters,

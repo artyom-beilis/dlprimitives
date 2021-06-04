@@ -12,6 +12,11 @@ namespace dlprim {
     public:
         SoftMax(Context &ctx,SoftMaxConfig const &cfg=SoftMaxConfig());
         virtual ~SoftMax();
+        
+        virtual char const *operator_type() const
+        {
+            return "SoftMax";
+        }
 
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,

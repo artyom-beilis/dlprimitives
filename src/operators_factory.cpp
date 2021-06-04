@@ -14,6 +14,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
+        "Activation", 
+        [](Context &ctx,json::value const &p) {
+            return new Activation(ctx,ActivationConfig::from_json(p));
+        }
+    },
+    {
         "Elementwise", 
         [](Context &ctx,json::value const &p) {
             return new Elementwise(ctx,ElementwiseConfig::from_json(p));
