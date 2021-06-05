@@ -103,7 +103,77 @@ float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
 #error "Unsupported condif"
 #endif
 
+#if defined(cl_intel_subgroups)
+#define INTEL_PLATFORM 1
+#else
+#define INTEL_PLATFORM 0
+#endif
+
+#define vload1(off,addr) ((addr)[off])
+#define vstore1(val,off,addr) ((addr)[off]=(val))
+
+#if BLOCK_SIZE_M == 1
+#define vloadM vload1
+#define vstoreM vstore1
+#define floatM float
+#elif BLOCK_SIZE_M == 4
+#define vloadM vload4
+#define vstoreM vstore4
+#define floatM float4
+#elif BLOCK_SIZE_M == 8
+#define vloadM vload8
+#define vstoreM vstore8
+#define floatM float8
+#elif BLOCK_SIZE_M == 16 
+#define vloadM vload16
+#define vstoreM vstore16
+#define floatM float16
+#endif
+
+#if BLOCK_SIZE_N == 1
+#define vloadN vload1
+#define vstoreN vstore1
+#define floatN float
+#elif BLOCK_SIZE_N == 4
+#define vloadN vload4
+#define vstoreN vstore4
+#define floatN float4
+#elif BLOCK_SIZE_N == 8
+#define vloadN vload8
+#define vstoreN vstore8
+#define floatN float8
+#elif BLOCK_SIZE_N == 16 
+#define vloadN vload16
+#define vstoreN vstore16
+#define floatN float16
+#endif
+
+#if TILE_SIZE_K == 1
+#define vloadK vload1
+#define vstoreK vstore1
+#define floatK float
+#elif TILE_SIZE_K == 4
+#define vloadK vload4
+#define vstoreK vstore4
+#define floatK float4
+#elif TILE_SIZE_K == 8
+#define floatK float8
+#define vloadK vload8
+#define vstoreK vstore8
+#elif TILE_SIZE_K == 16 
+#define vloadK vload16
+#define vstoreK vstore16
+#define floatK float16
+#endif
+
+
+
+
+
 __kernel 
+#if INTEL_PLATFORM == 1
+__attribute__((intel_reqd_sub_group_size(8)))
+#endif
 __attribute__((reqd_work_group_size(BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N, 1)))
 void    sgemm(    int M,int N,int K,
         __global const float * restrict A,int offset_A,int lda,
@@ -118,13 +188,7 @@ void    sgemm(    int M,int N,int K,
     B += offset_B;
     C += offset_C;
 
-    ALIGN_FLOAT4 __local float a_tile[TILE_SIZE_K][BLOCKS_IN_TILE_M][BLOCK_SIZE_M+TILE_OFFSET];
-    ALIGN_FLOAT4 __local float b_tile[TILE_SIZE_K][BLOCKS_IN_TILE_N][BLOCK_SIZE_N+TILE_OFFSET];
-
-    float c[BLOCK_SIZE_M][BLOCK_SIZE_N] = {{0.0f}};
-    float ap[BLOCK_SIZE_M];
-    float bp[BLOCK_SIZE_N];
-    
+   
     int row = get_global_id(0) * BLOCK_SIZE_M;
     int col = get_global_id(1) * BLOCK_SIZE_N;
 
@@ -139,6 +203,26 @@ void    sgemm(    int M,int N,int K,
     const int local_wg_size = BLOCKS_IN_TILE_M * BLOCKS_IN_TILE_N;
     const int load_step = TILE_SIZE_M * TILE_SIZE_K / local_wg_size;
 
+    float c[BLOCK_SIZE_M][BLOCK_SIZE_N] = {{0.0f}};
+
+#if INTEL_PLATFORM == 0
+    float ap[BLOCK_SIZE_M];
+    float bp[BLOCK_SIZE_N];
+
+    ALIGN_FLOAT4 __local float a_tile[TILE_SIZE_K][BLOCKS_IN_TILE_M][BLOCK_SIZE_M+TILE_OFFSET];
+    ALIGN_FLOAT4 __local float b_tile[TILE_SIZE_K][BLOCKS_IN_TILE_N][BLOCK_SIZE_N+TILE_OFFSET];
+#else
+    #if ATRANS == 1
+    float a[TILE_SIZE_K][BLOCK_SIZE_M];
+    #define pA(ind1,ind2) (a[(ind2)][(ind1)])
+    #else
+    float a[BLOCK_SIZE_M][TILE_SIZE_K];
+    #define pA(ind1,ind2) (a[(ind1)][(ind2)])
+    #endif
+#endif    
+
+#if INTEL_PLATFORM == 0
+ 
     int k=0;
     for(k=0;k<K;k+=TILE_SIZE_K) {
 
@@ -259,6 +343,65 @@ void    sgemm(    int M,int N,int K,
 
         barrier(CLK_LOCAL_MEM_FENCE);
     }
+#else // INTEL_PLATFORM == 1
+    // for intel we don't use local memory
+    // we use optimized loads from global memory for A
+    // and intel_sub_group_shuffle for optimal loading B
+    int k=0;
+    for(k=0;k<K;k+=TILE_SIZE_K) {
+        if(row + BLOCK_SIZE_M - 1 < M && k + TILE_SIZE_K-1 < K) {
+            #if ATRANS == 0
+                #pragma unroll
+                for(int dr=0;dr<BLOCK_SIZE_M;dr++){
+                    floatK v=vloadK(0,&get_A(row+dr,k));
+                    vstoreK(v,0,a[dr]);
+                }
+           #else // ATRANS
+                #pragma unroll
+                for(int dk=0;dk<TILE_SIZE_K;dk++){
+                    floatM v=vloadM(0,&get_A(row,k+dk));
+                    vstoreM(v,0,a[dk]);
+                }
+            #endif
+        }
+        else {
+            #pragma unroll
+            for(int dr=0;dr<BLOCK_SIZE_M;dr++){
+                #pragma unroll
+                for(int dk=0;dk < TILE_SIZE_K;dk++) {
+                    pA(dr,dk) = (row + dr < M && k+dk < K) ? get_A(row+dr,k+dk): 0;
+                }
+            }
+        }
+
+        #pragma unroll(TILE_SIZE_K)
+        for(int dk=0;dk<TILE_SIZE_K;dk++) {
+            if(k + dk >= K)
+                continue;
+            #if BLOCK_SIZE_N == 8
+                int mycol = col + get_sub_group_local_id();
+                float myv = (mycol < N) ? get_B(k+dk,col + get_sub_group_local_id()) : 0;
+                #pragma unroll
+                for(int dc=0;dc<BLOCK_SIZE_N;dc++){
+                    float b_dc = intel_sub_group_shuffle(myv,dc);
+                    for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
+                        c[dr][dc] = mad(pA(dr,dk),b_dc,c[dr][dc]);
+                    }
+                }
+            #else
+                #pragma unroll
+                for(int dc=0;dc<BLOCK_SIZE_N;dc++){
+                    float b_dc = (col + dc < N) ? get_B(k+dk,col+dc) : 0;
+                    for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
+                        c[dr][dc] = mad(pA(dr,dk),b_dc,c[dr][dc]);
+                    }
+                }
+            #endif
+        }
+    }
+#endif // INTEL_PLATFORM = 1
+
+
 #if BIAS != 0
     bias += offset_bias;
 #endif

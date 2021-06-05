@@ -1,43 +1,69 @@
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <iostream>
 
 namespace dlprim {
 namespace gpu {
+    
+    class StandardSGEMMBase : public GEMM {
+    public:
+        StandardSGEMMBase(Context &ctx,int M,int N,int /*K*/)
+        {
+            if(ctx.check_device_extension("cl_intel_subgroups")) {
+                block_size_m_ = 8;
+                block_size_n_ = 8;
+                tile_size_k_ = 4;
+                off_ = 0;
+                if(M >= 128 && N >= 128) {
+                    tile_size_m_ = tile_size_n_ = 128;
+                }
+                else {
+                    tile_size_m_ = tile_size_n_ = 64;
+                }
+            }
+            else {
+                if(M >= 256 && N >= 256) {
+                    tile_size_m_ = 128;
+                    tile_size_n_ = 128;
+                    block_size_m_ = 8;
+                    block_size_n_ = 8;
+                    tile_size_k_ = 16;
+                    off_ = 1;
+                }
+                else if(M >= 128 && N>= 128) {
+                    tile_size_m_ = 64;
+                    tile_size_n_ = 64;
+                    block_size_m_ = 8;
+                    block_size_n_ = 8;
+                    tile_size_k_ = 16;
+                    off_ = 1;
+                }
+                else {
+                    tile_size_m_ = 32;
+                    tile_size_n_ = 32;
+                    block_size_m_ = 4;
+                    block_size_n_ = 4;
+                    tile_size_k_ = 32;
+                    off_ = 0;
+                }
+            }
+        }
+    protected:
+        int tile_size_n_,tile_size_m_,tile_size_k_;
+        int block_size_n_,block_size_m_;
+        int off_;
+    };
 
-
-    class StandardSGEMM : public GEMM {
+    class StandardSGEMM : public StandardSGEMMBase {
     public:
         StandardSGEMM(  Context &ctx,
                         bool atrans,bool btrans,
-                        int M,int N,int /*K*/,
+                        int M,int N,int K,
                         int bias,
                         StandardActivations act,
-                        int im2col_chan = 0)
+                        int im2col_chan = 0) : 
+                StandardSGEMMBase(ctx,M,N,K)
         {
-            if(M >= 256 && N >= 256) {
-                tile_size_m_ = 128;
-                tile_size_n_ = 128;
-                block_size_m_ = 8;
-                block_size_n_ = 8;
-                tile_size_k_ = 16;
-                off_ = 1;
-            }
-            else if(M >= 128 && N>= 128) {
-                tile_size_m_ = 64;
-                tile_size_n_ = 64;
-                block_size_m_ = 8;
-                block_size_n_ = 8;
-                tile_size_k_ = 16;
-                off_ = 1;
-            }
-            else {
-                tile_size_m_ = 32;
-                tile_size_n_ = 32;
-                block_size_m_ = 4;
-                block_size_n_ = 4;
-                tile_size_k_ = 32;
-                off_ = 0;
-            }
 
             cl::Program const &prog = Cache::instance().get_program(ctx,"sgemm",
                                         "TILE_SIZE_M",tile_size_m_,
@@ -107,49 +133,23 @@ namespace gpu {
 
     private:
         cl::Kernel kernel_;
-        int tile_size_n_,tile_size_m_,tile_size_k_;
-        int block_size_n_,block_size_m_;
-        int off_;
         bool bias_;
     };
 
 
-    class ConvSGEMM : public GEMM {
+    class ConvSGEMM : public StandardSGEMMBase {
     public:
         ConvSGEMM(  Context &ctx,
                         bool atrans,bool btrans,
-                        int M,int N,int /*K*/,
+                        int M,int N,int K,
             int kernel[2],int dilate[2],int padding[2],int stride[2],
             int src_channels,int src_rows,int src_cols,
             int tgt_rows,int tgt_cols,
                         int bias,
                         StandardActivations act,
-                        int im2col_chan = 0)
+                        int im2col_chan = 0) :
+                StandardSGEMMBase(ctx,M,N,K)
         {
-            if(M >= 256 && N >= 256) {
-                tile_size_m_ = 128;
-                tile_size_n_ = 128;
-                block_size_m_ = 8;
-                block_size_n_ = 8;
-                tile_size_k_ = 16;
-                off_ = 1;
-            }
-            else if(M >= 128 && N>= 128) {
-                tile_size_m_ = 64;
-                tile_size_n_ = 64;
-                block_size_m_ = 8;
-                block_size_n_ = 8;
-                tile_size_k_ = 16;
-                off_ = 1;
-            }
-            else {
-                tile_size_m_ = 32;
-                tile_size_n_ = 32;
-                block_size_m_ = 4;
-                block_size_n_ = 4;
-                tile_size_k_ = 32;
-                off_ = 0;
-            }
 
             cl::Program const &prog = Cache::instance().get_program(ctx,"sgemm",
                                         "TILE_SIZE_M",tile_size_m_,
@@ -229,9 +229,6 @@ namespace gpu {
 
     private:
         cl::Kernel kernel_;
-        int tile_size_n_,tile_size_m_,tile_size_k_;
-        int block_size_n_,block_size_m_;
-        int off_;
         bool bias_;
     };
 
