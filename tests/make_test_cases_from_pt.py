@@ -96,6 +96,7 @@ def make_activation():
                     ("identity", (lambda x:x) ) ]:
         cases=[]
         test = {
+            "train" : True,
             "options" : {
                 "activation": act,
             },
@@ -109,9 +110,14 @@ def make_activation():
             case = dict(in_shapes = [ shape ] ,out_shapes = [shape])
             if np.prod(shape) < 100:
                 a = torch.randn(*shape)
+                a.requires_grad = True
                 c = op(a)
+                dc = torch.randn(c.shape)
+                c.backward(dc,retain_graph=True)
                 case["in_tensors"]  = [a.reshape((-1,)).tolist()]
                 case["out_tensors"] = [c.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+                case["in_diffs"] = [a.grad.reshape((-1)).tolist()]
             else:
                 case["use_cpu_reference"]=True
             cases.append(case)

@@ -1,5 +1,21 @@
 #pragma once
 #include <stdexcept>
+
+#if defined(__WIN32) || defined(_WIN32) || defined(WIN32) || defined(__CYGWIN__)
+#	if defined(DLL_EXPORT)
+#		if defined(DLPRIM_SOURCE)
+#			define DLPRIM_API __declspec(dllexport)
+#		else
+#			define DLPRIM_API __declspec(dllimport)
+#		endif
+#	else
+#		define DLPRIM_API
+#	endif
+#else // ELF BINARIES
+#	define DLPRIM_API
+#endif
+
+
 namespace dlprim {
     namespace json { class value; }
 

@@ -38,6 +38,9 @@ void Activation::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpec
     cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"activation",
                                         "ACTIVATION",int(config_.activation));
     kernel_ = cl::Kernel(prog,"activation");
+    if(mode_ == CalculationsMode::predict)
+        return;
+    bwd_kernel_ = cl::Kernel(prog,"activation_diff");
 }
 
 void Activation::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
@@ -63,6 +66,27 @@ void Activation::forward(std::vector<Tensor> &input,std::vector<Tensor> &output,
     }
 }
 
+void Activation::backward(std::vector<TensorAndGradient> &input,
+                          std::vector<TensorAndGradient> &output,
+                          std::vector<TensorAndGradient> &,
+                          Tensor &,
+                          ExecutionContext const &e)
+{
+    DLPRIM_CHECK(input.size()==1);
+    DLPRIM_CHECK(output.size()==1); 
+    if(!output[0].requires_gradient)
+        return;
+    DLPRIM_CHECK(input[0].diff.shape() == output[0].diff.shape());
+    DLPRIM_CHECK(input[0].diff.shape() == output[0].data.shape());
+    if(ctx_.is_cpu_context()) {
+        backward_cpu(output[0].data,output[0].diff,input[0].diff);
+    }
+    else {
+        backward_gpu(output[0].data,output[0].diff,input[0].diff,e);
+    }
+}
+
+
 void Activation::forward_cpu(Tensor &in,Tensor &out)
 {
     size_t size = in.shape().total_size();
@@ -72,6 +96,15 @@ void Activation::forward_cpu(Tensor &in,Tensor &out)
         memmove(b,a,size*sizeof(float));
     }
     cpu::apply_activation(b,size,config_.activation);
+}
+
+void Activation::backward_cpu(Tensor &y,Tensor &dy,Tensor &dx)
+{
+    size_t size = y.shape().total_size();
+    float *p_y =y.data<float>();
+    float *p_dy=dy.data<float>();
+    float *p_dx=dx.data<float>();
+    cpu::apply_activation_diff(size,p_y,p_dy,p_dx,config_.activation);
 }
 
 void Activation::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
@@ -89,5 +122,25 @@ void Activation::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("activation"));
     
 }
+
+void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,ExecutionContext const &ctx)
+{
+    int p=0;
+    int size = y.shape().total_size();
+    bwd_kernel_.setArg(p++,size);
+    bwd_kernel_.setArg(p++,y.device_buffer());
+    bwd_kernel_.setArg(p++,int(y.device_offset()));
+    bwd_kernel_.setArg(p++,dy.device_buffer());
+    bwd_kernel_.setArg(p++,int(dy.device_offset()));
+    bwd_kernel_.setArg(p++,dx.device_buffer());
+    bwd_kernel_.setArg(p++,int(dx.device_offset()));
+    
+    cl::NDRange wg(256);
+    cl::NDRange gr=gpu::round_range(size,wg);
+    ctx.queue().enqueueNDRangeKernel(bwd_kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("activation_diff"));
+    
+}
+
+
 
 }

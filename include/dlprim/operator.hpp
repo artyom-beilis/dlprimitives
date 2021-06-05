@@ -9,7 +9,7 @@ namespace dlprim {
     struct TensorAndGradient {
         bool requires_gradient=true;
         Tensor data;
-        Tensor grad;
+        Tensor diff;
     };
 
     class Operator {

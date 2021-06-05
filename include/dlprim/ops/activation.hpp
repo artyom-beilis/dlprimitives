@@ -32,14 +32,22 @@ namespace dlprim {
                              Tensor &workspace,
                              ExecutionContext const &ctx);
 
+        virtual void backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &parameters,
+                              Tensor &workspace,
+                              ExecutionContext const &ctx);
 
         
     private:
    		void forward_gpu(Tensor &a,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &a,Tensor &output);
+        void backward_cpu(Tensor &y,Tensor &dy,Tensor &dx);
+        void backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,ExecutionContext const &ctx);
         ActivationConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;
+        cl::Kernel bwd_kernel_;
     };
 } // namespace
  

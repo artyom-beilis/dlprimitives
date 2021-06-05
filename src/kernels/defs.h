@@ -16,15 +16,19 @@
 
 #if ACTIVATION == ACTIVATION_IDENTITY
 #   define ACTIVATION_F(x) (x)
+#   define ACTIVATION_FINV(y,dy) (dy)
 #   define ACTIVATION_NAME identity
 #elif ACTIVATION == ACTIVATION_RELU
 #   define ACTIVATION_F(x) (max((x),(dtype)(0)))
+#   define ACTIVATION_FINV(y,dy)  ((y>0)?dy:0)
 #   define ACTIVATION_NAME relu
 #elif ACTIVATION == ACTIVATION_TANH
 #   define ACTIVATION_F(x) (tanh((x)))
+#   define ACTIVATION_FINV(y,dy) ((1-(y)*(y))*(dy))
 #   define ACTIVATION_NAME tanh 
 #elif ACTIVATION == ACTIVATION_SIGMOID
 #   define ACTIVATION_F(x) ((dtype)(1) / ((dtype)(1) + exp(-(x))))
+#   define ACTIVATION_FINV(y,dy) ((y)*(1-(y))*(dy))
 #   define ACTIVATION_NAME sigmoid
 #else
 #   error "Unknown activation"

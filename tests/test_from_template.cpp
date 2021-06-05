@@ -139,6 +139,17 @@ void initialize_tensors(std::vector<dp::Tensor> &tensors,std::string const &op)
     }
 }
 
+std::vector<dp::TensorAndGradient> join_grad(std::vector<dp::Tensor> &data,std::vector<dp::Tensor> &diff)
+{
+    std::vector<dp::TensorAndGradient> joined(data.size());
+    for(size_t i=0;i<data.size();i++) {
+        joined[i].data = data[i];
+        joined[i].diff = diff[i];
+        joined[i].requires_gradient = true;
+    }
+    return joined;
+}
+
 int main(int argc,char **argv)
 {
     if(argc != 3) {
@@ -170,6 +181,7 @@ int main(int argc,char **argv)
         dp::json::array &tests = config["tests"].array();
         for(size_t i=0;i<tests.size();i++) {
             std::cout << "- Running test case " << i << " for options " << tests[i]["options"] << std::endl;
+            bool train = tests[i].get("train",false);
             std::string rnd = tests[i].get("init","uniform");
             std::unique_ptr<dp::Operator> op =     dp::create_by_name(ctx,    op_name,tests[i]["options"]);
             std::unique_ptr<dp::Operator> ref_op = dp::create_by_name(cpu_ctx,op_name,tests[i]["options"]);
@@ -180,6 +192,10 @@ int main(int argc,char **argv)
             std::vector<dp::TensorSpecs> res_specs,res_param_specs,ref_specs,ref_param_specs;
             size_t res_ws;
             dp::Tensor res_ws_tensor;
+            if(train) {
+                op->mode(dp::CalculationsMode::train);
+                ref_op->mode(dp::CalculationsMode::train);
+            }
             op->setup(input_specs,res_specs,res_param_specs,res_ws);
             TEST(res_specs == output_specs);
             TEST(ws == -1 || res_ws == size_t(ws));
@@ -194,8 +210,9 @@ int main(int argc,char **argv)
             }
             TEST(res_specs == output_specs);
             std::vector<dp::Tensor> params,ref_params;
+            std::vector<dp::TensorSpecs> param_specs;
             if(!tests[i].find("param_specs").is_undefined()) {
-                std::vector<dp::TensorSpecs> param_specs = tensor_specs_from_json(tests[i]["param_specs"]);
+                param_specs = tensor_specs_from_json(tests[i]["param_specs"]);
                 TEST(res_param_specs == param_specs);
                 params = make_tensors(ctx,param_specs);
                 ref_params = make_tensors(cpu_ctx,param_specs);
@@ -209,7 +226,8 @@ int main(int argc,char **argv)
             }
             dp::json::array const &cases = tests[i]["cases"].array();
             for(size_t i=0;i<cases.size();i++) {
-                std::cout << "-- test for shape " << cases[i]["in_shapes"] << std::endl;
+                std::cout << "-- test for shape " << cases[i]["in_shapes"] << " fwd" << std::flush;
+                bool use_cpu_reference = cases[i].get("use_cpu_reference",false);
                 std::vector<dp::Shape> in_shapes = tensor_shapes_from_json(cases[i]["in_shapes"]);
                 std::vector<dp::Shape> out_shapes = tensor_shapes_from_json(cases[i]["out_shapes"]);
                 std::vector<dp::Shape> res_shape;
@@ -218,7 +236,7 @@ int main(int argc,char **argv)
                 std::vector<dp::Tensor> in_tensors = make_tensors(ctx,in_shapes,input_specs);
                 std::vector<dp::Tensor> out_tensors = make_tensors(ctx,out_shapes,output_specs);
                 std::vector<dp::Tensor> ref_tensors = make_tensors(cpu_ctx,out_shapes,output_specs);
-                if(!cases[i].get("use_cpu_reference",false)) {
+                if(!use_cpu_reference) {
                     copy_tensors(in_tensors,cases[i]["in_tensors"]);
                     copy_tensors(ref_tensors,cases[i]["out_tensors"]);
                 }
@@ -237,7 +255,51 @@ int main(int argc,char **argv)
                     if(ctx.is_gpu_context())    
                         e.queue().finish();
                 }
-                compare_tensors(out_tensors,ref_tensors,cases[i].get<double>("eps",1e-5));
+                double eps = cases[i].get<double>("eps",1e-5);
+                compare_tensors(out_tensors,ref_tensors,eps);
+                if(train && (use_cpu_reference || !cases[i].find("out_diffs").is_undefined())) {
+                    std::cout <<",bwd" << std::flush;
+                    std::vector<dp::Tensor> out_diffs   = make_tensors(ctx,out_shapes,output_specs);
+                    std::vector<dp::Tensor> ref_diffs   = make_tensors(cpu_ctx,out_shapes,output_specs);
+                    std::vector<dp::Tensor> in_diffs    = make_tensors(ctx,in_shapes,input_specs);
+                    std::vector<dp::Tensor> param_diffs = make_tensors(ctx,param_specs);
+                    std::vector<dp::Tensor> param_ref_diffs = make_tensors(cpu_ctx,param_specs);
+                    if(!use_cpu_reference) {
+                        copy_tensors(out_diffs,cases[i]["out_diffs"]);
+                        copy_tensors(ref_diffs,cases[i]["in_diffs"]);
+                        if(!params.empty()) {
+                            copy_tensors(param_ref_diffs,cases[i]["params_diffs"]);
+                        }
+                    }
+                    else {
+                        initialize_tensors(out_diffs,rnd);
+                        auto a = join_grad(in_tensors,ref_diffs);
+                        auto b = join_grad(ref_tensors,out_diffs);
+                        auto c = join_grad(ref_params,param_ref_diffs);
+                        ref_op->backward(a,b,c,ref_ws_tensor,cpu_e);
+                    }
+                    if(ctx.is_gpu_context()) {
+                        for(dp::Tensor &tensor : out_diffs)
+                            tensor.to_device(e,false);
+                    }
+                    {
+                        auto a = join_grad(in_tensors,in_diffs);
+                        auto b = join_grad(out_tensors,out_diffs);
+                        auto c = join_grad(params,param_diffs);
+                        op->backward(a,b,c,res_ws_tensor,e);
+                    }
+                    if(ctx.is_gpu_context()) {
+                        for(dp::Tensor &tensor : in_diffs)
+                            tensor.to_host(e,false);
+                        for(dp::Tensor &tensor : param_diffs)
+                            tensor.to_host(e,false);
+                        if(ctx.is_gpu_context())    
+                            e.queue().finish();
+                    }
+                    compare_tensors(in_diffs,ref_diffs,eps);
+                    compare_tensors(param_diffs,param_ref_diffs,eps);
+                }
+                std::cout << std::endl;
             }
         }
 
@@ -246,11 +308,11 @@ int main(int argc,char **argv)
         return 0;
     }
     catch(cl::Error const &e) {
-        std::cerr << "FAILED: " << e.what() << " " << e.err()<< std::endl;
+        std::cerr << "\n\nFAILED: " << e.what() << " " << e.err()<< std::endl;
         return 1;
     }
     catch(std::exception const &e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
+        std::cerr << "\n\nFAILED: " << e.what() << std::endl;
         return 1;
     }
     

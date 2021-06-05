@@ -25,9 +25,9 @@ Please note this is only work in progress - first and preliminary stages.
 |GlobalAvgPool2d        |                           | Fwd               |
 |Inner Product          |                           | Fwd               |
 |Conv2d                 |                           | Fwd               |
-|Activation             | relu, sigmoid, tanh       | Fwd               |
+|Activation             | relu, sigmoid, tanh       | Fwd,Bwd           |
 
 ## Other features
 
 - Network object for inference
-- ONNX to DlPrimitives model converted
+- ONNX to DlPrimitives model converter
