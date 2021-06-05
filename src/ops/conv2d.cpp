@@ -260,6 +260,68 @@ namespace dlprim {
             ec.queue(),ec.events(),ec.event("conv_gemm"));
     }
 
+    namespace details {
+        template<int K,int S,int P,typename Float>
+        void im2col_fast(Shape const &in,Shape const &outs,Float *img_in,Float *mat_in)
+        {
+            int rows = outs[2];
+            int cols = outs[3];
+            int src_rows = in[2];
+            int src_cols = in[3];
+            int channels_in = in[1];
+            for(int chan = 0;chan < channels_in;chan ++) {
+                for(int r=P;r<rows-P;r++) {
+                    for(int c=P;c<cols-P;c++) {
+                        int mat_row = r * cols + c;
+                        int mat_col = chan * (K*K);
+                        Float *mat = mat_in + mat_row * channels_in * (K*K) + mat_col;
+                        int y_pos = -P + r * S; 
+                        int x_pos = -P + c * S;
+                        Float *img = img_in + src_cols * (chan * src_rows + y_pos) + x_pos;
+
+
+                        for(int dy = 0;dy < K ;dy++, img += src_cols) {
+                            for(int dx=0;dx < K ;dx++) {
+                                *mat++ = img[dx];
+                            }
+                        }
+                    }
+                }
+                if(P>0) {
+                    for(int r=0;r<rows;r++) {
+                        for(int c=0;c<cols;c++) {
+                            if(c==P && r>=P && r<rows-P) 
+                                c=cols-P;
+
+                            int mat_row = r * cols + c;
+                            int mat_col = chan * (K*K);
+                            Float *mat = mat_in + mat_row * channels_in * (K*K) + mat_col;
+                            int y_pos = -P + r * S;
+                            int x_pos = -P + c * S;
+                            Float *img = img_in + src_cols * (chan * src_rows + y_pos) + x_pos;
+
+
+                            for(int dy = 0;dy < K ;dy++, img += src_cols) {
+                                int y = y_pos + dy;
+                                if(y >= 0 && y < src_rows) {
+                                    for(int dx=0;dx < K ;dx++) {
+                                        int x = x_pos + dx;
+                                        *mat++ = (x >= 0 && x < src_cols) ? img[dx] : 0;
+                                    }
+                                }
+                                else {
+                                    for(int dx=0;dx < K ;dx++) {
+                                        *mat++ = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } // details
+
 
     void Convolution2D::im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in)
     {
@@ -271,6 +333,22 @@ namespace dlprim {
         int dilate_w = config_.dilate[1];
         int stride_h = config_.stride[0];
         int stride_w = config_.stride[1];
+
+        if(dilate_h == 1 && dilate_h == 1 && kern_h == kern_w && pad_h == pad_w && stride_h == stride_w) {
+            int k=kern_w, p = pad_w, s = stride_w;
+            if(s < 10 && p < 10) {
+                int combine = k*100 + s * 10 + p;
+                switch(combine) {
+                case 1142: details::im2col_fast<11,4,2>(in,outs,img_in,mat_in); return;
+                case  311: details::im2col_fast< 3,1,1>(in,outs,img_in,mat_in); return;
+                case  512: details::im2col_fast< 5,1,2>(in,outs,img_in,mat_in); return;
+                case  321: details::im2col_fast< 3,2,1>(in,outs,img_in,mat_in); return;
+                case  723: details::im2col_fast< 7,2,3>(in,outs,img_in,mat_in); return;
+                case  110: details::im2col_fast< 1,1,0>(in,outs,img_in,mat_in); return;
+                case  120: details::im2col_fast< 1,2,0>(in,outs,img_in,mat_in); return;
+                }
+            }
+        }
 
         int rows = outs[2];
         int cols = outs[3];
