@@ -86,7 +86,23 @@ int main(int argc,char **argv)
             std::cout << "Step " << std::setw(2) << i << " " << passed * 1e3 << std::endl;
             if(i == 0 && timing) {
                 double total_event_time = 0;
-                for(auto &d : timing->events()) {
+                if(ctx.is_cpu_context()) {
+                    for(unsigned i=0;i<timing->sections().size();i++) {
+                        int s = i;
+                        std::stack<char const *> sections;
+                        while(s!=-1) {
+                            auto &sec = timing->sections().at(s);
+                            sections.push(sec.name);
+                            s=sec.parent;
+                        }
+                        while(!sections.empty()) {
+                            std::cout << sections.top() << ":";
+                            sections.pop();
+                        }
+                        std::cout << timing->sections()[i].time_sec * 1e3 << "ms" << std::endl;
+                    }
+                }
+                else for(auto &d : timing->events()) {
                     try {
                         auto end =   d->event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
                         auto start = d->event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
