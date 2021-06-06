@@ -35,18 +35,19 @@ Please note this is only work in progress - first and preliminary stages.
 | VGG16     | torchvision.models    | Inference     |
 | ResNet50  | torchvision.models    | Inference     |
 
-Networks exported from pytorch to ONNX and imported for DLPrimitives. Results
-compared with sample images
+The networks were exported from pytorch to ONNX and imported for DLPrimitives.
+Results compared with sample images. Note currently only inference tested,
+BN layers are merged into conv layers by torch optimizer.
 
 ## Tested GPUs
 
-| Device    | Vendor    |   Notes       |
-|-----------|-----------|---------------|
-|RX 560     | AMD       | 16cu model    | 
-|HD 530     | Intel     | i5-6600       |
-|GTX 960    | NVidia    |               |
-|GTX 1080   | NVidia    |               |
-|RTX 2060S  | NVidia    |               |
+| Device    | Vendor    |   Notes                       |
+|-----------|-----------|-------------------------------|
+|RX 560     | AMD       | 16cu model, ROCm & Clover     | 
+|HD 530     | Intel     | i5-6600, NEO driver           |
+|GTX 960    | NVidia    |                               |
+|GTX 1080   | NVidia    |                               |
+|RTX 2060S  | NVidia    |                               |
 
 ## Other features
 
