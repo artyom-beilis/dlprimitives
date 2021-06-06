@@ -50,6 +50,7 @@ void global_pooling(int items,int over,float scale,__global dtype *in,int data_o
     val = val * scale;
 #endif
 
-    *out = val;
+    if(get_local_id(1) == 0)
+        *out = val;
 }
 

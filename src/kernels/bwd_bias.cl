@@ -44,9 +44,11 @@ void bwd_bias(int features,int over,__global dtype *dy,int dy_offset,__global dt
     
     my_work_group_reduce_add(val);
 
-    if(beta == 0)
-        dx[feature] = val;
-    else
-        dx[feature] = dx[feature] * beta + val;
+    if(get_local_id(0) == 0) {
+        if(beta == 0)
+            dx[feature] = val;
+        else
+            dx[feature] = dx[feature] * beta + val;
+    }
 }
 
