@@ -84,7 +84,7 @@ void copy_tensors(std::vector<dp::Tensor> &out,std::vector<dp::Tensor> &inp,dp::
 }
 
 
-void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &reference,float eps)
+void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &reference,float eps,float factor=1.0f,char const *name="")
 {
     for(size_t i=0;i < actual.size();i++) {
         if(actual[i].dtype() == dp::float_data) {
@@ -92,9 +92,11 @@ void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &re
             float *r=reference[i].data<float>();
             int total =  actual[i].shape().total_size();
             for(int j=0;j<total;j++) {
-                if(fabs(a[j] - r[j]) > eps) {
+                if(fabs(a[j] - factor * r[j]) > eps) {
                     std::ostringstream err;
-                    err << "Comparison failed for tensor #" << i << " at " << j << " expecting " << r[j] << " got " << a[j] << " for esp="<<eps;
+                    err << "Comparison failed for tensor " << name 
+                        << "#" << i << " at " << j << " expecting " << r[j]*factor << "=" << r[j] << "*" << factor << " got "
+                         << a[j] << " for esp="<<eps;
                     throw std::runtime_error(err.str());
                 }
             }
@@ -139,13 +141,14 @@ void initialize_tensors(std::vector<dp::Tensor> &tensors,std::string const &op)
     }
 }
 
-std::vector<dp::TensorAndGradient> join_grad(std::vector<dp::Tensor> &data,std::vector<dp::Tensor> &diff)
+std::vector<dp::TensorAndGradient> join_grad(std::vector<dp::Tensor> &data,std::vector<dp::Tensor> &diff,float accum = 0)
 {
     std::vector<dp::TensorAndGradient> joined(data.size());
     for(size_t i=0;i<data.size();i++) {
         joined[i].data = data[i];
         joined[i].diff = diff[i];
         joined[i].requires_gradient = true;
+        joined[i].accumulate_gradient = accum;
     }
     return joined;
 }
@@ -233,6 +236,8 @@ int main(int argc,char **argv)
                 std::vector<dp::Shape> res_shape;
                 op->reshape(in_shapes,res_shape);
                 TEST(out_shapes == res_shape);
+                ref_op->reshape(in_shapes,res_shape);
+                TEST(out_shapes == res_shape);
                 std::vector<dp::Tensor> in_tensors = make_tensors(ctx,in_shapes,input_specs);
                 std::vector<dp::Tensor> out_tensors = make_tensors(ctx,out_shapes,output_specs);
                 std::vector<dp::Tensor> ref_tensors = make_tensors(cpu_ctx,out_shapes,output_specs);
@@ -273,31 +278,33 @@ int main(int argc,char **argv)
                     }
                     else {
                         initialize_tensors(out_diffs,rnd);
-                        auto a = join_grad(in_tensors,ref_diffs);
-                        auto b = join_grad(ref_tensors,out_diffs);
-                        auto c = join_grad(ref_params,param_ref_diffs);
+                        auto a = join_grad(in_tensors,ref_diffs,0);
+                        auto b = join_grad(ref_tensors,out_diffs,0);
+                        auto c = join_grad(ref_params,param_ref_diffs,0);
                         ref_op->backward(a,b,c,ref_ws_tensor,cpu_e);
                     }
-                    if(ctx.is_gpu_context()) {
-                        for(dp::Tensor &tensor : out_diffs)
-                            tensor.to_device(e,false);
+                    for(int accum = 0;accum<2;accum++) {
+                        if(ctx.is_gpu_context()) {
+                            for(dp::Tensor &tensor : out_diffs)
+                                tensor.to_device(e,false);
+                        }
+                        {
+                            auto a = join_grad(in_tensors,in_diffs,accum * 0.5f);
+                            auto b = join_grad(out_tensors,out_diffs);
+                            auto c = join_grad(params,param_diffs,accum * 0.5f);
+                            op->backward(a,b,c,res_ws_tensor,e);
+                        }
+                        if(ctx.is_gpu_context()) {
+                            for(dp::Tensor &tensor : in_diffs)
+                                tensor.to_host(e,false);
+                            for(dp::Tensor &tensor : param_diffs)
+                                tensor.to_host(e,false);
+                            if(ctx.is_gpu_context())    
+                                e.queue().finish();
+                        }
+                        compare_tensors(in_diffs,ref_diffs,eps,1.0 + accum * 0.5f,"data");
+                        compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter");
                     }
-                    {
-                        auto a = join_grad(in_tensors,in_diffs);
-                        auto b = join_grad(out_tensors,out_diffs);
-                        auto c = join_grad(params,param_diffs);
-                        op->backward(a,b,c,res_ws_tensor,e);
-                    }
-                    if(ctx.is_gpu_context()) {
-                        for(dp::Tensor &tensor : in_diffs)
-                            tensor.to_host(e,false);
-                        for(dp::Tensor &tensor : param_diffs)
-                            tensor.to_host(e,false);
-                        if(ctx.is_gpu_context())    
-                            e.queue().finish();
-                    }
-                    compare_tensors(in_diffs,ref_diffs,eps);
-                    compare_tensors(param_diffs,param_ref_diffs,eps);
                 }
                 std::cout << std::endl;
             }

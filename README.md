@@ -23,7 +23,7 @@ Please note this is only work in progress - first and preliminary stages.
 |AvgPool2d              |                           | Fwd               |
 |GlobalMaxPool2d        |                           | Fwd               |
 |GlobalAvgPool2d        |                           | Fwd               |
-|Inner Product          |                           | Fwd               |
+|Inner Product          |                           | Fwd,Bwd           |
 |Conv2d                 |                           | Fwd               |
 |Activation             | relu, sigmoid, tanh       | Fwd,Bwd           |
 

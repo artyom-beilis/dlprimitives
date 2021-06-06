@@ -93,7 +93,7 @@ namespace dlprim {
 
     struct TensorAndGradient {
         bool requires_gradient=true;
-        float accumulate_gradient=1.0;
+        float accumulate_gradient=0.0;
         Tensor data;
         Tensor diff;
     };

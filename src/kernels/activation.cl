@@ -13,7 +13,7 @@ void activation(int size,__global dtype *a,int a_offset, __global dtype *c,int c
 
 
 __kernel
-void activation_diff(int size,__global dtype *y,int y_offset, __global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset)
+void activation_diff(int size,__global dtype *y,int y_offset, __global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset,dtype beta)
 {
     int pos = get_global_id(0);
     if(pos >= size)
@@ -23,7 +23,11 @@ void activation_diff(int size,__global dtype *y,int y_offset, __global dtype *dy
     dx+=dx_offset;
     dtype y_val  = y[pos];
     dtype dy_val = dy[pos];
-    dx[pos] = ACTIVATION_FINV(y_val,dy_val);
+    dtype diff = ACTIVATION_FINV(y_val,dy_val);
+    if(beta == 0)
+        dx[pos] = diff;
+    else
+        dx[pos] = mad(dx[pos],beta,diff);
 }
 
 

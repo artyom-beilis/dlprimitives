@@ -42,8 +42,8 @@ namespace dlprim {
     private:
    		void forward_gpu(Tensor &a,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &a,Tensor &output);
-        void backward_cpu(Tensor &y,Tensor &dy,Tensor &dx);
-        void backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,ExecutionContext const &ctx);
+        void backward_cpu(Tensor &y,Tensor &dy,Tensor &dx,float beta);
+        void backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,float beta,ExecutionContext const &ctx);
         ActivationConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;

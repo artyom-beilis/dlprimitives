@@ -44,6 +44,7 @@ add_library(dlprim SHARED
         src/ops/softmax.cpp
         src/ops/elementwise.cpp
         src/ops/pooling.cpp
+        src/ops/bwd_bias.cpp
         src/gemm.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )

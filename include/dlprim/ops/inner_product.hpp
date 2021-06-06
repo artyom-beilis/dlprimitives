@@ -3,6 +3,7 @@
 namespace dlprim {
     namespace gpu { class GEMM; }
     namespace json { class value; }
+    class BWBias;
 
 	struct InnerProductConfig {
         int inputs = -1;
@@ -37,12 +38,31 @@ namespace dlprim {
                              Tensor &workspace,
                              ExecutionContext const &ctx);
 
+        virtual void backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &parameters,
+                              Tensor &workspace,
+                              ExecutionContext const &ctx);
+
+
 	protected:
         void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias);
+        
+        void backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dM,float factor,ExecutionContext const &ctx);
+        void backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dM,float factor);
+
+        void backward_data_gpu(Tensor &dy,Tensor &dx,Tensor &M,float factor,ExecutionContext const &ctx);
+        void backward_data_cpu(Tensor &dy,Tensor &dx,Tensor &M,float factor);
+
+
 		InnerProductConfig config_;
         DataType dtype_;
         std::unique_ptr<gpu::GEMM> gemm_;
+        std::unique_ptr<gpu::GEMM> bwd_gemm_;
+        std::unique_ptr<gpu::GEMM> bwd_weights_gemm_;
+        std::unique_ptr<Operator>  activation_;
+        std::unique_ptr<BWBias> bwd_bias_;
 	};
 	
 }

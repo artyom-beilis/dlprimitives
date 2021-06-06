@@ -74,15 +74,16 @@ void Activation::backward(std::vector<TensorAndGradient> &input,
 {
     DLPRIM_CHECK(input.size()==1);
     DLPRIM_CHECK(output.size()==1); 
-    if(!output[0].requires_gradient)
+    if(!input[0].requires_gradient)
         return;
     DLPRIM_CHECK(input[0].diff.shape() == output[0].diff.shape());
     DLPRIM_CHECK(input[0].diff.shape() == output[0].data.shape());
+    float accum = input[0].accumulate_gradient;
     if(ctx_.is_cpu_context()) {
-        backward_cpu(output[0].data,output[0].diff,input[0].diff);
+        backward_cpu(output[0].data,output[0].diff,input[0].diff,accum);
     }
     else {
-        backward_gpu(output[0].data,output[0].diff,input[0].diff,e);
+        backward_gpu(output[0].data,output[0].diff,input[0].diff,accum,e);
     }
 }
 
@@ -98,13 +99,13 @@ void Activation::forward_cpu(Tensor &in,Tensor &out)
     cpu::apply_activation(b,size,config_.activation);
 }
 
-void Activation::backward_cpu(Tensor &y,Tensor &dy,Tensor &dx)
+void Activation::backward_cpu(Tensor &y,Tensor &dy,Tensor &dx,float beta)
 {
     size_t size = y.shape().total_size();
     float *p_y =y.data<float>();
     float *p_dy=dy.data<float>();
     float *p_dx=dx.data<float>();
-    cpu::apply_activation_diff(size,p_y,p_dy,p_dx,config_.activation);
+    cpu::apply_activation_diff(size,p_y,p_dy,p_dx,beta,config_.activation);
 }
 
 void Activation::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
@@ -123,7 +124,7 @@ void Activation::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     
 }
 
-void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,ExecutionContext const &ctx)
+void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,float beta,ExecutionContext const &ctx)
 {
     int p=0;
     int size = y.shape().total_size();
@@ -134,6 +135,7 @@ void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,ExecutionContext c
     bwd_kernel_.setArg(p++,int(dy.device_offset()));
     bwd_kernel_.setArg(p++,dx.device_buffer());
     bwd_kernel_.setArg(p++,int(dx.device_offset()));
+    bwd_kernel_.setArg(p++,beta);
     
     cl::NDRange wg(256);
     cl::NDRange gr=gpu::round_range(size,wg);

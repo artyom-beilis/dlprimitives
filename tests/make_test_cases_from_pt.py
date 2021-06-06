@@ -228,6 +228,7 @@ def make_inner_product():
                 tin = torch.randn(10,inp)
                 tout = op(tin)
                 test = {
+                    "train" : True,
                     "init" : "small_frac",
                     "options" : {
                         "inputs": inp,
@@ -252,13 +253,21 @@ def make_inner_product():
                 for s in [[2,inp],[8,inp],[127,inp],[128,inp]]:
                     print("- ",s)
                     tin = torch.randn(s)
+                    tin.requires_grad = True
                     tout = final_op(tin)
+                    dtout = torch.randn(tout.shape)
+                    tout.backward(dtout,retain_graph=True)
                     case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
                     if np.prod(s) < 50:
                         case["in_tensors"] = [tin.reshape((-1,)).tolist()]
                         case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                        case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
+                        case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                        case["params_diffs"] = [ p.grad.reshape((-1,)).tolist() for p in params ]
                     else:
                         case["use_cpu_reference"]=True
+                    for p in params:
+                        p.grad*=0
                     cases.append(case)
     return report
 

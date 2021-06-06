@@ -1,4 +1,6 @@
 #include <dlprim/ops/inner_product.hpp>
+#include <dlprim/ops/bwd_bias.hpp>
+#include <dlprim/ops/activation.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/gpu/gemm.hpp>
@@ -51,8 +53,26 @@ namespace dlprim {
         out.assign({TensorSpecs(Shape(batch,config_.outputs),in[0].dtype())});
         workspace = 0;
 
-        if(ctx_.is_cpu_context())
+        if(mode_ != CalculationsMode::predict) { 
+            if(config_.bias)
+                bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],1,dtype_));
+            
+            if(config_.activation != StandardActivations::identity) {
+                ActivationConfig cfg;
+                cfg.activation = config_.activation;
+                activation_.reset(new Activation(ctx_,cfg));
+                activation_->mode(mode_);
+                std::vector<TensorSpecs> o,p;
+                size_t ws=0;
+                activation_->setup(out,o,p,ws);
+                workspace = std::max(workspace,ws);
+            }
+        }
+ 
+
+        if(ctx_.is_cpu_context()) {
             return;
+        }
         
         gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
             ctx_,dtype_,false,true,
@@ -60,6 +80,24 @@ namespace dlprim {
             (config_.bias ? gpu::GEMM::bias_N : gpu::GEMM::no_bias),
             config_.activation            
         ));
+       
+        if(mode_ == CalculationsMode::predict)
+            return;
+
+        bwd_gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
+            ctx_,dtype_,false,false,
+            batch,config_.inputs,config_.outputs,
+            gpu::GEMM::no_bias,
+            StandardActivations::identity            
+        ));
+
+        bwd_weights_gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
+            ctx_,dtype_,true,false,
+            config_.outputs,config_.inputs,batch,
+            gpu::GEMM::no_bias,
+            StandardActivations::identity            
+        ));
+
     }
 
     void InnerProduct::reshape(std::vector<Shape> const &in,
@@ -69,6 +107,9 @@ namespace dlprim {
         DLPRIM_CHECK(in[0].size() >= 2);
         DLPRIM_CHECK(int(in[0].size_no_batch()) == config_.inputs);
         out.assign({Shape(in[0][0],config_.outputs)});
+        if(mode_ != CalculationsMode::predict && config_.bias && size_t(bwd_bias_->batch()) < in[0][0]) {
+            bwd_bias_.reset(new BWBias(ctx_,in[0][0],1,dtype_));
+        }
     }
 
     void InnerProduct::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,std::vector<Tensor> &parameters,Tensor &,
@@ -140,4 +181,119 @@ namespace dlprim {
         }
         cpu::apply_activation(b,batch*config_.outputs,config_.activation);
     }
+
+    void InnerProduct::backward(std::vector<TensorAndGradient> &input,
+                                std::vector<TensorAndGradient> &output,
+                                std::vector<TensorAndGradient> &parameters,
+                                Tensor &ws,
+                                ExecutionContext const &e)
+    {
+        int steps = 0,step=0;
+        if(config_.activation != StandardActivations::identity)
+            steps++;
+        if(config_.bias && parameters[1].requires_gradient)
+            steps++;
+        if(parameters[0].requires_gradient)
+            steps++;
+        if(input[0].requires_gradient)
+            steps++;
+        if(config_.activation != StandardActivations::identity) {
+            std::vector<TensorAndGradient> tmp({output[0]}),empty;
+            tmp[0].requires_gradient = true;
+            tmp[0].accumulate_gradient = 0.0;
+            activation_->backward(tmp,tmp,empty,ws,e.generate_series_context(step++,steps));
+        }
+        if(config_.bias && parameters[1].requires_gradient) {
+            bwd_bias_->backward(output[0].diff,
+                                parameters[1].diff,
+                                parameters[1].accumulate_gradient,
+                                e.generate_series_context(step++,steps));
+        }
+        if(parameters[0].requires_gradient) {
+            auto ec = e.generate_series_context(step++,steps);
+            if(!ctx_.is_cpu_context()) {
+                backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
+                                    parameters[0].accumulate_gradient,ec);
+            }
+            else {
+                backward_filter_cpu(output[0].diff,input[0].data,parameters[0].diff,
+                                    parameters[0].accumulate_gradient);
+            }
+        }
+        if(input[0].requires_gradient) {
+            auto ec = e.generate_series_context(step++,steps);
+            if(!ctx_.is_cpu_context()) {
+                backward_data_gpu(output[0].diff,input[0].diff,parameters[0].data,
+                                    input[0].accumulate_gradient,ec);
+            }
+            else {
+                backward_data_cpu(output[0].diff,input[0].diff,parameters[0].data,
+                                    input[0].accumulate_gradient);
+            }
+        }
+
+    }
+
+    void InnerProduct::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dM,float factor,ExecutionContext const &ec)
+    {
+        bwd_weights_gemm_->gemm(config_.outputs,config_.inputs,dy.shape()[0],
+                                dy.device_buffer(),
+                                dy.device_offset(),
+                                config_.outputs,
+                                x.device_buffer(),
+                                x.device_offset(),
+                                config_.inputs,
+                                dM.device_buffer(),
+                                dM.device_offset(),
+                                dM.shape()[1],
+                                nullptr,0,
+                                factor,
+                                ec.queue(),ec.events(),ec.event("bw_gemm_weights"));
+
+    }
+    void InnerProduct::backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dM,float factor)
+    {
+        cblas_sgemm(CblasRowMajor,CblasTrans,CblasNoTrans,
+                    config_.outputs,config_.inputs,dy.shape()[0],
+                    1.0f,
+                    dy.data<float>(),
+                    config_.outputs,
+                    x.data<float>(),
+                    config_.inputs,
+                    factor,
+                    dM.data<float>(),
+                    dM.shape()[1]);
+    }
+    void InnerProduct::backward_data_gpu(Tensor &dy,Tensor &dx,Tensor &M,float factor,ExecutionContext const &ec)
+    {
+        bwd_gemm_->gemm(dy.shape()[0],config_.inputs,config_.outputs,
+                        dy.device_buffer(),
+                        dy.device_offset(),
+                        config_.outputs,
+                        M.device_buffer(),
+                        M.device_offset(),
+                        M.shape()[1],
+                        dx.device_buffer(),
+                        dx.device_offset(),
+                        config_.inputs,
+                        nullptr,0,
+                        factor,
+                        ec.queue(),ec.events(),ec.event("bw_gemm_data"));
+
+    }
+    void InnerProduct::backward_data_cpu(Tensor &dy,Tensor &dx,Tensor &M,float factor)
+    {
+        cblas_sgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans,
+                    dy.shape()[0],config_.inputs,config_.outputs,
+                    1.0f,
+                    dy.data<float>(),
+                    config_.outputs,
+                    M.data<float>(),
+                    M.shape()[1],
+                    factor,
+                    dx.data<float>(),
+                    config_.inputs);
+    }
+
+
 } // dlprim
