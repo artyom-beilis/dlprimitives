@@ -27,6 +27,27 @@ Please note this is only work in progress - first and preliminary stages.
 |Conv2d                 |                           | Fwd               |
 |Activation             | relu, sigmoid, tanh       | Fwd,Bwd           |
 
+## Validated Networks
+
+| Network   | Source of model       | Operation     |
+|-----------|-----------------------|---------------|
+| AlexNet   | torchvision.models    | Inference     |
+| VGG16     | torchvision.models    | Inference     |
+| ResNet50  | torchvision.models    | Inference     |
+
+Networks exported from pytorch to ONNX and imported for DLPrimitives. Results
+compared with sample images
+
+## Tested GPUs
+
+| Device    | Vendor    |   Notes       |
+|-----------|-----------|---------------|
+|RX 560     | AMD       | 16cu model    | 
+|HD 530     | Intel     | i5-6600       |
+|GTX 960    | NVidia    |               |
+|GTX 1080   | NVidia    |               |
+|RTX 2060S  | NVidia    |               |
+
 ## Other features
 
 - Network object for inference
