@@ -27,6 +27,7 @@ namespace gpu {
                           int ldc,
                           cl::Buffer *bias,
                           int bias_offset,
+                          float beta,
                           cl::CommandQueue &queue,
                           std::vector<cl::Event> *events = nullptr,
                           cl::Event *event=nullptr) = 0;

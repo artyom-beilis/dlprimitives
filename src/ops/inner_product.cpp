@@ -112,7 +112,7 @@ namespace dlprim {
                     in.device_buffer(),in.device_offset(),config_.inputs,
                     M.device_buffer(),M.device_offset(),config_.inputs,
                     out.device_buffer(),out.device_offset(),config_.outputs,
-                    bias_buffer,bias_offset,
+                    bias_buffer,bias_offset,0.0f,
                     ctx.queue(),ctx.events(),ctx.event("ip_gemm"));
     }
 

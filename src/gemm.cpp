@@ -96,6 +96,7 @@ namespace gpu {
                           int ldc,
                           cl::Buffer *bias,
                           int bias_offset,
+                          float beta,
                           cl::CommandQueue &queue,
                           std::vector<cl::Event> *events,
                           cl::Event *event)
@@ -113,6 +114,7 @@ namespace gpu {
             kernel_.setArg(ind++,c);
             kernel_.setArg(ind++,offset_c);
             kernel_.setArg(ind++,ldc);
+            kernel_.setArg(ind++,beta);
             if(bias_) {
                 DLPRIM_CHECK(bias != nullptr);
                 kernel_.setArg(ind++,*bias);
@@ -192,6 +194,7 @@ namespace gpu {
                           int ldc,
                           cl::Buffer *bias,
                           int bias_offset,
+                          float beta,
                           cl::CommandQueue &queue,
                           std::vector<cl::Event> *events,
                           cl::Event *event)
@@ -209,6 +212,7 @@ namespace gpu {
             kernel_.setArg(ind++,c);
             kernel_.setArg(ind++,offset_c);
             kernel_.setArg(ind++,ldc);
+            kernel_.setArg(ind++,beta);
             if(bias_) {
                 DLPRIM_CHECK(bias != nullptr);
                 kernel_.setArg(ind++,*bias);

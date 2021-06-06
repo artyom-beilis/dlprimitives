@@ -226,6 +226,7 @@ namespace dlprim {
                     N,
                     bias_buffer,
                     bias_offset + g* chstep_out,
+                    0.0f,
                     ectmp.queue(),ectmp.events(),ectmp.event("conv_gemm"));
             }
         }
@@ -257,6 +258,7 @@ namespace dlprim {
             N,
             bias_buffer,
             bias_offset,
+            0.0f,
             ec.queue(),ec.events(),ec.event("conv_gemm"));
     }
 

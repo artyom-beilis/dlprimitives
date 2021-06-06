@@ -91,6 +91,14 @@ namespace dlprim {
         size_t capacity_;
     };
 
+    struct TensorAndGradient {
+        bool requires_gradient=true;
+        float accumulate_gradient=1.0;
+        Tensor data;
+        Tensor diff;
+    };
+
+
 }
 /// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 

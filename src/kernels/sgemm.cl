@@ -178,7 +178,8 @@ __attribute__((reqd_work_group_size(BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N, 1)))
 void    sgemm(    int M,int N,int K,
         __global const float * restrict A,int offset_A,int lda,
         __global const float * restrict B,int offset_B,int ldb,
-        __global float * restrict C,int offset_C,int ldc
+        __global float * restrict C,int offset_C,int ldc,
+        float beta_factor
 #if BIAS != 0
         , __global const float * restrict bias,int offset_bias
 #endif
@@ -445,7 +446,12 @@ void    sgemm(    int M,int N,int K,
             #pragma unroll
             for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
                 if(row+dr < M) {
-                    C[(row + dr)*ldc + offset] = ACTIVATION_F(c[dr][dc]);
+                    int index =(row + dr)*ldc + offset;
+                    if(beta_factor != 0)
+                        C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
+                    else
+                        C[index] = ACTIVATION_F(c[dr][dc]);
+
                 }
             }
         }
@@ -457,7 +463,11 @@ void    sgemm(    int M,int N,int K,
             #pragma unroll
             for(int dc=0;dc<BLOCK_SIZE_N;dc++) {
                 if(row + dr < M && col+dc < N) {
-                    C[(row+dr)*ldc+col+dc] = ACTIVATION_F(c[dr][dc]);
+                    int index = (row+dr)*ldc+col+dc;
+                    if(beta_factor != 0)
+                        C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
+                    else
+                        C[index] = ACTIVATION_F(c[dr][dc]);
                 }
             }
         }

@@ -6,12 +6,6 @@
 namespace dlprim {
     namespace json { class value; }
 
-    struct TensorAndGradient {
-        bool requires_gradient=true;
-        Tensor data;
-        Tensor diff;
-    };
-
     class Operator {
     public:
         Operator(Context const &ctx) : 
