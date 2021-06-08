@@ -34,6 +34,9 @@
 #define BIAS 0
 #endif
 
+#ifndef GROUPS
+#define GROUPS 1
+#endif
 
 #define BLOCK_SIZE_NY (BLOCK_SIZE_N*BLOCK_SIZE_M)
 #define BLOCKS_IN_TILE_N (TILE_SIZE_N / BLOCK_SIZE_N)
@@ -76,7 +79,7 @@ float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
     int x = x_pos + dx * DILATE_W;
 
     if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) {
-        return ptr[((b *  CHANNELS_IN + channel) * SRC_ROWS + y) * SRC_COLS + x];
+        return ptr[((b *  (CHANNELS_IN*GROUPS) + channel) * SRC_ROWS + y) * SRC_COLS + x];
     }
     return 0;
 }
@@ -168,13 +171,26 @@ float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
 
 
 
+#if GROUPS == 1
+#define DIM_M 0
+#define DIM_N 1
+#define DIM_G 2
+#else
+#define DIM_M 1
+#define DIM_N 2
+#define DIM_G 0
+#endif
 
 
 __kernel 
 #if INTEL_PLATFORM == 1
 __attribute__((intel_reqd_sub_group_size(8)))
 #endif
+#if GROUPS == 1
 __attribute__((reqd_work_group_size(BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N, 1)))
+#else
+__attribute__((reqd_work_group_size(1,BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N)))
+#endif
 void    sgemm(    int M,int N,int K,
         __global const float * restrict A,int offset_A,int lda,
         __global const float * restrict B,int offset_B,int ldb,
@@ -189,17 +205,29 @@ void    sgemm(    int M,int N,int K,
     B += offset_B;
     C += offset_C;
 
+#if GROUPS > 1
+    int group = get_global_id(DIM_G);
+    if(group >= GROUPS)
+        return;
+    A += M*K*group;
+    B += SRC_COLS*SRC_ROWS*CHANNELS_IN*group;
+    C += (IM2COL_OCHAN) * M *group;
+    #if BIAS != 0
+    bias += M*group;
+    #endif
+#endif
+
    
-    int row = get_global_id(0) * BLOCK_SIZE_M;
-    int col = get_global_id(1) * BLOCK_SIZE_N;
+    int row = get_global_id(DIM_M) * BLOCK_SIZE_M;
+    int col = get_global_id(DIM_N) * BLOCK_SIZE_N;
 
-    int lid0 = get_local_id(0);
-    int lid1 = get_local_id(1);
+    int lid0 = get_local_id(DIM_M);
+    int lid1 = get_local_id(DIM_N);
     
-    int local_tile_id = lid0 * get_local_size(1) + lid1;
+    int local_tile_id = lid0 * get_local_size(DIM_N) + lid1;
 
-    int tile_row0 = get_group_id(0)*TILE_SIZE_M;
-    int tile_col0 = get_group_id(1)*TILE_SIZE_N;
+    int tile_row0 = get_group_id(DIM_M)*TILE_SIZE_M;
+    int tile_col0 = get_group_id(DIM_N)*TILE_SIZE_N;
 
     const int local_wg_size = BLOCKS_IN_TILE_M * BLOCKS_IN_TILE_N;
     const int load_step = TILE_SIZE_M * TILE_SIZE_K / local_wg_size;
@@ -442,7 +470,7 @@ void    sgemm(    int M,int N,int K,
             int matrix_col = col + dc;
             int batch = matrix_col / IM2COL_OCHAN;
             int incol = matrix_col % IM2COL_OCHAN;
-            int offset = batch * IM2COL_OCHAN * M + incol;
+            int offset = batch * (IM2COL_OCHAN * GROUPS) * M + incol;
             #pragma unroll
             for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
                 if(row+dr < M) {

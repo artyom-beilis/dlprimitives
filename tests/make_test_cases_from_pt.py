@@ -93,7 +93,8 @@ def make_activation():
     for act,op in [ ("relu", torch.nn.ReLU()),
                     ("tanh", torch.nn.Tanh()),
                     ("sigmoid",torch.nn.Sigmoid()),
-                    ("identity", (lambda x:x) ) ]:
+                    ("identity", (lambda x:x) ),
+                    ("relu6", torch.nn.ReLU6() ) ]:
         cases=[]
         test = {
             "train" : True,
@@ -109,7 +110,7 @@ def make_activation():
         for shape in [[5,2],[32,6,16,16],[128,256,16,16],[10023]]:
             case = dict(in_shapes = [ shape ] ,out_shapes = [shape])
             if np.prod(shape) < 100:
-                a = torch.randn(*shape)
+                a = torch.randn(*shape)*16
                 a.requires_grad = True
                 c = op(a)
                 dc = torch.randn(c.shape)

@@ -2,6 +2,7 @@
 #define ACTIVATION_RELU     1
 #define ACTIVATION_TANH     2
 #define ACTIVATION_SIGMOID  3
+#define ACTIVATION_RELU6    4
 
 #ifndef dtype
 #define dtype float
@@ -30,6 +31,10 @@
 #   define ACTIVATION_F(x) ((dtype)(1) / ((dtype)(1) + exp(-(x))))
 #   define ACTIVATION_FINV(y,dy) ((y)*(1-(y))*(dy))
 #   define ACTIVATION_NAME sigmoid
+#elif ACTIVATION == ACTIVATION_RELU6
+#   define ACTIVATION_F(x) (min(max((x),(dtype)(0)),(dtype)(6)))
+#   define ACTIVATION_FINV(y,dy)  ((0<y && y<6)?dy:0)
+#   define ACTIVATION_NAME relu6
 #else
 #   error "Unknown activation"
 #endif 

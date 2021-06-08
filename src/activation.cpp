@@ -11,6 +11,8 @@ namespace dlprim {
             return StandardActivations::tanh;
         if(name == "sigmoid")
             return StandardActivations::sigmoid;
+        if(name == "relu6")
+            return StandardActivations::relu6;
         throw ValidationError("Invalid cativation name:" + name);
     }
     char const *activation_to_name(StandardActivations act)
@@ -24,6 +26,8 @@ namespace dlprim {
             return "tanh";
         case StandardActivations::sigmoid:
             return "sigmoid";
+        case StandardActivations::relu6:
+            return "relu6";
         }
         throw ValidationError("Internal error invalid cativation");
     }

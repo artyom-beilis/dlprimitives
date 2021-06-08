@@ -144,9 +144,9 @@ namespace gpu {
         ConvSGEMM(  Context &ctx,
                         bool atrans,bool btrans,
                         int M,int N,int K,
-            int kernel[2],int dilate[2],int padding[2],int stride[2],
-            int src_channels,int src_rows,int src_cols,
-            int tgt_rows,int tgt_cols,
+                        int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,
+                        int src_channels,int src_rows,int src_cols,
+                        int tgt_rows,int tgt_cols,
                         int bias,
                         StandardActivations act,
                         int im2col_chan = 0) :
@@ -169,6 +169,7 @@ namespace gpu {
                                         "DILATE_H",dilate[0], "DILATE_W",dilate[1],
                                         "PAD_H",   padding[0],"PAD_W",padding[1],
                                         "STRIDE_H",stride[0], "STRIDE_W",stride[1],
+                                        "GROUPS",groups,
                                         "CHANNELS_IN",src_channels,
                                         "SRC_COLS",src_cols,
                                         "SRC_ROWS",src_rows,
@@ -177,6 +178,7 @@ namespace gpu {
                                         "ACTIVATION",int(act));
             kernel_ = cl::Kernel(prog,"sgemm");
             bias_ = bias;
+            groups_ = groups;
         }
         static int round_up_div(int x,int y)
         {
@@ -226,14 +228,22 @@ namespace gpu {
             int ls1 = tile_size_n_ / block_size_n_; 
             int gs0 = round_up_div(M,tile_size_m_) * tile_size_m_ / block_size_m_;
             int gs1 = round_up_div(N,tile_size_n_) * tile_size_n_ / block_size_n_;
-            cl::NDRange global(gs0,gs1);
-            cl::NDRange local(ls0,ls1);
+            cl::NDRange global,local;
+            if(groups_ > 1) {
+                global = cl::NDRange(groups_,gs0,gs1);
+                local =  cl::NDRange(1,ls0,ls1);
+            }
+            else {
+                global = cl::NDRange(gs0,gs1,1);
+                local =  cl::NDRange(ls0,ls1,1);
+            }
             queue.enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,events,event);
         }
 
     private:
         cl::Kernel kernel_;
         bool bias_;
+        int groups_;
     };
 
 
@@ -254,7 +264,7 @@ namespace gpu {
             Context &ctx,DataType dtype,
             bool trans_a,bool trans_b,
             int M,int N,int K,
-            int kernel[2],int dilate[2],int padding[2],int stride[2],
+            int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,
             int src_channels,int src_rows,int src_cols,
             int tgt_rows,int tgt_cols,
             int bias,
@@ -263,7 +273,7 @@ namespace gpu {
     {
         DLPRIM_CHECK(dtype == float_data);
         std::unique_ptr<GEMM> g(new ConvSGEMM(ctx,trans_a,trans_b,M,N,K,
-            kernel,dilate,padding,stride,
+            kernel,dilate,padding,stride,groups,
             src_channels,src_rows,src_cols,
             tgt_rows,tgt_cols,
             bias,act,im2col_chan));

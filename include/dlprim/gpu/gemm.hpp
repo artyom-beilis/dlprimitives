@@ -44,7 +44,7 @@ namespace gpu {
             Context &ctx,DataType dtype,
             bool trans_a,bool trans_b,
             int M,int N,int K,
-            int kernel[2],int dilate[2],int padding[2],int stride[2],
+            int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,
             int src_channels,int src_rows,int src_cols,
             int tgt_rows,int tgt_cols,
             int bias = 0,
