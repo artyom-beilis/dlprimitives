@@ -57,6 +57,9 @@ namespace dlprim {
         size_t ws_size_;
         size_t out_h_,out_w_;
         size_t in_h_,in_w_;
+
+        bool use_ds_conv;
+        cl::Kernel conv_;
 	};
 } // namespace
 

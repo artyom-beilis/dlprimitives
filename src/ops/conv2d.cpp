@@ -82,6 +82,8 @@ namespace dlprim {
         Shape output_shape = get_output_shape(in_shape);
         out.assign({TensorSpecs(output_shape,dtype_)});
 
+        use_ds_conv=false;
+
         Shape params_shape(config_.channels_out,
                            config_.channels_in / config_.groups,
                            config_.kernel[0],
@@ -95,10 +97,32 @@ namespace dlprim {
             ws_size_ = workspace =  output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
             return;
         }
+
+        ws_size_ = workspace =  0;
+
+        if(config_.kernel[0] == config_.kernel[1] 
+            && config_.pad[0] == config_.pad[1] 
+            && config_.dilate[0] == config_.dilate[1]
+            && config_.stride[0] == config_.stride[1]
+            && config_.groups == config_.channels_in
+            && config_.channels_in > 1
+            && config_.dilate[0] == 1
+            && config_.stride[0] == 1
+            && config_.kernel[0] % 2 == 1
+            && config_.kernel[0] / 2 == config_.pad[0])
+        {
+            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"depthwise_separable_conv",
+                                        "ACTIVATION",int(config_.activation),
+                                        "BIAS",int(config_.bias),
+                                        "KERN",config_.kernel[0],
+                                        "CHANNELS",config_.channels_in);
+            conv_ = cl::Kernel(prog,"conv");
+            use_ds_conv=true;
+            return;
+        }
         
         get_gemm(in[0].shape(),out[0].shape());
 
-        ws_size_ = workspace =  0;
 
     }
     
@@ -187,18 +211,40 @@ namespace dlprim {
 
     void Convolution2D::forward_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
     {
+        cl::Buffer *bias_buffer = nullptr;
+        int bias_offset = 0;
+         if(config_.bias) {
+            bias_buffer = &bias->device_buffer();
+            bias_offset = bias->device_offset();
+        }
         int batch = in.shape()[0];
+        int height = in.shape()[2];
+        int width = in.shape()[2];
+        if(use_ds_conv) {
+            int p=0;
+            conv_.setArg(p++,batch);
+            conv_.setArg(p++,height);
+            conv_.setArg(p++,width);
+            conv_.setArg(p++,in.device_buffer());
+            conv_.setArg(p++,int(in.device_offset()));
+            conv_.setArg(p++,W.device_buffer());
+            conv_.setArg(p++,int(W.device_offset()));
+            if(config_.bias) {
+                conv_.setArg(p++,bias->device_buffer());
+                conv_.setArg(p++,bias_offset);
+            }
+            conv_.setArg(p++,out.device_buffer());
+            conv_.setArg(p++,int(out.device_offset()));
+            cl::NDRange wg(1,16,16);
+            cl::NDRange gr=gpu::round_range(batch*config_.channels_in,height,width,wg);
+            ec.queue().enqueueNDRangeKernel(conv_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv"));
+            return;
+        }
         int M = config_.channels_out / config_.groups;
         int N = out.shape()[2]*out.shape()[3];
         int K = get_im2col_width(); 
         
-        cl::Buffer *bias_buffer = nullptr;
-        int bias_offset = 0;
-        
-        if(config_.bias) {
-            bias_buffer = &bias->device_buffer();
-            bias_offset = bias->device_offset();
-        }
+       
         gemm_->gemm(M,N*batch,K,
             W.device_buffer(),
             W.device_offset(),
