@@ -307,6 +307,7 @@ def make_conv2d():
         tout = op(tin)
         test = {
             "init" : "small_frac",
+            "train" : True,
             "options" : {
                 "kernel": kernel,
                 "pad" : pad,
@@ -338,15 +339,23 @@ def make_conv2d():
             if s[2] + _at(pad,0) < lkh or s[3] + _at(pad,1) < lkw:
                 continue
             tin = torch.randn(s)
+            tin.requires_grad = True
             tout = op(tin)
+            dtout = torch.randn(tout.shape)
+            tout.backward(dtout,retain_graph=True)
             case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
             if np.prod(s) < 5000 and pred_param:
                 case["in_tensors"] = [tin.reshape((-1,)).tolist()]
                 case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
+                case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                case["params_diffs"] = [ p.grad.reshape((-1,)).tolist() for p in params ]
                 print("- ",s,"predefined")
             else:
                 case["use_cpu_reference"]=True
                 print("- ",s,"cpu as ref")
+            for p in params:
+                p.grad*=0
             cases.append(case)
     return report
 

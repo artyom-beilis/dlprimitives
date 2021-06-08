@@ -144,5 +144,18 @@ void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,float beta,Executi
 }
 
 
-
+std::unique_ptr<Activation> Activation::get_bwd_op(Context &ctx,StandardActivations act,TensorSpecs spec)
+{
+    ActivationConfig cfg;
+    cfg.activation = act;
+    std::unique_ptr<Activation> p(new Activation(ctx,cfg));
+    p->mode(CalculationsMode::train);
+    std::vector<TensorSpecs> in={spec},out,par;
+    size_t ws = 0;
+    p->setup(in,out,par,ws);
+    DLPRIM_CHECK(ws==0);
+    DLPRIM_CHECK(par.empty());
+    return p;
 }
+
+} // dlprim

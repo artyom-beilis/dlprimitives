@@ -86,24 +86,43 @@ void copy_tensors(std::vector<dp::Tensor> &out,std::vector<dp::Tensor> &inp,dp::
 
 void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &reference,float eps,float factor=1.0f,char const *name="")
 {
+    bool failed = false;
     for(size_t i=0;i < actual.size();i++) {
+        int fail_counts=0;
         if(actual[i].dtype() == dp::float_data) {
             float *a=actual[i].data<float>();
             float *r=reference[i].data<float>();
             int total =  actual[i].shape().total_size();
+            if(total == 0)
+                continue;
+            float sum=0,sum2=0;
             for(int j=0;j<total;j++) {
+                sum +=r[j];
+                sum2+=r[j]*r[j];
+            }
+            sum /= total;
+            sum2 /= total;
+            float variance = sum2 - sum*sum;
+            float dev = std::sqrt(variance);
+            //std::cout << "\n\nstd("<<name << "[" << i <<"])=" << dev << " var=" << variance<< std::endl;
+            if(dev > 1)
+                eps *= dev;
+            for(int j=0;j<total && fail_counts < 10;j++) {
                 if(fabs(a[j] - factor * r[j]) > eps) {
-                    std::ostringstream err;
-                    err << "Comparison failed for tensor " << name 
-                        << "#" << i << " at " << j << " expecting " << r[j]*factor << "=" << r[j] << "*" << factor << " got "
-                         << a[j] << " for esp="<<eps;
-                    throw std::runtime_error(err.str());
+                    std::cerr << "Comparison failed for tensor " << name 
+                        << ":" << i << " at " << j << " expecting " << r[j]*factor << "=" << r[j] << "*" << factor << " got "
+                         << a[j] << " for esp="<<eps << std::endl;
+                    fail_counts ++;
+                    failed=true;
                 }
             }
         }
         else {
             TEST(!"Unsuported data type");
         }
+    }
+    if(failed) {
+        throw std::runtime_error("Computations Failed");
     }
 }
 
@@ -223,14 +242,14 @@ int main(int argc,char **argv)
                     copy_tensors(ref_params,tests[i]["param_tensors"]);
                 }
                 else {
-                    initialize_tensors(ref_params,rnd);
+                   initialize_tensors(ref_params,rnd);
                 }
                 copy_tensors(params,ref_params,ctx);
             }
             dp::json::array const &cases = tests[i]["cases"].array();
             for(size_t i=0;i<cases.size();i++) {
-                std::cout << "-- test for shape " << cases[i]["in_shapes"] << " fwd" << std::flush;
                 bool use_cpu_reference = cases[i].get("use_cpu_reference",false);
+                std::cout << "-- test for shape " << cases[i]["in_shapes"] << " fwd" << std::flush;
                 std::vector<dp::Shape> in_shapes = tensor_shapes_from_json(cases[i]["in_shapes"]);
                 std::vector<dp::Shape> out_shapes = tensor_shapes_from_json(cases[i]["out_shapes"]);
                 std::vector<dp::Shape> res_shape;
@@ -302,8 +321,8 @@ int main(int argc,char **argv)
                             if(ctx.is_gpu_context())    
                                 e.queue().finish();
                         }
-                        compare_tensors(in_diffs,ref_diffs,eps,1.0 + accum * 0.5f,"data");
                         compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter");
+                        compare_tensors(in_diffs,ref_diffs,eps,1.0 + accum * 0.5f,"data");
                     }
                 }
                 std::cout << std::endl;

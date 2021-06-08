@@ -4,6 +4,8 @@
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
+#include <dlprim/ops/bwd_bias.hpp>
+#include <dlprim/ops/activation.hpp>
 #include <cblas.h>
 #include <boost/compute/event.hpp>
 
@@ -91,14 +93,21 @@ namespace dlprim {
         if(config_.bias) 
             params.push_back(TensorSpecs(Shape(config_.channels_out),dtype_));
 
+        if(mode_ == CalculationsMode::train) {
+            if(config_.bias)
+                bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],out_h_ * out_w_,dtype_));
+            if(config_.activation != StandardActivations::identity)
+                activation_ = std::move(Activation::get_bwd_op(ctx_,config_.activation,in[0]));
+        }
+
         if(ctx_.is_cpu_context()) {
             ws_size_ = workspace =  output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
-            return;
+        }
+        else {
+             ws_size_ = workspace = 0;
         }
         
         get_gemm(in[0].shape(),out[0].shape());
-
-        ws_size_ = workspace =  0;
 
     }
     
@@ -110,6 +119,7 @@ namespace dlprim {
         out_w_ = out[3];
         in_h_ = in[2];
         in_w_ = in[3];
+       
         
         if(ctx_.is_cpu_context())
             return;
@@ -155,9 +165,19 @@ namespace dlprim {
     {
         DLPRIM_CHECK(in.size() == 1);
         out.assign({get_output_shape(in[0])});
+        if(activation_) {
+            std::vector<Shape> tmp;
+            activation_->reshape(out,tmp);
+        }
+        if(bwd_bias_) {
+            int rc = out[0][2]*out[0][3];
+            int b = out[0][0];
+            if(bwd_bias_->batch() < b || bwd_bias_->rows_columns() != rc) {
+                bwd_bias_.reset(new BWBias(ctx_,b,rc,dtype_));
+            }
+        }
         get_gemm(in[0],out[0]);
     }
-
     void Convolution2D::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,std::vector<Tensor> &parameters,Tensor &ws,
             ExecutionContext const &ectx)
     {
@@ -263,7 +283,49 @@ namespace dlprim {
     }
 
     namespace details {
-        template<int K,int S,int P,typename Float>
+        
+        struct Im2ColOp {
+            template<typename DType>
+            static void copy(DType &img,DType &im2col)
+            {
+                im2col = img;
+            }
+            template<typename DType>
+            static void copy_if(DType &img,DType &im2col,bool cond)
+            {
+                if(cond) {
+                    im2col = img;
+                }
+                else {
+                    im2col = DType();
+                }
+            }
+            template<typename DType>
+            static void pad_zero(DType &im2col)
+            {
+                im2col = DType();
+            }
+        };
+        struct Col2ImOp {
+            template<typename DType>
+            static void copy(DType &img,DType &im2col)
+            {
+                img += im2col;
+            }
+            template<typename DType>
+            static void copy_if(DType &img,DType &im2col,bool cond)
+            {
+                if(cond) {
+                    img += im2col;
+                }
+            }
+            template<typename DType>
+            static void pad_zero(DType &)
+            {
+            }
+        };
+
+        template<int K,int S,int P,typename Op,typename Float>
         void im2col_fast(Shape const &in,Shape const &outs,Float *img_in,Float *mat_in)
         {
             int rows = outs[2];
@@ -284,7 +346,8 @@ namespace dlprim {
 
                         for(int dy = 0;dy < K ;dy++, img += src_cols) {
                             for(int dx=0;dx < K ;dx++) {
-                                *mat++ = img[dx];
+                                Op::copy(img[dx],*mat);
+                                mat++;
                             }
                         }
                     }
@@ -308,12 +371,14 @@ namespace dlprim {
                                 if(y >= 0 && y < src_rows) {
                                     for(int dx=0;dx < K ;dx++) {
                                         int x = x_pos + dx;
-                                        *mat++ = (x >= 0 && x < src_cols) ? img[dx] : 0;
+                                        Op::copy_if(img[dx],*mat,(x >= 0 && x < src_cols));
+                                        mat++;
                                     }
                                 }
                                 else {
                                     for(int dx=0;dx < K ;dx++) {
-                                        *mat++ = 0;
+                                        Op::pad_zero(*mat);
+                                        mat++;
                                     }
                                 }
                             }
@@ -325,7 +390,8 @@ namespace dlprim {
     } // details
 
 
-    void Convolution2D::im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in)
+    template<typename Op,typename DType>
+    void Convolution2D::im2col(Shape const &in,Shape const &outs,DType *img_in,DType *mat_in)
     {
         int kern_h   = config_.kernel[0];
         int kern_w   = config_.kernel[1];
@@ -341,13 +407,13 @@ namespace dlprim {
             if(s < 10 && p < 10) {
                 int combine = k*100 + s * 10 + p;
                 switch(combine) {
-                case 1142: details::im2col_fast<11,4,2>(in,outs,img_in,mat_in); return;
-                case  311: details::im2col_fast< 3,1,1>(in,outs,img_in,mat_in); return;
-                case  512: details::im2col_fast< 5,1,2>(in,outs,img_in,mat_in); return;
-                case  321: details::im2col_fast< 3,2,1>(in,outs,img_in,mat_in); return;
-                case  723: details::im2col_fast< 7,2,3>(in,outs,img_in,mat_in); return;
-                case  110: details::im2col_fast< 1,1,0>(in,outs,img_in,mat_in); return;
-                case  120: details::im2col_fast< 1,2,0>(in,outs,img_in,mat_in); return;
+                case 1142: details::im2col_fast<11,4,2,Op>(in,outs,img_in,mat_in); return;
+                case  311: details::im2col_fast< 3,1,1,Op>(in,outs,img_in,mat_in); return;
+                case  512: details::im2col_fast< 5,1,2,Op>(in,outs,img_in,mat_in); return;
+                case  321: details::im2col_fast< 3,2,1,Op>(in,outs,img_in,mat_in); return;
+                case  723: details::im2col_fast< 7,2,3,Op>(in,outs,img_in,mat_in); return;
+                case  110: details::im2col_fast< 1,1,0,Op>(in,outs,img_in,mat_in); return;
+                case  120: details::im2col_fast< 1,2,0,Op>(in,outs,img_in,mat_in); return;
                 }
             }
         }
@@ -362,22 +428,24 @@ namespace dlprim {
                 for(int c=0;c<cols;c++) {
                     int mat_row = r * cols + c;
                     int mat_col = chan * (kern_h * kern_w);
-                    float *mat = mat_in + mat_row * channels_in * (kern_h * kern_w) + mat_col;
+                    DType *mat = mat_in + mat_row * channels_in * (kern_h * kern_w) + mat_col;
                     int y_pos = -pad_h + r * stride_h;
                     int x_pos = -pad_w + c * stride_w;
-                    float *img = img_in + src_cols * (chan * src_rows + y_pos) + x_pos;
+                    DType *img = img_in + src_cols * (chan * src_rows + y_pos) + x_pos;
 
                     for(int dy = 0;dy < kern_h * dilate_h ;dy+= dilate_h, img += src_cols * dilate_h) {
                         int y = y_pos + dy;
                         if(y >= 0 && y < src_rows) {
                             for(int dx=0;dx < kern_w * dilate_w ;dx+= dilate_w) {
                                 int x = x_pos + dx;
-                                *mat++ = (x >= 0 && x < src_cols) ? img[dx] : 0;
+                                Op::copy_if(img[dx],*mat,(x >= 0 && x < src_cols));
+                                mat++;
                             }
                         }
                         else {
                             for(int dx=0;dx < kern_w * dilate_w ;dx+= dilate_w) {
-                                *mat++ = 0;
+                                Op::pad_zero(*mat);
+                                mat++;
                             }
                         }
                     }
@@ -385,8 +453,34 @@ namespace dlprim {
             }
         }
     }
+   
+    void Convolution2D::scale_cpu(Tensor &t,float v)
+    {
+        size_t items = t.shape().total_size();
+        float  *ptr = t.data<float>();
+        if(v == 0)
+            memset(ptr,0,items * sizeof(float));
+        else
+            cblas_sscal(items,v,ptr,1);
+    }
+    
+    void Convolution2D::forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws)
+    {
+        fwd_bwd_cpu(OpMode::forward,in,out,M,bias,ws);
+        cpu::apply_activation(out.data<float>(),out.shape().total_size(),config_.activation);
+    }
+    void Convolution2D::backward_data_cpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor)
+    {
+        scale_cpu(dx,factor);
+        fwd_bwd_cpu(OpMode::backward_data,dx,dy,K,nullptr,ws.host_data());
+    }
+    void Convolution2D::backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dK,Tensor &ws,float factor)
+    {
+        scale_cpu(dK,factor);
+        fwd_bwd_cpu(OpMode::backward_filter,x,dy,dK,nullptr,ws.host_data());
+    }
 
-    void Convolution2D::forward_cpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
+    void Convolution2D::fwd_bwd_cpu(OpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
     {
         int batch = in.shape()[0];
         float *imcols = static_cast<float *>(ws);
@@ -404,24 +498,101 @@ namespace dlprim {
             for(int g=0;g<config_.groups;g++) {
                 float *img = in.data<float>()  + in_size_no_batch *b + g * step_groups_in * in.shape()[2] * in.shape()[3];
                 float *omg = out.data<float>() + out_size_no_batch*b + g * step_groups_out * out.shape()[2] * out.shape()[3];
-                im2col(in_shape,out_shape,img,imcols);
-                cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasTrans,
-                        config_.channels_out / config_.groups,im2col_rows,kernel_cols,
-                        1.0f,
-                        kernel + step_kernel * g,kernel_cols,
-                        imcols,kernel_cols,
-                        0.0f,
-                        omg,
-                        im2col_rows);
-                if(config_.bias) {
-                    float *bias = bias_tensor->data<float>() + g * step_groups_out;
-                    int plane_size = out.shape()[2]*out.shape()[3];
-                    for(int i=0;i<step_groups_out;i++) {
-                        cblas_saxpy(plane_size,1.0f,bias + i,0,omg + plane_size*i,1);
+                switch(mode) {
+                case OpMode::forward: {
+                        im2col<details::Im2ColOp>(in_shape,out_shape,img,imcols);
+                        cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasTrans,
+                                config_.channels_out / config_.groups,im2col_rows,kernel_cols,
+                                1.0f,
+                                kernel + step_kernel * g,kernel_cols,
+                                imcols,kernel_cols,
+                                0.0f,
+                                omg,
+                                im2col_rows);
+                        if(config_.bias) {
+                            float *bias = bias_tensor->data<float>() + g * step_groups_out;
+                            int plane_size = out.shape()[2]*out.shape()[3];
+                            for(int i=0;i<step_groups_out;i++) {
+                                cblas_saxpy(plane_size,1.0f,bias + i,0,omg + plane_size*i,1);
+                            }
+                        }
                     }
-                }
+                    break;
+                case OpMode::backward_filter: {
+                        im2col<details::Im2ColOp>(in_shape,out_shape,img,imcols);
+                        cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasNoTrans,
+                                config_.channels_out / config_.groups,kernel_cols,im2col_rows,
+                                1.0f,
+                                omg,im2col_rows,
+                                imcols,kernel_cols,
+                                1.0f,
+                                kernel + step_kernel * g,kernel_cols
+                                );
+                    }
+                    break;
+                case OpMode::backward_data: {
+                        cblas_sgemm(CblasRowMajor,CblasTrans, CblasNoTrans,
+                                im2col_rows, kernel_cols, config_.channels_out / config_.groups,
+                                1.0f,
+                                omg,im2col_rows,
+                                kernel + step_kernel * g,kernel_cols,
+                                0.0f,
+                                imcols,kernel_cols
+                                );
+                        im2col<details::Col2ImOp>(in_shape,out_shape,img,imcols);
+                    }
+                    break;
+                } // switch
             }
         }
-        cpu::apply_activation(out.data<float>(),out.shape().total_size(),config_.activation);
     }
+
+    void Convolution2D::backward(std::vector<TensorAndGradient> &input,
+                                 std::vector<TensorAndGradient> &output,
+                                 std::vector<TensorAndGradient> &parameters,
+                                 Tensor &workspace,
+                                 ExecutionContext const &e)
+    {
+        int steps = int(input[0].requires_gradient) 
+                        + int(parameters[0].requires_gradient)
+                        + int(config_.bias && parameters[1].requires_gradient)
+                        + int(config_.activation != StandardActivations::identity);
+        int step = 0;
+        if(config_.activation != StandardActivations::identity) {
+            std::vector<TensorAndGradient> tmp({output[0]}),empty;
+            tmp[0].requires_gradient = true;
+            tmp[0].accumulate_gradient = 0.0;
+            activation_->backward(tmp,tmp,empty,workspace,e.generate_series_context(step++,steps));
+        }
+        if(config_.bias && parameters[1].requires_gradient) {
+            bwd_bias_->backward(output[0].diff,
+                                parameters[1].diff,
+                                parameters[1].accumulate_gradient,
+                                e.generate_series_context(step++,steps));
+        }
+        if(parameters[0].requires_gradient) {
+            auto ec = e.generate_series_context(step++,steps);
+            if(!ctx_.is_cpu_context()) {
+                //backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
+                //                    parameters[0].accumulate_gradient,ec);
+            }
+            else {
+                backward_filter_cpu(output[0].diff,input[0].data,parameters[0].diff,workspace,
+                                    parameters[0].accumulate_gradient);
+            }
+        }
+        if(input[0].requires_gradient) {
+            auto ec = e.generate_series_context(step++,steps);
+            if(!ctx_.is_cpu_context()) {
+                //backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,
+                //                    input[0].accumulate_gradient,ec);
+            }
+            else {
+                backward_data_cpu(output[0].diff,parameters[0].data,input[0].diff,workspace,
+                                    input[0].accumulate_gradient);
+            }
+        }
+    }
+
+
 } // dlprim

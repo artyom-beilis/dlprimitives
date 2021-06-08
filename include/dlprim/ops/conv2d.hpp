@@ -4,6 +4,7 @@
 namespace dlprim {	
     
     namespace gpu { class GEMM; }
+    class BWBias;
 
 	struct Convolution2DConfig {
 		int channels_in = -1;
@@ -41,6 +42,12 @@ namespace dlprim {
                              std::vector<Tensor> &parameters,
                              Tensor &workspace,
                              ExecutionContext const &ctx);
+        
+        virtual void backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &parameters,
+                              Tensor &workspace,
+                              ExecutionContext const &ctx);
 
 
         Shape get_output_shape(Shape const &in);
@@ -50,11 +57,33 @@ namespace dlprim {
         void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_gpu_grouped(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws);
-        void im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in);
+        template<typename Op,typename DType>
+        void im2col(Shape const &in,Shape const &outs,DType *img_in,DType *mat_in);
+    
+        void scale_cpu(Tensor &t,float v);
+
+        void backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ctx);
+        void backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dK,Tensor &ws,float factor);
+
+        void backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ctx);
+        void backward_data_cpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor);
+
+        enum class OpMode {
+            forward,
+            backward_data,
+            backward_filter
+        };
+
+        void fwd_bwd_cpu(OpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws);
+
 		
         Convolution2DConfig config_;
         DataType dtype_;
         std::unique_ptr<gpu::GEMM> gemm_;
+        std::unique_ptr<gpu::GEMM> bwd_gemm_;
+        std::unique_ptr<gpu::GEMM> bwd_weights_gemm_;
+        std::unique_ptr<Operator>  activation_;
+        std::unique_ptr<BWBias> bwd_bias_;
         size_t ws_size_;
         size_t out_h_,out_w_;
         size_t in_h_,in_w_;

@@ -6,6 +6,8 @@ namespace dlprim {
         StandardActivations activation = StandardActivations::identity;
         static ActivationConfig from_json(json::value const &v);
     };
+
+
    
     class Activation : public Operator {
     public:
@@ -38,6 +40,7 @@ namespace dlprim {
                               Tensor &workspace,
                               ExecutionContext const &ctx);
 
+        static std::unique_ptr<Activation> get_bwd_op(Context &ctx,StandardActivations act,TensorSpecs spec);
         
     private:
    		void forward_gpu(Tensor &a,Tensor &output,ExecutionContext const &ctx);
