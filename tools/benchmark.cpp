@@ -2,8 +2,28 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <cmath>
 
 namespace dp = dlprim;
+
+void xavier(dp::Tensor &t)
+{
+    float *p = t.data<float>();
+    int no = t.shape()[0];
+    int ni = t.shape().size_no_batch();
+    int total = t.shape().total_size();
+    float factor = 1/std::sqrt(float(no+ni));
+    for(int i=0;i<total;i++) {
+        p[i] = factor*(float(rand())/RAND_MAX - 0.5f);
+    }
+}
+
+void xavier(dp::Net &n)
+{
+    for(auto &p : n.params()) {
+        xavier(p.second);
+    }
+}
 
 int main(int argc,char **argv)
 {
@@ -29,20 +49,25 @@ int main(int argc,char **argv)
             argv++;
             argc--;
         }
-        if(argc<4) {
-            std::cerr << "Usage [-t] [-iNNN] [-wMMM] device net.json net.h5" << std::endl;
+        if(argc<3) {
+            std::cerr << "Usage [-t] [-iNNN] [-wMMM] device net.json [net.h5]" << std::endl;
             return 1;
         }
         dp::Context ctx(argv[1]);
         std::cout << "Using: " << ctx.name() << std::endl;
         
         std::string net_js = argv[2];
-        std::string net_h5 = argv[3];
+        std::string net_h5 = argc >= 4 ? argv[3] : "";
 
         dp::Net net(ctx);
         net.load_from_json_file(net_js);
         net.setup();
-        net.load_parameters_from_hdf5(net_h5);
+        if(!net_h5.empty()) {
+            net.load_parameters_from_hdf5(net_h5);
+        }
+        else {
+            xavier(net);
+        }
         net.copy_parameters_to_device();
         std::vector<dp::Tensor> data,res;
         std::cout << "Inputs" << std::endl;

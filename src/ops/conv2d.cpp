@@ -126,13 +126,13 @@ namespace dlprim {
         
         if(config_.groups > 1) {
             int M = config_.channels_out / config_.groups;
-            int N = out_h_*out_w_;
+            int N = out_h_*out_w_ * out[0];
             int K = get_im2col_width(); 
 
             auto gemm = gpu::GEMM::get_optimal_conv_gemm(
                 ctx_,dtype_,false,true,
                 M,N,K,
-                config_.kernel,config_.dilate,config_.pad,config_.stride,
+                config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
                 config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
                 (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
                 config_.activation,
@@ -149,7 +149,7 @@ namespace dlprim {
             auto gemm = gpu::GEMM::get_optimal_conv_gemm(
                 ctx_,dtype_,false,true,
                 M,N,K,
-                config_.kernel,config_.dilate,config_.pad,config_.stride,
+                config_.kernel,config_.dilate,config_.pad,config_.stride,1,
                 config_.channels_in,in[2],in[3],out[2],out[3],
                 (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
                 config_.activation,
@@ -200,62 +200,15 @@ namespace dlprim {
             forward_cpu(in[0],out[0],W,bias,ws.host_data());
         }
         else {
-            if(config_.groups > 1)
-                forward_gpu_grouped(in[0],out[0],W,bias,ectx);
-            else
-                forward_gpu(in[0],out[0],W,bias,ectx);
+            forward_gpu(in[0],out[0],W,bias,ectx);
         }
     }
     
 
-
-    void Convolution2D::forward_gpu_grouped(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
-    {
-        int M = config_.channels_out / config_.groups;
-        int N = out.shape()[2]*out.shape()[3];
-        int K = get_im2col_width(); 
-        int batch = in.shape()[0];
-        int groups = config_.groups;
-        
-        cl::Buffer *bias_buffer = nullptr;
-        int bias_offset = 0;
-        
-        if(config_.bias) {
-            bias_buffer = &bias->device_buffer();
-            bias_offset = bias->device_offset();
-        }
-        int chstep_in  = config_.channels_in  / config_.groups;
-        int chstep_out = config_.channels_out / config_.groups;
-        int step_input  = chstep_in  *  in.shape()[2]  * in.shape()[3];
-        int step_output = chstep_out * out.shape()[2] * out.shape()[3];
-        int step_kernel = chstep_out * chstep_in * config_.kernel[0] * config_.kernel[1];
-
-        int index = 0;
-        for(int b=0;b<batch;b++) {
-            for(int g=0;g<groups;g++,index++) {
-                ExecutionContext ectmp = ec.generate_series_context(index,batch*groups);
-                gemm_->gemm(M,N,K,
-                    W.device_buffer(),
-                    W.device_offset() + g * step_kernel,
-                    K,
-                    in.device_buffer(),
-                    in.device_offset() + index * step_input,
-                    K,
-                    out.device_buffer(),
-                    out.device_offset() + index * step_output,
-                    N,
-                    bias_buffer,
-                    bias_offset + g* chstep_out,
-                    0.0f,
-                    ectmp.queue(),ectmp.events(),ectmp.event("conv_gemm"));
-            }
-        }
-    }
-
     void Convolution2D::forward_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
     {
         int batch = in.shape()[0];
-        int M = config_.channels_out;
+        int M = config_.channels_out / config_.groups;
         int N = out.shape()[2]*out.shape()[3];
         int K = get_im2col_width(); 
         

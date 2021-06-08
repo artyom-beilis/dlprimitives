@@ -15,25 +15,26 @@ Please note this is only work in progress - first and preliminary stages.
 
 ## Operators Features Matrix
 
-|Operator               |Features                   | Computation       |
-|-----------------------|---------------------------|-------------------|
-|Softmax                |                           | Fwd               |
-|Elementwise            | ax+by, max(ax,by), ax\*y  | Fwd               |
-|MaxPool2d              |                           | Fwd               |
-|AvgPool2d              |                           | Fwd               |
-|GlobalMaxPool2d        |                           | Fwd               |
-|GlobalAvgPool2d        |                           | Fwd               |
-|Inner Product          |                           | Fwd,Bwd           |
-|Conv2d                 |                           | Fwd               |
-|Activation             | relu, sigmoid, tanh       | Fwd,Bwd           |
+|Operator               |Features                       | Computation       |
+|-----------------------|-------------------------------|-------------------|
+|Softmax                |                               | Fwd               |
+|Elementwise            | ax+by, max(ax,by), ax\*y      | Fwd               |
+|MaxPool2d              |                               | Fwd               |
+|AvgPool2d              |                               | Fwd               |
+|GlobalMaxPool2d        |                               | Fwd               |
+|GlobalAvgPool2d        |                               | Fwd               |
+|Inner Product          |                               | Fwd,Bwd           |
+|Conv2d                 |                               | Fwd               |
+|Activation             | relu, sigmoid, tanh, relu6    | Fwd,Bwd           |
 
 ## Validated Networks
 
-| Network   | Source of model       | Operation     |
-|-----------|-----------------------|---------------|
-| AlexNet   | torchvision.models    | Inference     |
-| VGG16     | torchvision.models    | Inference     |
-| ResNet50  | torchvision.models    | Inference     |
+| Network       | Source of model       | Operation     |
+|---------------|-----------------------|---------------|
+| AlexNet       | torchvision.models    | Inference     |
+| VGG16         | torchvision.models    | Inference     |
+| ResNet50      | torchvision.models    | Inference     |
+| MobileNet v2  | torchvision.models    | Inference     |
 
 The networks were exported from pytorch to ONNX and imported for DLPrimitives.
 Results compared with sample images. Note currently only inference tested,

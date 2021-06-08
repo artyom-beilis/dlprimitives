@@ -33,6 +33,14 @@ namespace dlprim {
                         }
                     }
                     break;
+                case StandardActivations::relu6:
+                    {
+                        T zero=T();
+                        for(size_t i=0;i<n;i++) {
+                            p[i] = std::min(std::max(p[i],zero),T(6));
+                        }
+                    }
+                    break;
             };
         }
 
@@ -67,6 +75,13 @@ namespace dlprim {
                         for(size_t i=0;i<n;i++) {
                             T yv = y[i];
                             dx[i] = dy[i] * yv * (1-yv);
+                        }
+                    }
+                    break;
+                case StandardActivations::relu6:
+                    {
+                        for(size_t i=0;i<n;i++) {
+                            dx[i] = (6 > y[i] && y[i] > 0) ? dy[i] : 0;
                         }
                     }
                     break;
@@ -108,6 +123,13 @@ namespace dlprim {
                         for(size_t i=0;i<n;i++) {
                             T yv = y[i];
                             dx[i] = beta*dx[i] + (dy[i] * yv * (1-yv));
+                        }
+                    }
+                    break;
+                case StandardActivations::relu6:
+                    {
+                        for(size_t i=0;i<n;i++) {
+                            dx[i] = beta*dx[i] + (6 > y[i] && y[i] > 0 ? dy[i] : 0);
                         }
                     }
                     break;

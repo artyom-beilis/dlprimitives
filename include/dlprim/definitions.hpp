@@ -121,6 +121,7 @@ namespace dlprim {
 		relu = 1,
         tanh = 2,
         sigmoid = 3,
+        relu6 = 4,
 	};
     
     StandardActivations activation_from_name(std::string const &name);

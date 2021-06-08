@@ -55,7 +55,6 @@ namespace dlprim {
         void get_gemm(Shape const &in,Shape const &out);
         int get_im2col_width();
         void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
-        void forward_gpu_grouped(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws);
         template<typename Op,typename DType>
         void im2col(Shape const &in,Shape const &outs,DType *img_in,DType *mat_in);

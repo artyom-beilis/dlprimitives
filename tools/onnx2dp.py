@@ -35,7 +35,7 @@ def get_inputs(model):
         outputs.append(str(out.name))
     return inputs,outputs,params
 
-def get_attrs(attrs):
+def get_attrs(attrs,tp):
     res = dict()
     for a in attrs:
         name = a.name
@@ -50,7 +50,8 @@ def get_attrs(attrs):
         elif a.type == 3:
             res[name] = str(a.s)
         else:
-            raise Exception("Unknow type ",a.type,str(a))
+            print("Warning Unknow attibute type " + str(a) + "in operator" + tp)
+            #raise Exception("Unknow attibute type " + str(a) + "in operator" + tp)
     return res
 
 def get_pads(attrs):
@@ -65,7 +66,8 @@ def get_pads(attrs):
 def get_operators(model,inputs,params):
     operators = []
     actdic = {
-        "Relu" : 'relu'
+        "Relu" : 'relu',
+        "Clip" : 'relu6'
     }
     op_len = 0
     print("================")
@@ -73,7 +75,7 @@ def get_operators(model,inputs,params):
         print(n.op_type,n.name)
     print("================")
     for n in model.graph.node:
-        attrs = get_attrs(n.attribute)
+        attrs = get_attrs(n.attribute,n.op_type)
         if n.op_type == 'Conv':
             pads = get_pads(attrs)
             op = dict(name = n.name,
@@ -89,7 +91,7 @@ def get_operators(model,inputs,params):
                         dilate = attrs.get('dilations',1),
                         pad = pads,
                         channels_out = params[n.input[1]]['shape'][0],
-                        channels_in  = params[n.input[1]]['shape'][1]
+                        channels_in  = params[n.input[1]]['shape'][1]*attrs.get('group',1)
                       )
                     )
             operators.append(op)
@@ -112,6 +114,8 @@ def get_operators(model,inputs,params):
             operators.append(op)
         elif n.op_type in actdic:
             opt_name = actdic[n.op_type]
+            if opt_name == 'Clip' and (attrs.get('min')!=0  or attr.get('max')!=6):
+                raise Exception("Clip expected to have min/max for Relu6")
             if  operators[-1]['options'].get('activation') is None \
                 and operators[-1]['type'] in ('Convolution2D','InnerProduct','Elementwise') \
                 and operators[-1]['outputs'][0] == n.input[0]:
@@ -120,7 +124,7 @@ def get_operators(model,inputs,params):
                 operators[-1]['outputs'][0] = n.output[0]
             else:
                 raise Exception("Need previous operator to add %s " % opt_name)
-        elif n.op_type in ('Flatten','Dropout'):
+        elif n.op_type in ('Flatten','Dropout','Reshape'):
             assert operators[-1]['outputs'][0] == n.input[0]
             operators[-1]['outputs'][0] = n.output[0]
         elif n.op_type == 'Softmax':
@@ -171,7 +175,8 @@ def get_operators(model,inputs,params):
                     )
             operators.append(op)
         else:
-            raise Exception("Unsupported operation: " + str(n.op_type) + " with attributes " + json.dumps(attrs));
+            print("Warning Unsupported operation: " + str(n.op_type) + " with attributes " + json.dumps(attrs));
+            print("Final network may not represent actual!!!")
         if op_len == len(operators):
             print("Skipped or modified last op from %s" % str(n.op_type))
         else:
