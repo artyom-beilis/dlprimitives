@@ -59,6 +59,10 @@ void copy_tensors(std::vector<dp::Tensor> &tensors,dp::json::value const &v)
     dp::json::array const &vals = v.array();
     for(size_t i=0;i<tensors.size();i++) {
         std::vector<float> const &values = vals.at(i).get_value<std::vector<float> >();
+        if(values.size() !=tensors[i].shape().total_size()) {
+            std::cerr << "Got vector of size " << values.size() << " for shape " << tensors[i].shape() << std::endl;
+        }
+        TESTEQ(values.size(),tensors[i].shape().total_size());
         if(tensors[i].dtype() == dp::float_data) {
             float *p=tensors[i].data<float>();
             memcpy(p,values.data(),sizeof(float)*tensors[i].shape().total_size());
@@ -104,9 +108,9 @@ void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &re
             sum2 /= total;
             float variance = sum2 - sum*sum;
             float dev = std::sqrt(variance);
-            //std::cout << "\n\nstd("<<name << "[" << i <<"])=" << dev << " var=" << variance<< std::endl;
-            if(dev > 1)
+            if(dev > 1) {
                 eps *= dev;
+            }
             for(int j=0;j<total && fail_counts < 10;j++) {
                 if(fabs(a[j] - factor * r[j]) > eps) {
                     std::cerr << "Comparison failed for tensor " << name 
@@ -286,18 +290,19 @@ int main(int argc,char **argv)
                     std::vector<dp::Tensor> out_diffs   = make_tensors(ctx,out_shapes,output_specs);
                     std::vector<dp::Tensor> ref_diffs   = make_tensors(cpu_ctx,out_shapes,output_specs);
                     std::vector<dp::Tensor> in_diffs    = make_tensors(ctx,in_shapes,input_specs);
+                    std::vector<dp::Tensor> in_ref_diffs    = make_tensors(cpu_ctx,in_shapes,input_specs);
                     std::vector<dp::Tensor> param_diffs = make_tensors(ctx,param_specs);
                     std::vector<dp::Tensor> param_ref_diffs = make_tensors(cpu_ctx,param_specs);
                     if(!use_cpu_reference) {
                         copy_tensors(out_diffs,cases[i]["out_diffs"]);
-                        copy_tensors(ref_diffs,cases[i]["in_diffs"]);
+                        copy_tensors(in_ref_diffs,cases[i]["in_diffs"]);
                         if(!params.empty()) {
                             copy_tensors(param_ref_diffs,cases[i]["params_diffs"]);
                         }
                     }
                     else {
                         initialize_tensors(out_diffs,rnd);
-                        auto a = join_grad(in_tensors,ref_diffs,0);
+                        auto a = join_grad(in_tensors,in_ref_diffs,0);
                         auto b = join_grad(ref_tensors,out_diffs,0);
                         auto c = join_grad(ref_params,param_ref_diffs,0);
                         ref_op->backward(a,b,c,ref_ws_tensor,cpu_e);
@@ -322,7 +327,7 @@ int main(int argc,char **argv)
                                 e.queue().finish();
                         }
                         compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter");
-                        compare_tensors(in_diffs,ref_diffs,eps,1.0 + accum * 0.5f,"data");
+                        compare_tensors(in_diffs,in_ref_diffs,eps,1.0 + accum * 0.5f,"data");
                     }
                 }
                 std::cout << std::endl;

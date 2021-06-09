@@ -82,6 +82,8 @@ namespace dlprim {
 
     void Convolution2D::setup_depthwise_separable_conv()
     {
+        if(ctx_.is_cpu_context())
+            return;
         cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"depthwise_separable_conv",
                                     "ACTIVATION",int(config_.activation),
                                     "BIAS",int(config_.bias),
@@ -132,6 +134,7 @@ namespace dlprim {
 
         if(ctx_.is_cpu_context()) {
             ws_size_ = workspace =  output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
+            return;
         }
         else {
              ws_size_ = workspace = 0;
