@@ -50,6 +50,10 @@ namespace dlprim {
         void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws);
         void im2col(Shape const &in,Shape const &outs,float *img_in,float *mat_in);
+
+        void setup_depthwise_separable_conv();
+        bool is_depthwise_separable_conv();
+        static int get_opt_val(int v);
 		
         Convolution2DConfig config_;
         DataType dtype_;
@@ -58,7 +62,9 @@ namespace dlprim {
         size_t out_h_,out_w_;
         size_t in_h_,in_w_;
 
-        bool use_ds_conv;
+        constexpr static int ds_patch_rows = 2;
+        constexpr static int ds_patch_cols = 2;
+        bool use_ds_conv_;
         cl::Kernel conv_;
 	};
 } // namespace

@@ -1,11 +1,16 @@
 #include "defs.h"
 
+#define KERN_PAD ((KERN-1)/2)
+
+#define PATCH_H (PATCH_ROWS + KERN - 1)
+#define PATCH_W (PATCH_COLS + KERN - 1)
+
 __kernel
 void conv(int batch,int height,int width,
-          __global const float *input, int input_offset,
+          __global const float *input,int input_offset,
           __global const float *kern,int kernel_offset,
 #if BIAS != 0
-          __global const float *bias  ,int bias_offset,
+          __global const float *bias,int bias_offset,
 #endif          
           __global float *output,int output_offset)
 {
@@ -14,43 +19,69 @@ void conv(int batch,int height,int width,
     kern += kernel_offset;
     int b = get_global_id(0) / CHANNELS;
     int d = get_global_id(0) % CHANNELS;
-    int r = get_global_id(1);
-    int c = get_global_id(2);
-    kern += d * KERN * KERN;
-    input  += b * CHANNELS * width * height + d * width * height + r * width + c;
-    output += b * CHANNELS * width * height + d * width * height + r * width + c;
+    int r = get_global_id(1) * PATCH_ROWS;
+    int c = get_global_id(2) * PATCH_COLS;
 
     if(r >= height || c >= width || b >= batch)
         return;
+
+    kern += d * KERN * KERN;
+    
+    input  += b * CHANNELS * width * height + d * width * height + (r - KERN_PAD) * width + c - KERN_PAD;
+    output += b * CHANNELS * width * height + d * width * height + r * width + c;
+
     float K_vals[KERN][KERN];
-    float I_vals[KERN][KERN] = {{0}};
+    float I_vals[PATCH_H][PATCH_W];
+
     #pragma unroll
     for(int dr=0;dr < KERN;dr++)
+        #pragma unroll
         for(int dc=0;dc<KERN;dc++)
             K_vals[dr][dc] = *kern ++;
 
+    #if BIAS != 0
+        float start_val = bias[bias_offset + d];
+    #else
+        const float start_val = 0;
+    #endif
+
+            
+
+    int y = r-KERN_PAD;
     #pragma unroll
-    for(int dr=-KERN/2,kr=0;dr<=KERN/2;dr++,kr++) {
-        if(r+dr < 0 || r+dr >= height)
-            continue;
-        #pragma unroll
-        for(int dc=-KERN/2,kc=0;dc<=KERN/2;dc++,kc++) {
-            if(c+dc < 0 || c+dc >= height)
-                continue;
-            I_vals[kr][kc]=input[dr*width+dc];
+    for(int dr=0;dr<PATCH_H;dr++,y++) {
+        if(y < 0 || y >= height) {
+            #pragma unroll
+            for(int dc=0;dc<PATCH_W;dc++)
+                I_vals[dr][dc]=0;
+        }
+        else {
+            int x = c - KERN_PAD;
+            #pragma unroll
+            for(int dc=0;dc<PATCH_W;dc++,x++) {
+                I_vals[dr][dc]=(0 <= x && x < width) ? input[dr*width+dc] : 0;
+            }
         }
     }
 
-    float sum = 0;
-    #pragma unroll
-    for(int dr=0;dr < KERN;dr++)
-        #pragma unroll
-        for(int dc=0;dc<KERN;dc++)
-            sum = mad(K_vals[dr][dc],I_vals[dr][dc],sum);
-    #if BIAS != 0
-    sum += bias[bias_offset + d];
-    #endif
 
-    *output = ACTIVATION_F(sum);
-    
+    #pragma unroll
+    for(int dr=0;dr<PATCH_ROWS;dr++) {
+        if(r+dr >= height)
+            break;
+        #pragma unroll
+        for(int dc=0;dc<PATCH_COLS;dc++) {
+            if(c+dc>=width)
+                break;
+            float sum = start_val;
+            #pragma unroll
+            for(int drk=0;drk < KERN;drk++)
+                #pragma unroll
+                for(int dck=0;dck<KERN;dck++)
+                    sum = mad(K_vals[drk][dck],I_vals[dr+drk][dc+dck],sum);
+
+            output[dr*width+dc] = ACTIVATION_F(sum);
+        }
+    }
+
 }
