@@ -24,7 +24,7 @@ Please note this is only work in progress - first and preliminary stages.
 |GlobalMaxPool2d        |                               | Fwd               |
 |GlobalAvgPool2d        |                               | Fwd               |
 |Inner Product          |                               | Fwd,Bwd           |
-|Conv2d                 |                               | Fwd               |
+|Conv2d                 |                               | Fwd,Bwd           |
 |Activation             | relu, sigmoid, tanh, relu6    | Fwd,Bwd           |
 
 ## Validated Networks

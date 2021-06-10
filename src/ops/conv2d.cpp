@@ -282,7 +282,7 @@ namespace dlprim {
         }
         int batch = in.shape()[0];
         int height = in.shape()[2];
-        int width = in.shape()[2];
+        int width = in.shape()[3];
         
         if(use_ds_conv_) {
             int p=0;
