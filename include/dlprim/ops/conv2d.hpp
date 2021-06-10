@@ -3,7 +3,7 @@
 
 namespace dlprim {	
     
-    namespace gpu { class GEMM; }
+    namespace gpu { class GEMM; class Scal; }
     class BWBias;
 
 	struct Convolution2DConfig {
@@ -68,13 +68,8 @@ namespace dlprim {
         void backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ctx);
         void backward_data_cpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor);
 
-        enum class OpMode {
-            forward,
-            backward_data,
-            backward_filter
-        };
 
-        void fwd_bwd_cpu(OpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws);
+        void fwd_bwd_cpu(GemmOpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws);
 
 
         void setup_depthwise_separable_conv();
@@ -84,10 +79,11 @@ namespace dlprim {
         Convolution2DConfig config_;
         DataType dtype_;
         std::unique_ptr<gpu::GEMM> gemm_;
-        std::unique_ptr<gpu::GEMM> bwd_gemm_;
+        std::unique_ptr<gpu::GEMM> bwd_data_gemm_;
         std::unique_ptr<gpu::GEMM> bwd_weights_gemm_;
         std::unique_ptr<Operator>  activation_;
         std::unique_ptr<BWBias> bwd_bias_;
+        std::unique_ptr<gpu::Scal> scal_;
         size_t ws_size_;
         size_t out_h_,out_w_;
         size_t in_h_,in_w_;

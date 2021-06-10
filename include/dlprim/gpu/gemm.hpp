@@ -42,6 +42,7 @@ namespace gpu {
 
         static std::unique_ptr<GEMM> get_optimal_conv_gemm(
             Context &ctx,DataType dtype,
+            GemmOpMode op_mode,
             bool trans_a,bool trans_b,
             int M,int N,int K,
             int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,

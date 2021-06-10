@@ -291,6 +291,7 @@ def make_conv2d():
             (1, 0, 1, 1, 3, 5,False,1,False),
             (1, 0, 2, 1, 3, 5,False,1,False),
             (3, 1, 1, 1, 4, 8,True,2,False), 
+            (3, 1, 2, 1, 6, 8,True,2,False), 
             (3, 1, 1, 1, 8, 8,True,8,False), 
             ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False),
             (5, 2, 1, 1, 16,32,True,1,False),
@@ -334,7 +335,7 @@ def make_conv2d():
             test["options"]["activation"] = "relu"
         print(test["options"],"predefined params",pred_param)
         tests.append(test)
-        for s in [[3,cin,4,4],[2,cin,7,7],[2,cin,10,10],[2,cin,19,19],[2,cin,20,20],[2,cin,32,32],
+        for s in [[1,cin,4,4],[3,cin,4,4],[2,cin,7,7],[2,cin,10,5],[2,cin,10,10],[2,cin,19,19],[2,cin,20,20],[2,cin,32,32],
                   [64,cin,64,64],[53,cin,100,100]]:
             lkh,lkw = _at(kernel,0)*_at(dilate,0), _at(kernel,1)*_at(dilate,1)
             if s[2] + _at(pad,0) < lkh or s[3] + _at(pad,1) < lkw:

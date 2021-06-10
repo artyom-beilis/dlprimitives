@@ -142,14 +142,15 @@ namespace gpu {
     class ConvSGEMM : public StandardSGEMMBase {
     public:
         ConvSGEMM(  Context &ctx,
-                        bool atrans,bool btrans,
-                        int M,int N,int K,
-                        int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,
-                        int src_channels,int src_rows,int src_cols,
-                        int tgt_rows,int tgt_cols,
-                        int bias,
-                        StandardActivations act,
-                        int im2col_chan = 0) :
+                    GemmOpMode op_mode,
+                    bool atrans,bool btrans,
+                    int M,int N,int K,
+                    int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,
+                    int src_channels,int src_rows,int src_cols,
+                    int tgt_rows,int tgt_cols,
+                    int bias,
+                    StandardActivations act,
+                    int im2col_chan = 0) :
                 StandardSGEMMBase(ctx,M,N,K)
         {
 
@@ -164,7 +165,7 @@ namespace gpu {
                                         "ATRANS",int(atrans),
                                         "BTRANS",int(btrans),
                                         "IM2COL_OCHAN",im2col_chan,
-                                        "CONVGEMM",1,
+                                        "CONVGEMM",int(op_mode),
                                         "KERN_H",  kernel[0], "KERN_W",kernel[1],
                                         "DILATE_H",dilate[0], "DILATE_W",dilate[1],
                                         "PAD_H",   padding[0],"PAD_W",padding[1],
@@ -262,6 +263,7 @@ namespace gpu {
     }
     std::unique_ptr<GEMM> GEMM::get_optimal_conv_gemm(
             Context &ctx,DataType dtype,
+            GemmOpMode op_mode,
             bool trans_a,bool trans_b,
             int M,int N,int K,
             int kernel[2],int dilate[2],int padding[2],int stride[2],int groups,
@@ -272,7 +274,8 @@ namespace gpu {
             int im2col_chan)
     {
         DLPRIM_CHECK(dtype == float_data);
-        std::unique_ptr<GEMM> g(new ConvSGEMM(ctx,trans_a,trans_b,M,N,K,
+        std::unique_ptr<GEMM> g(new ConvSGEMM(ctx,op_mode,
+            trans_a,trans_b,M,N,K,
             kernel,dilate,padding,stride,groups,
             src_channels,src_rows,src_cols,
             tgt_rows,tgt_cols,

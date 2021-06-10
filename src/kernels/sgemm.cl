@@ -50,40 +50,76 @@
 #define CONVGEMM 0
 #endif
 
-#if CONVGEMM == 0
+#if CONVGEMM == 3
+void atomic_addf(__global volatile float *ptr,float v)
+{
+    float oldv = *ptr;
+    for(;;) {
+        float newv = oldv + v;
+        float prev = as_float(atomic_cmpxchg((__global volatile int *)(ptr),as_int(oldv),as_int(newv)));
+        if(prev == oldv)
+            return;
+        oldv = prev;
+    }
+}
+#endif
 
+#if CONVGEMM != 0
+    #if CONVGEMM == 3
+    void add_img_value(__global float *ptr,int matrix_row,int matrix_col,float dV)
+    #else
+    float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
+    #endif
+    {
+        int channel = matrix_col / (KERN_H * KERN_W);
+        int k_index = matrix_col % (KERN_H * KERN_W);
+        
+        int dy = k_index / KERN_W;
+        int dx = k_index % KERN_W;
+        
+        int b  = matrix_row / (IMG_COLS * IMG_ROWS);
+        int rc = matrix_row % (IMG_COLS * IMG_ROWS);
+
+        int r  = rc / IMG_COLS;
+        int c  = rc % IMG_COLS;
+
+        int y_pos = -PAD_H + r * STRIDE_H;
+        int x_pos = -PAD_W + c * STRIDE_W;
+
+        int y = y_pos + dy * DILATE_H;
+        int x = x_pos + dx * DILATE_W;
+
+        int address = ((b *  (CHANNELS_IN*GROUPS) + channel) * SRC_ROWS + y) * SRC_COLS + x;
+
+        #if CONVGEMM != 3
+            #if PAD_W > 0 && PAD_H > 0
+                if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) {
+                    return ptr[address];
+                }
+                return 0;
+            #else
+                return ptr[address];
+            #endif  
+        #else
+            #if PAD_W > 0 && PAD_H > 0
+                if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) 
+                    atomic_addf(ptr+address,dV);
+            #else
+                atomic_addf(ptr+address,dV);
+            #endif
+        #endif
+    }
+#endif
+
+
+
+#if CONVGEMM == 0 || CONVGEMM == 3
 #  if BTRANS == 0
 #    define get_B(r,c) (B[(r)*ldb + (c)])
 #  else
 #    define get_B(r,c) (B[(c)*ldb + (r)])
 #  endif
 #else
-float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
-{
-    int channel = matrix_col / (KERN_H * KERN_W);
-    int k_index = matrix_col % (KERN_H * KERN_W);
-    
-    int dy = k_index / KERN_W;
-    int dx = k_index % KERN_W;
-    
-    int b  = matrix_row / (IMG_COLS * IMG_ROWS);
-    int rc = matrix_row % (IMG_COLS * IMG_ROWS);
-
-    int r  = rc / IMG_COLS;
-    int c  = rc % IMG_COLS;
-
-    int y_pos = -PAD_H + r * STRIDE_H;
-    int x_pos = -PAD_W + c * STRIDE_W;
-
-    int y = y_pos + dy * DILATE_H;
-    int x = x_pos + dx * DILATE_W;
-
-    if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) {
-        return ptr[((b *  (CHANNELS_IN*GROUPS) + channel) * SRC_ROWS + y) * SRC_COLS + x];
-    }
-    return 0;
-}
-
 #  if BTRANS == 0
 #    define get_B(r,c) get_img_value(B,r,c)
 #  else
@@ -91,12 +127,34 @@ float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
 #  endif
 #endif
 
-#if  ATRANS == 0
-#define get_A(r,c) (A[(r)*lda + (c)])
+#if CONVGEMM  == 0 || CONVGEMM == 1
+    #if  ATRANS == 0
+        #define get_A(r,c) (A[(r)*lda + (c)])
+    #else
+        #define get_A(r,c) (A[(c)*lda + (r)])
+    #endif
 #else
-#define get_A(r,c) (A[(c)*lda + (r)])
-#endif
+    float get_y_value(int row,int matrix_col,__global float const *A,int ldc,int M)
+    {
+        int batch = matrix_col / IM2COL_OCHAN;
+        int incol = matrix_col % IM2COL_OCHAN;
+        int offset = batch * (IM2COL_OCHAN * GROUPS) * M + incol;
+        int index =row*IM2COL_OCHAN + offset;
+        return A[index];
+    }
 
+    #if CONVGEMM == 3
+        #define GET_Y_STEP K
+    #else
+        #define GET_Y_STEP M
+    #endif
+    #if  ATRANS == 0
+        #define get_A(r,c) (get_y_value(r,c,A,lda,GET_Y_STEP))
+    #else
+        #define get_A(r,c) (get_y_value(c,r,A,lda,GET_Y_STEP))
+    #endif
+
+#endif
 
 #define lA(x,y) a_tile[(x)][(y) / BLOCK_SIZE_M][(y) % BLOCK_SIZE_M]
 #define lB(x,y) b_tile[(x)][(y) / BLOCK_SIZE_N][(y) % BLOCK_SIZE_N]
@@ -205,19 +263,39 @@ void    sgemm(    int M,int N,int K,
     B += offset_B;
     C += offset_C;
 
-#if GROUPS > 1
+#if CONVGEMM > 0 && GROUPS > 1
     int group = get_global_id(DIM_G);
     if(group >= GROUPS)
         return;
-    A += M*K*group;
-    B += SRC_COLS*SRC_ROWS*CHANNELS_IN*group;
-    C += (IM2COL_OCHAN) * M *group;
-    #if BIAS != 0
-    bias += M*group;
+    #if CONVGEMM == 1
+        A += M*K*group;
+        B += SRC_COLS*SRC_ROWS*CHANNELS_IN*group;
+        C += (IM2COL_OCHAN) * M *group;
+        #if BIAS != 0
+        bias += M*group;
+        #endif
+    #elif CONVGEMM == 2
+        // M = channels_out / groups
+        int step_g_y = (M*IM2COL_OCHAN);
+        int step_g_x = (SRC_COLS*SRC_ROWS) * CHANNELS_IN;
+        int step_g_w = M*(CHANNELS_IN*KERN_W*KERN_H);
+        
+        A += step_g_y * group;
+        B += step_g_x * group;
+        C += step_g_w * group;
+    #elif CONVGEMM == 3
+        // K = channels_out / group
+        int step_g_y = (K*IM2COL_OCHAN);
+        int step_g_x = (SRC_COLS*SRC_ROWS) * CHANNELS_IN;
+        int step_g_w = K*(CHANNELS_IN*KERN_W*KERN_H);
+        
+        A += step_g_y * group;
+        B += step_g_w * group;
+        C += step_g_x * group;
+    #else
+    #error "Invalid CONVGEMM Value"
     #endif
-#endif
-
-   
+#endif   
     int row = get_global_id(DIM_M) * BLOCK_SIZE_M;
     int col = get_global_id(DIM_N) * BLOCK_SIZE_N;
 
@@ -379,18 +457,27 @@ void    sgemm(    int M,int N,int K,
     int k=0;
     for(k=0;k<K;k+=TILE_SIZE_K) {
         if(row + BLOCK_SIZE_M - 1 < M && k + TILE_SIZE_K-1 < K) {
-            #if ATRANS == 0
+            #if CONVGEMM == 2 || CONVGEMM == 3
                 #pragma unroll
                 for(int dr=0;dr<BLOCK_SIZE_M;dr++){
-                    floatK v=vloadK(0,&get_A(row+dr,k));
-                    vstoreK(v,0,a[dr]);
+                    for(int dk=0;dk < TILE_SIZE_K;dk++) {
+                        pA(dr,dk)=get_A(row+dr,k+dk);
+                    }
                 }
-           #else // ATRANS
-                #pragma unroll
-                for(int dk=0;dk<TILE_SIZE_K;dk++){
-                    floatM v=vloadM(0,&get_A(row,k+dk));
-                    vstoreM(v,0,a[dk]);
-                }
+            #else
+                #if ATRANS == 0
+                    #pragma unroll
+                    for(int dr=0;dr<BLOCK_SIZE_M;dr++){
+                        floatK v=vloadK(0,&get_A(row+dr,k));
+                        vstoreK(v,0,a[dr]);
+                    }
+                #else // ATRANS
+                    #pragma unroll
+                    for(int dk=0;dk<TILE_SIZE_K;dk++){
+                        floatM v=vloadM(0,&get_A(row,k+dk));
+                        vstoreM(v,0,a[dk]);
+                    }
+                #endif
             #endif
         }
         else {
@@ -461,7 +548,7 @@ void    sgemm(    int M,int N,int K,
     }
 #endif    
 
-#if IM2COL_OCHAN > 0
+#if CONVGEMM == 1
     {
         #pragma unroll
         for(int dc=0;dc<BLOCK_SIZE_N;dc++) {
@@ -479,7 +566,6 @@ void    sgemm(    int M,int N,int K,
                         C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
                     else
                         C[index] = ACTIVATION_F(c[dr][dc]);
-
                 }
             }
         }
@@ -491,11 +577,15 @@ void    sgemm(    int M,int N,int K,
             #pragma unroll
             for(int dc=0;dc<BLOCK_SIZE_N;dc++) {
                 if(row + dr < M && col+dc < N) {
-                    int index = (row+dr)*ldc+col+dc;
-                    if(beta_factor != 0)
-                        C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
-                    else
-                        C[index] = ACTIVATION_F(c[dr][dc]);
+                    #if CONVGEMM == 3
+                        add_img_value(C,row+dr,col+dc,c[dr][dc]);
+                    #else
+                        int index = (row+dr)*ldc+col+dc;
+                        if(beta_factor != 0)
+                            C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
+                        else
+                            C[index] = ACTIVATION_F(c[dr][dc]);
+                    #endif
                 }
             }
         }

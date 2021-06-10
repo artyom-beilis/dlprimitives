@@ -132,6 +132,12 @@ namespace dlprim {
         train,
         predict
     };
+    
+    enum class GemmOpMode {
+        forward = 1,
+        backward_filter = 2,
+        backward_data = 3
+    };
 
 
 }

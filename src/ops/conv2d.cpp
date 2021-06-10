@@ -1,5 +1,6 @@
 #include <dlprim/ops/conv2d.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
+#include <dlprim/gpu/gpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/utils/json_helpers.hpp>
@@ -143,10 +144,7 @@ namespace dlprim {
         if(is_depthwise_separable_conv()) {
             setup_depthwise_separable_conv();
         }
-        else {
-            get_gemm(in[0].shape(),out[0].shape());
-        }
-
+        get_gemm(in[0].shape(),out[0].shape());
     }
     
     void Convolution2D::get_gemm(Shape const &in,Shape const &out)
@@ -162,13 +160,14 @@ namespace dlprim {
         if(ctx_.is_cpu_context())
             return;
         
-        if(config_.groups > 1) {
+        if(!use_ds_conv_){
             int M = config_.channels_out / config_.groups;
             int N = out_h_*out_w_ * out[0];
             int K = get_im2col_width(); 
 
             auto gemm = gpu::GEMM::get_optimal_conv_gemm(
-                ctx_,dtype_,false,true,
+                ctx_,dtype_,GemmOpMode::forward,
+                false,true,
                 M,N,K,
                 config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
                 config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
@@ -179,23 +178,38 @@ namespace dlprim {
 
             gemm_ = std::move(gemm);
         }
-        else {
-            int M = config_.channels_out;
-            int N = out_h_*out_w_ * out[0];
-            int K = get_im2col_width(); 
 
-            auto gemm = gpu::GEMM::get_optimal_conv_gemm(
-                ctx_,dtype_,false,true,
-                M,N,K,
-                config_.kernel,config_.dilate,config_.pad,config_.stride,1,
-                config_.channels_in,in[2],in[3],out[2],out[3],
-                (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
-                config_.activation,
-                out_h_ * out_w_
-            );
+        if(mode_ != CalculationsMode::predict) {
+            int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
+            int im2col_rows = out[2]*out[3]*out[0];
+            auto bw = gpu::GEMM::get_optimal_conv_gemm(
+                    ctx_,dtype_,
+                    GemmOpMode::backward_filter,
+                    false,false,
+                    config_.channels_out / config_.groups,kernel_cols,im2col_rows,
+                    config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
+                    config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
+                    gpu::GEMM::no_bias,
+                    StandardActivations::identity,
+                    out_h_ * out_w_
+                );
+            bwd_weights_gemm_ = std::move(bw);
 
-            gemm_ = std::move(gemm);
+            auto bwd = gpu::GEMM::get_optimal_conv_gemm(
+                    ctx_,dtype_,
+                    GemmOpMode::backward_data,
+                    true,false,
+                    im2col_rows,kernel_cols,config_.channels_out / config_.groups,
+                    config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
+                    config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
+                    gpu::GEMM::no_bias,
+                    StandardActivations::identity,
+                    out_h_ * out_w_
+                );
+            bwd_data_gemm_ = std::move(bwd);
+            scal_.reset(new gpu::Scal(ctx_,dtype_));
         }
+
     }
 
     void Convolution2D::reshape(std::vector<Shape> const &in,
@@ -506,21 +520,66 @@ namespace dlprim {
     
     void Convolution2D::forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws)
     {
-        fwd_bwd_cpu(OpMode::forward,in,out,M,bias,ws);
+        fwd_bwd_cpu(GemmOpMode::forward,in,out,M,bias,ws);
         cpu::apply_activation(out.data<float>(),out.shape().total_size(),config_.activation);
     }
     void Convolution2D::backward_data_cpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor)
     {
         scale_cpu(dx,factor);
-        fwd_bwd_cpu(OpMode::backward_data,dx,dy,K,nullptr,ws.host_data());
+        fwd_bwd_cpu(GemmOpMode::backward_data,dx,dy,K,nullptr,ws.host_data());
     }
     void Convolution2D::backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dK,Tensor &ws,float factor)
     {
         scale_cpu(dK,factor);
-        fwd_bwd_cpu(OpMode::backward_filter,x,dy,dK,nullptr,ws.host_data());
+        fwd_bwd_cpu(GemmOpMode::backward_filter,x,dy,dK,nullptr,ws.host_data());
+    }
+    void Convolution2D::backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ec)
+    {
+        int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
+        int im2col_rows = dy.shape()[2]*dy.shape()[3]*dy.shape()[0];
+        bwd_data_gemm_->gemm(
+            im2col_rows,
+            kernel_cols,
+            config_.channels_out / config_.groups,
+            dy.device_buffer(),
+            dy.device_offset(),
+            im2col_rows,
+            K.device_buffer(),
+            K.device_offset(),
+            kernel_cols,
+            dx.device_buffer(),
+            dx.device_offset(),
+            kernel_cols,
+            nullptr,  // no bias for BW
+            0,
+            factor,
+            ec.queue(),ec.events(),ec.event("bw_data_conv_gemm"));
     }
 
-    void Convolution2D::fwd_bwd_cpu(OpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
+    void Convolution2D::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ec)
+    {
+        int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
+        int im2col_rows = dy.shape()[2]*dy.shape()[3]*dy.shape()[0];
+        bwd_weights_gemm_->gemm(
+            config_.channels_out / config_.groups,  // M
+            kernel_cols,                            // N
+            im2col_rows,                            // K
+            dy.device_buffer(),
+            dy.device_offset(),
+            im2col_rows,
+            x.device_buffer(),
+            x.device_offset(),
+            kernel_cols,
+            dK.device_buffer(),
+            dK.device_offset(),
+            kernel_cols,
+            nullptr,  // no bias for BW
+            0,
+            factor,
+            ec.queue(),ec.events(),ec.event("bw_filter_conv_gemm"));
+    }
+
+    void Convolution2D::fwd_bwd_cpu(GemmOpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
     {
         int batch = in.shape()[0];
         float *imcols = static_cast<float *>(ws);
@@ -539,7 +598,7 @@ namespace dlprim {
                 float *img = in.data<float>()  + in_size_no_batch *b + g * step_groups_in * in.shape()[2] * in.shape()[3];
                 float *omg = out.data<float>() + out_size_no_batch*b + g * step_groups_out * out.shape()[2] * out.shape()[3];
                 switch(mode) {
-                case OpMode::forward: {
+                case GemmOpMode::forward: {
                         im2col<details::Im2ColOp>(in_shape,out_shape,img,imcols);
                         cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasTrans,
                                 config_.channels_out / config_.groups,im2col_rows,kernel_cols,
@@ -558,7 +617,7 @@ namespace dlprim {
                         }
                     }
                     break;
-                case OpMode::backward_filter: {
+                case GemmOpMode::backward_filter: {
                         im2col<details::Im2ColOp>(in_shape,out_shape,img,imcols);
                         cblas_sgemm(CblasRowMajor,CblasNoTrans, CblasNoTrans,
                                 config_.channels_out / config_.groups,kernel_cols,im2col_rows,
@@ -570,7 +629,7 @@ namespace dlprim {
                                 );
                     }
                     break;
-                case OpMode::backward_data: {
+                case GemmOpMode::backward_data: {
                         cblas_sgemm(CblasRowMajor,CblasTrans, CblasNoTrans,
                                 im2col_rows, kernel_cols, config_.channels_out / config_.groups,
                                 1.0f,
@@ -593,7 +652,7 @@ namespace dlprim {
                                  Tensor &workspace,
                                  ExecutionContext const &e)
     {
-        int steps = int(input[0].requires_gradient) 
+        int steps =     2*int(input[0].requires_gradient) 
                         + int(parameters[0].requires_gradient)
                         + int(config_.bias && parameters[1].requires_gradient)
                         + int(config_.activation != StandardActivations::identity);
@@ -613,8 +672,8 @@ namespace dlprim {
         if(parameters[0].requires_gradient) {
             auto ec = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                //backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
-                //                    parameters[0].accumulate_gradient,ec);
+                backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
+                                    parameters[0].accumulate_gradient,ec);
             }
             else {
                 backward_filter_cpu(output[0].diff,input[0].data,parameters[0].diff,workspace,
@@ -622,10 +681,12 @@ namespace dlprim {
             }
         }
         if(input[0].requires_gradient) {
-            auto ec = e.generate_series_context(step++,steps);
+            auto ec1 = e.generate_series_context(step++,steps);
+            auto ec2 = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                //backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,
-                //                    input[0].accumulate_gradient,ec);
+                scal_->scale(input[0].accumulate_gradient,input[0].diff,ec1);
+                backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,
+                                    input[0].accumulate_gradient,ec2);
             }
             else {
                 backward_data_cpu(output[0].diff,parameters[0].data,input[0].diff,workspace,
