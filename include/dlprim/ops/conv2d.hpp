@@ -91,7 +91,7 @@ namespace dlprim {
         constexpr static int ds_patch_rows = 2;
         constexpr static int ds_patch_cols = 2;
         bool use_ds_conv_;
-        cl::Kernel conv_;
+        cl::Kernel conv_,bw_conv_data_;
 	};
 } // namespace
 

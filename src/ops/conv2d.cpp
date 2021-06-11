@@ -93,6 +93,7 @@ namespace dlprim {
                                     "KERN",config_.kernel[0],
                                     "CHANNELS",config_.channels_in);
         conv_ = cl::Kernel(prog,"conv");
+        bw_conv_data_ = cl::Kernel(prog,"backward_data_conv");
         use_ds_conv_=true;
     }
     
@@ -535,6 +536,36 @@ namespace dlprim {
     }
     void Convolution2D::backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ec)
     {
+        if(use_ds_conv_) {
+            int batch = dx.shape()[0];
+            int height = dx.shape()[2];
+            int width = dx.shape()[3];
+            int p=0;
+            bw_conv_data_.setArg(p++,batch);
+            bw_conv_data_.setArg(p++,height);
+            bw_conv_data_.setArg(p++,width);
+            bw_conv_data_.setArg(p++,dx.device_buffer());
+            bw_conv_data_.setArg(p++,int(dx.device_offset()));
+            bw_conv_data_.setArg(p++,K.device_buffer());
+            bw_conv_data_.setArg(p++,int(K.device_offset()));
+            bw_conv_data_.setArg(p++,dy.device_buffer());
+            bw_conv_data_.setArg(p++,int(dy.device_offset()));
+            
+            int gW = (width+1)/2;
+            int gH = (height+1)/2;
+
+            int lW = get_opt_val(gW);
+            int lH = get_opt_val(gH);
+            int lD = 1;
+            if(lW * lH < 64)
+                lD = 64 / (lW * lH);
+            
+            cl::NDRange wg(lD,lH,lW);
+            cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
+            ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv_bw_data"));
+            return;
+        }
+
         int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
         int im2col_rows = dy.shape()[2]*dy.shape()[3]*dy.shape()[0];
         bwd_data_gemm_->gemm(

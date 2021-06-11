@@ -1,4 +1,5 @@
 #include "defs.h"
+#include "atomic.h"
 
 #define KERN_PAD ((KERN-1)/2)
 
@@ -84,4 +85,76 @@ void conv(int batch,int height,int width,
         }
     }
 
+}
+
+__kernel
+void backward_data_conv(int batch,int height,int width,
+          __global float *input,int input_offset,
+          __global const float *kern,int kernel_offset,
+          __global float const *output,int output_offset)
+{
+    input += input_offset;
+    output += output_offset;
+    kern += kernel_offset;
+    int b = get_global_id(0) / CHANNELS;
+    int d = get_global_id(0) % CHANNELS;
+    int r = get_global_id(1) * PATCH_ROWS;
+    int c = get_global_id(2) * PATCH_COLS;
+
+    if(r >= height || c >= width || b >= batch)
+        return;
+
+    kern += d * KERN * KERN;
+    
+    input  += b * CHANNELS * width * height + d * width * height + (r - KERN_PAD) * width + c - KERN_PAD;
+    output += b * CHANNELS * width * height + d * width * height + r * width + c;
+
+    float K_vals[KERN][KERN];
+    float I_vals[PATCH_H][PATCH_W] = {{0}};
+
+    #pragma unroll
+    for(int dr=0;dr < KERN;dr++)
+        #pragma unroll
+        for(int dc=0;dc<KERN;dc++)
+            K_vals[dr][dc] = *kern ++;
+
+            
+
+
+    #pragma unroll
+    for(int dr=0;dr<PATCH_ROWS;dr++) {
+        if(r+dr >= height)
+            break;
+        #pragma unroll
+        for(int dc=0;dc<PATCH_COLS;dc++) {
+            if(c+dc>=width)
+                break;
+            float val = output[dr*width+dc];
+            #pragma unroll
+            for(int drk=0;drk < KERN;drk++)
+                #pragma unroll
+                for(int dck=0;dck<KERN;dck++)
+                    I_vals[dr+drk][dc+dck] = mad(K_vals[drk][dck],val,I_vals[dr+drk][dc+dck]);
+
+        }
+    }
+
+    int y = r-KERN_PAD;
+    #pragma unroll
+    for(int dr=0;dr<PATCH_H;dr++,y++) {
+        if(y < 0 || y >= height) {
+            #pragma unroll
+            for(int dc=0;dc<PATCH_W;dc++)
+                I_vals[dr][dc]=0;
+        }
+        if(!(y < 0 || y >= height)) {
+            int x = c - KERN_PAD;
+            #pragma unroll
+            for(int dc=0;dc<PATCH_W;dc++,x++) {
+                if(0 <= x && x < width) {
+                    atomic_addf(input + (dr*width+dc),I_vals[dr][dc]);
+                }
+            }
+        }
+    }
 }
