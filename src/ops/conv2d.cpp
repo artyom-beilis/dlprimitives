@@ -81,7 +81,7 @@ namespace dlprim {
             && config_.kernel[0] / 2 == config_.pad[0];
     }
 
-    void Convolution2D::setup_depthwise_separable_conv()
+    void Convolution2D::setup_depthwise_separable_conv(Shape const &s)
     {
         if(ctx_.is_cpu_context())
             return;
@@ -94,6 +94,23 @@ namespace dlprim {
                                     "CHANNELS",config_.channels_in);
         conv_ = cl::Kernel(prog,"conv");
         bw_conv_data_ = cl::Kernel(prog,"backward_data_conv");
+
+        
+        int total = s[0] * s[2] * s[3];
+        if(total >= 256)
+            dwsc_bw_filter_wg_ = 256;
+        else if(total >= 128)
+            dwsc_bw_filter_wg_ = 128;
+        else
+            dwsc_bw_filter_wg_ = 64;
+        cl::Program const &prog2 = gpu::Cache::instance().get_program(ctx_,
+                    "depthwise_separable_bw_filter",
+                    "KERN",config_.kernel[0],
+                    "WG_SIZE",dwsc_bw_filter_wg_,
+                    "CHANNELS",config_.channels_in);
+
+        bw_conv_filter_ = cl::Kernel(prog2,"conv_bw_filter");
+
         use_ds_conv_=true;
     }
     
@@ -142,9 +159,11 @@ namespace dlprim {
              ws_size_ = workspace = 0;
         }
 
-        if(is_depthwise_separable_conv()) {
-            setup_depthwise_separable_conv();
-        }
+        if(mode_ != CalculationsMode::predict)
+                scal_.reset(new gpu::Scal(ctx_,dtype_));
+
+        use_ds_conv_ = is_depthwise_separable_conv();
+
         get_gemm(in[0].shape(),out[0].shape());
     }
     
@@ -178,39 +197,40 @@ namespace dlprim {
             );
 
             gemm_ = std::move(gemm);
+
+            if(mode_ != CalculationsMode::predict) {
+                int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
+                int im2col_rows = out[2]*out[3]*out[0];
+                auto bw = gpu::GEMM::get_optimal_conv_gemm(
+                        ctx_,dtype_,
+                        GemmOpMode::backward_filter,
+                        false,false,
+                        config_.channels_out / config_.groups,kernel_cols,im2col_rows,
+                        config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
+                        config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
+                        gpu::GEMM::no_bias,
+                        StandardActivations::identity,
+                        out_h_ * out_w_
+                    );
+                bwd_weights_gemm_ = std::move(bw);
+
+                auto bwd = gpu::GEMM::get_optimal_conv_gemm(
+                        ctx_,dtype_,
+                        GemmOpMode::backward_data,
+                        true,false,
+                        im2col_rows,kernel_cols,config_.channels_out / config_.groups,
+                        config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
+                        config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
+                        gpu::GEMM::no_bias,
+                        StandardActivations::identity,
+                        out_h_ * out_w_
+                    );
+                bwd_data_gemm_ = std::move(bwd);
+            }
         }
-
-        if(mode_ != CalculationsMode::predict) {
-            int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
-            int im2col_rows = out[2]*out[3]*out[0];
-            auto bw = gpu::GEMM::get_optimal_conv_gemm(
-                    ctx_,dtype_,
-                    GemmOpMode::backward_filter,
-                    false,false,
-                    config_.channels_out / config_.groups,kernel_cols,im2col_rows,
-                    config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
-                    config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
-                    gpu::GEMM::no_bias,
-                    StandardActivations::identity,
-                    out_h_ * out_w_
-                );
-            bwd_weights_gemm_ = std::move(bw);
-
-            auto bwd = gpu::GEMM::get_optimal_conv_gemm(
-                    ctx_,dtype_,
-                    GemmOpMode::backward_data,
-                    true,false,
-                    im2col_rows,kernel_cols,config_.channels_out / config_.groups,
-                    config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
-                    config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
-                    gpu::GEMM::no_bias,
-                    StandardActivations::identity,
-                    out_h_ * out_w_
-                );
-            bwd_data_gemm_ = std::move(bwd);
-            scal_.reset(new gpu::Scal(ctx_,dtype_));
+        else {
+            setup_depthwise_separable_conv(in);
         }
-
     }
 
     void Convolution2D::reshape(std::vector<Shape> const &in,
@@ -589,6 +609,28 @@ namespace dlprim {
 
     void Convolution2D::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ec)
     {
+        if(use_ds_conv_) {
+            int kitems = dK.shape().total_size();
+            int batch = x.shape()[0];
+            int height = x.shape()[2];
+            int width = x.shape()[3];
+            int p=0;
+            bw_conv_filter_.setArg(p++,batch);
+            bw_conv_filter_.setArg(p++,height);
+            bw_conv_filter_.setArg(p++,width);
+            bw_conv_filter_.setArg(p++,x.device_buffer());
+            bw_conv_filter_.setArg(p++,int(x.device_offset()));
+            bw_conv_filter_.setArg(p++,dK.device_buffer());
+            bw_conv_filter_.setArg(p++,int(dK.device_offset()));
+            bw_conv_filter_.setArg(p++,dy.device_buffer());
+            bw_conv_filter_.setArg(p++,int(dy.device_offset()));
+            bw_conv_filter_.setArg(p++,factor);
+            
+            cl::NDRange wg(dwsc_bw_filter_wg_,1);
+            cl::NDRange gr(dwsc_bw_filter_wg_,kitems);
+            ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv_bw_filter"));
+            return;
+        }
         int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
         int im2col_rows = dy.shape()[2]*dy.shape()[3]*dy.shape()[0];
         bwd_weights_gemm_->gemm(

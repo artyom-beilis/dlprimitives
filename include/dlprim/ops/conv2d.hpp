@@ -72,7 +72,7 @@ namespace dlprim {
         void fwd_bwd_cpu(GemmOpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws);
 
 
-        void setup_depthwise_separable_conv();
+        void setup_depthwise_separable_conv(Shape const &s);
         bool is_depthwise_separable_conv();
         static int get_opt_val(int v);
 		
@@ -91,7 +91,8 @@ namespace dlprim {
         constexpr static int ds_patch_rows = 2;
         constexpr static int ds_patch_cols = 2;
         bool use_ds_conv_;
-        cl::Kernel conv_,bw_conv_data_;
+        cl::Kernel conv_,bw_conv_data_,bw_conv_filter_;
+        int dwsc_bw_filter_wg_;
 	};
 } // namespace
 
