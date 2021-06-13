@@ -1,3 +1,4 @@
+#define my_get_local_wg_id() ((get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0))
 #if __OPENCL_VERSION__ >= 200
 #define REDUCE_PREPARE(WG_SIZE,dtype) do {} while(0)
 #define my_work_group_reduce_add(val) do { val = work_group_reduce_add(val); } while(0)
@@ -7,7 +8,7 @@
 #define REDUCE_PREPARE(WG_SIZE,dtype) __local dtype my_reduce[WG_SIZE];
 #define REDUCE_USING_OP(myval,reduce_op) \
     do { \
-        int lid = (get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0); \
+        int lid = my_get_local_wg_id(); \
         my_reduce[lid] = myval; \
         barrier(CLK_LOCAL_MEM_FENCE); \
         const int WGS = sizeof(my_reduce)/sizeof(my_reduce[0]); \

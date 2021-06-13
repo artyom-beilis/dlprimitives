@@ -4,6 +4,8 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <math.h>
 #include <dlprim/cpu/cpu_ops.hpp>
+#include <dlprim/gpu/gpu_ops.hpp>
+#include <cblas.h>
 
 namespace dlprim {
 PoolingBase PoolingBase::from_json(json::value const &v)
@@ -65,6 +67,8 @@ void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs
                                         "POOL_MODE",int(config_.mode),
                                         "COUNT_INCLUDE_PAD",int(config_.count_include_pad));
     kernel_ = cl::Kernel(prog,"pooling");
+    bwd_kernel_ = cl::Kernel(prog,"pooling_bw");
+    scal_.reset(new gpu::Scal(ctx_,dtype_));
 }
 
 int Pooling2D::calc_output_size(int in_size,int dim)
@@ -148,6 +152,139 @@ void Pooling2D::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, 
     }
 }
 
+void Pooling2D::backward_cpu_max(Tensor &xt,Tensor &dxt,Tensor &dyt,float factor)
+{
+    float *dx = dxt.data<float>();
+    float *dy = dyt.data<float>();
+    float *x  = xt.data<float>();
+    
+    size_t N = xt.shape().total_size();
+    if(factor == 0)
+        memset(dx,0,sizeof(float)*N);
+    else 
+        cblas_sscal(N,factor,dx,1);
+
+    int bc = xt.shape()[0]*xt.shape()[1];
+    
+    int in_h = xt.shape()[2];
+    int in_w = xt.shape()[3];
+
+    int out_h = dyt.shape()[2];
+    int out_w = dyt.shape()[3];
+    
+    for(int bc_count = 0;bc_count < bc;bc_count ++, x+= in_h*in_w,dx+= in_h*in_w,dy+= out_h*out_w) {
+        for(int out_r=0;out_r<out_h;out_r++) {
+            for(int out_c = 0;out_c <out_w;out_c++) {
+                int row0 = out_r * config_.stride[0] - config_.pad[0];
+                int col0 = out_c * config_.stride[1] - config_.pad[1];
+                int row1 = row0 + config_.kernel[0];
+                int col1 = col0 + config_.kernel[1];
+                
+                float val = -std::numeric_limits<float>::max();
+                int pos=0;
+
+                row0 = std::max(0,row0);
+                col0 = std::max(0,col0);
+                row1 = std::min(row1,in_h);
+                col1 = std::min(col1,in_w);
+                
+                for(int r=row0;r<row1;r++) {
+                    for(int c=col0;c<col1;c++) {
+                        float tmp = x[r*in_w + c];
+                        if(tmp > val) {
+                            pos = r*in_w + c;
+                            val = tmp;
+                        }
+                    }
+                }
+
+                dx[pos] += dy[out_r*out_w + out_c];
+            }
+        }
+    }
+}
+
+template<typename Reduce>
+void Pooling2D::backward_cpu_ave(Tensor &dxt,Tensor &dyt,float factor,Reduce rop)
+{
+    float *dx = dxt.data<float>();
+    float *dy = dyt.data<float>();
+    
+    size_t N = dxt.shape().total_size();
+    if(factor == 0)
+        memset(dx,0,sizeof(float)*N);
+    else 
+        cblas_sscal(N,factor,dx,1);
+
+    int bc = dxt.shape()[0]*dxt.shape()[1];
+    
+    int in_h = dxt.shape()[2];
+    int in_w = dxt.shape()[3];
+
+    int out_h = dyt.shape()[2];
+    int out_w = dyt.shape()[3];
+    
+    for(int bc_count = 0;bc_count < bc;bc_count ++,dx+= in_h*in_w,dy+= out_h*out_w) {
+        for(int out_r=0;out_r<out_h;out_r++) {
+            for(int out_c = 0;out_c <out_w;out_c++) {
+                int row0 = out_r * config_.stride[0] - config_.pad[0];
+                int col0 = out_c * config_.stride[1] - config_.pad[1];
+                int row1 = row0 + config_.kernel[0];
+                int col1 = col0 + config_.kernel[1];
+
+                row0 = std::max(0,row0);
+                col0 = std::max(0,col0);
+                row1 = std::min(row1,in_h);
+                col1 = std::min(col1,in_w);
+                
+                float dy_norm = rop.norm_valid(dy[out_r*out_w + out_c],row1-row0,col1-col0);
+                for(int r=row0;r<row1;r++) {
+                    for(int c=col0;c<col1;c++) {
+                        dx[r*in_w + c] += dy_norm;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Pooling2D::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ex)
+{
+    int bc = dx.shape()[0]*dx.shape()[1];
+    
+    int in_h = dx.shape()[2];
+    int in_w = dx.shape()[3];
+
+    int out_h = dy.shape()[2];
+    int out_w = dy.shape()[3];
+
+    int p=0;
+
+    auto ec1 = ex.generate_series_context(0,2);
+    auto ec2 = ex.generate_series_context(1,2);
+
+    scal_->scale(factor,dx,ec1);
+   
+    bwd_kernel_.setArg(p++,bc);
+    bwd_kernel_.setArg(p++,in_h);
+    bwd_kernel_.setArg(p++,in_w);
+    bwd_kernel_.setArg(p++,out_h);
+    bwd_kernel_.setArg(p++,out_w);
+    if(config_.mode == Pooling2DConfig::max) {
+        bwd_kernel_.setArg(p++,x.device_buffer());
+        bwd_kernel_.setArg(p++,int(x.device_offset()));
+    }
+    bwd_kernel_.setArg(p++,dy.device_buffer());
+    bwd_kernel_.setArg(p++,int(dy.device_offset()));
+    bwd_kernel_.setArg(p++,dx.device_buffer());
+    bwd_kernel_.setArg(p++,int(dx.device_offset()));
+
+    cl::NDRange wg(1,wg_size_,wg_size_);
+    cl::NDRange gr = gpu::round_range(bc,out_h,out_w,wg);
+    
+    ex.queue().enqueueNDRangeKernel(bwd_kernel_,cl::NullRange,gr,wg,ec2.events(),ec2.event("pooling_bw"));
+}
+
 
 template<typename Dtype,typename Reduce>
 void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
@@ -223,6 +360,47 @@ void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     
     ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("pooling"));
     
+}
+
+void Pooling2D::backward(std::vector<TensorAndGradient> &input,
+                         std::vector<TensorAndGradient> &output,
+                         std::vector<TensorAndGradient> &/*parameters*/,
+                         Tensor &/*workspace*/,
+                         ExecutionContext const &ctx)
+{
+    DLPRIM_CHECK(input.size()==1);
+    DLPRIM_CHECK(output.size()==1); 
+    if(!input[0].requires_gradient)
+        return;
+    DLPRIM_CHECK(input[0].data.shape().size()==4);
+    DLPRIM_CHECK(input[0].diff.shape().size()==4);
+    DLPRIM_CHECK(output[0].data.shape().size()==4);
+
+    DLPRIM_CHECK(input[0].data.shape()[0] == output[0].diff.shape()[0]);
+    DLPRIM_CHECK(input[0].data.shape()[1] == output[0].diff.shape()[1]);
+    
+    DLPRIM_CHECK(input[0].diff.shape()[0] == output[0].diff.shape()[0]);
+    DLPRIM_CHECK(input[0].diff.shape()[1] == output[0].diff.shape()[1]);
+
+    DLPRIM_CHECK(output[0].diff.dtype() == dtype_);
+    DLPRIM_CHECK(input[0].data.dtype() == dtype_);
+    DLPRIM_CHECK(input[0].diff.dtype() == dtype_);
+    if(ctx_.is_cpu_context()) {
+        if(config_.mode == Pooling2DConfig::max) {
+            backward_cpu_max(input[0].data,input[0].diff,output[0].diff,input[0].accumulate_gradient);
+        }
+        else {
+            float factor = 1.0f / (config_.kernel[0]*config_.kernel[1]);
+            if(config_.count_include_pad)
+                backward_cpu_ave(input[0].diff,output[0].diff,input[0].accumulate_gradient,AveReduceFull<float>(factor));
+            else
+                backward_cpu_ave(input[0].diff,output[0].diff,input[0].accumulate_gradient,AveReduceValid<float>(factor));
+        }
+    }
+    else {
+        backward_gpu(input[0].data,input[0].diff,output[0].diff,input[0].accumulate_gradient,ctx);
+    }
+
 }
 
 
@@ -350,7 +528,6 @@ void GlobalPooling::forward(std::vector<Tensor> &input,std::vector<Tensor> &outp
         forward_gpu(input[0],output[0],ctx);
     }
 }
-
 
 
 

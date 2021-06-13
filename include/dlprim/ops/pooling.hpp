@@ -3,7 +3,7 @@
 
 namespace dlprim {	
     namespace json { class value; }
-
+    namespace gpu  { class Scal; }
     struct PoolingBase {
         enum Mode {
             max = 0,
@@ -46,13 +46,24 @@ namespace dlprim {
                              Tensor &workspace,
                              ExecutionContext const &ctx);
 
+        virtual void backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &parameters,
+                              Tensor &workspace,
+                              ExecutionContext const &ctx);
+
     private:
         Shape calc_shape(Shape ins);
         int calc_output_size(int in_size,int dim);
    		void forward_gpu(Tensor &in,Tensor &output,ExecutionContext const &ctx);
+   		void backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ctx);
         
         template<typename Dtype,typename ReduceOpts>
         void forward_cpu(Tensor &in,Tensor &output,ReduceOpts rop);
+
+        void backward_cpu_max(Tensor &x,Tensor &dx,Tensor &dy,float factor);
+        template<typename ReduceOpts>
+        void backward_cpu_ave(Tensor &dx,Tensor &dy,float factor,ReduceOpts rop);
         
         template<typename T>
         struct MaxRedcue;
@@ -72,6 +83,8 @@ namespace dlprim {
         Pooling2DConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;
+        cl::Kernel bwd_kernel_;
+        std::unique_ptr<gpu::Scal> scal_;
         int wg_size_;
     };
 
