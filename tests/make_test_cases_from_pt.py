@@ -2,11 +2,48 @@ import torch
 import json
 import numpy as np
 import argparse
+import random
 
 def save_report(r):
     name,js = r
     with open('test_case_%s.json' %name,'w') as f:
         json.dump(js,f,indent=2)
+
+def make_softmax_loss():
+    report = {
+        "operator" : "SoftMax",
+        "tests" : [
+            {
+                "train" : True,
+                "options" : {"loss" : True},
+                "setup_tensors" : [ {"shape":[10,50]}, {"shape":[10],"requires_grad" : False} ],
+                "output_tensors" : [ {"shape":[1]} ],
+                "workspace": 0,
+                "cases" : []
+            }
+        ]
+    }
+    cases = report["tests"][0]["cases"]
+    sm = torch.nn.LogSoftmax(dim=1)
+    for b in [1,2,5,10,50]:
+        for f in [2,5,31,32,33,63,64,65]:
+            case = {
+                "in_shapes"  : [[b,f],[b]],
+                "out_shapes" : [[1]],
+            }
+            inp = torch.randn(b,f,requires_grad=True)
+            lbl = torch.randint(f,size=(b,))
+            out = torch.nn.NLLLoss()(sm(inp),lbl)
+            dl  = torch.rand(1).item() * 0.5 + 0.5
+            out.backward(torch.tensor(dl),retain_graph=True);
+            case["in_tensors"] = [inp.reshape((-1,)).tolist(),lbl.reshape((-1,)).tolist()]
+            case["out_tensors"] = [out.reshape((-1,)).tolist()]
+            case["out_diffs"] = [[dl]]
+            case["in_diffs"] = [inp.grad.reshape((-1,)).tolist(),False]
+            cases.append(case)
+    return report
+
+
 
 def make_softmax():
     report = {
@@ -375,6 +412,7 @@ def gen(name,func):
 if __name__ == "__main__":
     cases  = { 
         "softmax" : make_softmax,
+        "softmax_loss" : make_softmax_loss,
         "elementwise"  : make_eltwise,
         "pooling2d" : make_pooling2d,
         "global_pooling" : make_global_pooling,

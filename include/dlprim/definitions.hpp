@@ -71,6 +71,9 @@ namespace dlprim {
 
     template<>
     struct TypeTraits<float> { static constexpr DataType data_type = float_data; };
+
+    template<>
+    struct TypeTraits<int> { static constexpr DataType data_type = int32_data; };
     
     inline DataType string_to_data_type(std::string const &s)
     {
@@ -80,6 +83,8 @@ namespace dlprim {
             return half_data;
         else if(s == "bfloat16")
             return bfloat16_data;
+        else if(s == "int32" || s == "int")
+            return int32_data;
         throw ValidationError("Unknown data type " + s);
     }
     inline std::string data_type_to_string(DataType dt)

@@ -9,10 +9,32 @@
 #define ITEMS_PER_WI 1
 #endif
 
+#ifndef CALC_LOSS
+#define CALC_LOSS 0
+#endif
+
+#if CALC_LOSS==1
+#include "atomic.h"
+#endif
+
+
+
 #define LOCAL_ITEMS_LIMIT 32
 __kernel 
 __attribute__((reqd_work_group_size(1,WG_SIZE,1)))
-void softmax(int batch,int channels,__global dtype *in,int data_offset,__global dtype *out,int out_offset)
+void softmax(int batch,int channels,
+             __global dtype *in,int data_offset,
+#if CALC_LOSS==2
+             __global dtype *in_diff,int in_diff_offset,
+#endif
+#if CALC_LOSS>=1
+             __global itype *label,int label_offset,             
+#endif
+             __global dtype *out,int out_offset
+#if CALC_LOSS==2
+            ,dtype factor
+#endif            
+             )
 {
     in += data_offset;
     out += out_offset;
@@ -25,7 +47,14 @@ void softmax(int batch,int channels,__global dtype *in,int data_offset,__global 
     int c = get_global_id(1) * ITEMS_PER_WI;
 
     in += b * channels;
+#if CALC_LOSS >= 1
+    label += label_offset + b;
+    #if CALC_LOSS == 2
+    in_diff += b * channels + in_diff_offset;
+    #endif
+#else
     out += b * channels;
+#endif
     
     REDUCE_PREPARE(WG_SIZE,dtype);
 
@@ -49,6 +78,7 @@ void softmax(int batch,int channels,__global dtype *in,int data_offset,__global 
 
 
     my_work_group_reduce_max(val);
+    dtype maxv = val;
 
     dtype sum = 0;
 
@@ -56,20 +86,23 @@ void softmax(int batch,int channels,__global dtype *in,int data_offset,__global 
         #pragma unroll
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c+i < channels) {
-                sum += values[i] = exp(values[i] - val);
+                sum += values[i] = exp(values[i] - maxv);
             }
         }
     #else
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c+i < channels) {
-                dtype tmp = exp(in[c+i] - val);
+                dtype tmp = exp(in[c+i] - maxv);
+                #if CALC_LOSS == 0
                 out[c+i] = tmp;
+                #endif
                 sum += tmp;
             }
         }
     #endif
     my_work_group_reduce_add(sum);
 
+#if CALC_LOSS == 0
     val = (dtype)1 / sum;
 
     #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
@@ -86,5 +119,35 @@ void softmax(int batch,int channels,__global dtype *in,int data_offset,__global 
             }
         }
     #endif
+#elif CALC_LOSS == 1
+    if(get_local_id(1) == 0) {
+        int index = *label;
+        dtype loss = 0;
+        if(0 <= index && index < channels)
+            loss = -(in[index] - maxv - log(sum));
+        atomic_addf(out,loss / batch);
+    }
+#elif CALC_LOSS == 2
+    val = (dtype)1 / sum;
+    int index = *label;
+    dtype gr;
+    dtype loss = *out / batch;
+    
+    #pragma unroll(8)
+    for(int i=0;i<ITEMS_PER_WI;i++) {
+        if(c + i < channels) {
+            #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
+            dtype sm_val = values[i];
+            #else
+            dtype sm_val = exp(in[c+i]-maxv);
+            #endif
+            gr = loss *( sm_val * val - (int)(index ==  c + i));
+            if(factor == 0)
+                in_diff[c+i] = gr;
+            else
+                in_diff[c+i] = in_diff[c+i] * factor + gr;
+        }
+    }
+#endif
 }
 

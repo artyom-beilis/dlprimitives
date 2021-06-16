@@ -20,6 +20,15 @@ std::vector<dp::TensorSpecs> tensor_specs_from_json(dp::json::value const &v)
     return r;
 }
 
+std::vector<int> get_requires_grad(dp::json::value const &v)
+{
+    std::vector<int> rg;
+    for(auto &val : v.array()) {
+        rg.push_back(int(val.get("requires_grad",true)));
+    }
+    return rg;
+}
+
 std::vector<dp::Shape> tensor_shapes_from_json(dp::json::value const &v)
 {
     std::vector<dp::Shape> r;
@@ -58,6 +67,9 @@ void copy_tensors(std::vector<dp::Tensor> &tensors,dp::json::value const &v)
 {
     dp::json::array const &vals = v.array();
     for(size_t i=0;i<tensors.size();i++) {
+        if(vals.at(i).type() == dp::json::is_boolean && vals[i].get_value<bool>()==false) {
+            continue;
+        }
         std::vector<float> const &values = vals.at(i).get_value<std::vector<float> >();
         if(values.size() !=tensors[i].shape().total_size()) {
             std::cerr << "Got vector of size " << values.size() << " for shape " << tensors[i].shape() << std::endl;
@@ -88,10 +100,13 @@ void copy_tensors(std::vector<dp::Tensor> &out,std::vector<dp::Tensor> &inp,dp::
 }
 
 
-void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &reference,float eps,float factor=1.0f,char const *name="")
+void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &reference,
+                float eps,float factor=1.0f,char const *name="",std::vector<int> const &grad=std::vector<int>())
 {
     bool failed = false;
     for(size_t i=0;i < actual.size();i++) {
+        if(i < grad.size() && !grad[i])
+            continue;
         int fail_counts=0;
         if(actual[i].dtype() == dp::float_data) {
             float *a=actual[i].data<float>();
@@ -176,6 +191,19 @@ std::vector<dp::TensorAndGradient> join_grad(std::vector<dp::Tensor> &data,std::
     return joined;
 }
 
+
+std::vector<dp::TensorAndGradient> join_grad(std::vector<dp::Tensor> &data,std::vector<dp::Tensor> &diff,std::vector<int> &rg,float accum = 0)
+{
+    std::vector<dp::TensorAndGradient> joined(data.size());
+    for(size_t i=0;i<data.size();i++) {
+        joined[i].data = data[i];
+        joined[i].diff = diff[i];
+        joined[i].requires_gradient = rg[i];
+        joined[i].accumulate_gradient = accum;
+    }
+    return joined;
+}
+
 int main(int argc,char **argv)
 {
     if(argc != 3) {
@@ -213,6 +241,7 @@ int main(int argc,char **argv)
             std::unique_ptr<dp::Operator> ref_op = dp::create_by_name(cpu_ctx,op_name,tests[i]["options"]);
 
             std::vector<dp::TensorSpecs> input_specs = tensor_specs_from_json(tests[i]["setup_tensors"]);
+            std::vector<int> grad = get_requires_grad(tests[i]["setup_tensors"]);
             std::vector<dp::TensorSpecs> output_specs = tensor_specs_from_json(tests[i]["output_tensors"]);
             int ws = tests[i].get("workspace",-1);
             std::vector<dp::TensorSpecs> res_specs,res_param_specs,ref_specs,ref_param_specs;
@@ -302,7 +331,7 @@ int main(int argc,char **argv)
                     }
                     else {
                         initialize_tensors(out_diffs,rnd);
-                        auto a = join_grad(in_tensors,in_ref_diffs,0);
+                        auto a = join_grad(in_tensors,in_ref_diffs,grad,0);
                         auto b = join_grad(ref_tensors,out_diffs,0);
                         auto c = join_grad(ref_params,param_ref_diffs,0);
                         ref_op->backward(a,b,c,ref_ws_tensor,cpu_e);
@@ -313,7 +342,7 @@ int main(int argc,char **argv)
                                 tensor.to_device(e,false);
                         }
                         {
-                            auto a = join_grad(in_tensors,in_diffs,accum * 0.5f);
+                            auto a = join_grad(in_tensors,in_diffs,grad,accum * 0.5f);
                             auto b = join_grad(out_tensors,out_diffs);
                             auto c = join_grad(params,param_diffs,accum * 0.5f);
                             op->backward(a,b,c,res_ws_tensor,e);
@@ -327,7 +356,7 @@ int main(int argc,char **argv)
                                 e.queue().finish();
                         }
                         compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter");
-                        compare_tensors(in_diffs,in_ref_diffs,eps,1.0 + accum * 0.5f,"data");
+                        compare_tensors(in_diffs,in_ref_diffs,eps,1.0 + accum * 0.5f,"data",grad);
                     }
                 }
                 std::cout << std::endl;
