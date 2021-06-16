@@ -29,6 +29,7 @@ int main(int argc,char **argv)
 {
     try {
         bool enable_profiling = false;
+        bool enable_backward = false;
         int warm = 5;
         int iters = 20;
         while(argc >= 2 && argv[1][0] == '-') {
@@ -36,6 +37,8 @@ int main(int argc,char **argv)
             if(flag == "-t") {
                 enable_profiling = true;
             }
+            else if(flag == "-b") 
+                enable_backward = true;
             else if(flag.substr(0,2) == "-i" && flag.size() > 2) {
                 iters = atoi(flag.c_str()+2);
             }
@@ -60,6 +63,8 @@ int main(int argc,char **argv)
         std::string net_h5 = argc >= 4 ? argv[3] : "";
 
         dp::Net net(ctx);
+        if(enable_backward)
+            net.mode(dp::CalculationsMode::train);
         net.load_from_json_file(net_js);
         net.setup();
         if(!net_h5.empty()) {
@@ -69,7 +74,8 @@ int main(int argc,char **argv)
             xavier(net);
         }
         net.copy_parameters_to_device();
-        std::vector<dp::Tensor> data,res;
+        net.reshape();
+        std::vector<dp::Tensor> data,res,res_diff;
         std::cout << "Inputs" << std::endl;
         for(unsigned i=0;i<net.input_names().size();i++) {
             std::cout << "- " << net.input_names()[i] <<": " << net.input(i).shape() << std::endl;
@@ -79,6 +85,8 @@ int main(int argc,char **argv)
         for(unsigned i=0;i<net.output_names().size();i++) {
             std::cout <<"- " << net.output_names()[i] << ": "<< net.output(i).shape() << std::endl;
             res.push_back(net.output(i));
+            if(enable_backward)
+                res_diff.push_back(net.tensor_diffs()[net.output_names()[i]]);
         }
         
         cl::CommandQueue queue=ctx.make_queue(enable_profiling ? CL_QUEUE_PROFILING_ENABLE : 0);
@@ -106,6 +114,15 @@ int main(int argc,char **argv)
             net.forward(q);
             for(size_t j=0;j<res.size();j++)
                 res[j].to_host(q,j+1 == res.size());
+            if(enable_backward) {
+                for(size_t j=0;j<res.size();j++) {
+                    res[j].data<float>()[0] = 0;
+                    res[j].to_device(q,false);
+                }
+                net.backward(q);
+                if(!ctx.is_cpu_context())
+                    q.queue().finish();
+            }
             auto stop = std::chrono::system_clock::now();
             auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();
             std::cout << "Step " << std::setw(2) << i << " " << passed * 1e3 << std::endl;

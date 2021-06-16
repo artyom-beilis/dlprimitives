@@ -29,6 +29,7 @@ namespace dlprim {
                             std::vector<std::string> const &outputs,
                             std::vector<std::string> const &parameters = std::vector<std::string>());
 
+        void mode(CalculationsMode mode); 
         void setup();
         void reshape();
         void copy_parameters_to_device(); 
@@ -38,9 +39,18 @@ namespace dlprim {
         {
             return tensors_;
         }
+        std::map<std::string,Tensor> &tensor_diffs()
+        {
+            return tensors_diff_;
+        }
+
         std::map<std::string,Tensor> &params()
         {
             return parameters_;
+        }
+        std::map<std::string,Tensor> &param_diffs()
+        {
+            return parameters_diff_;
         }
 
         Tensor &tensor(std::string const &name)
@@ -60,6 +70,7 @@ namespace dlprim {
         }
 
         void forward(ExecutionContext const &ectx);
+        void backward(ExecutionContext const &ectx);
 
         std::vector<std::string> const &input_names()
         {
@@ -102,6 +113,10 @@ namespace dlprim {
             
             std::vector<TensorSpecs> parameter_specs;
             std::vector<Tensor>      parameters;
+
+            std::vector<TensorAndGradient> in_grad;
+            std::vector<TensorAndGradient> out_grad;
+            std::vector<TensorAndGradient> param_grad;
             size_t ws_size;
         };
 
@@ -118,8 +133,13 @@ namespace dlprim {
 
         Tensor workspace_;
         std::map<std::string,Tensor> tensors_;
+        std::map<std::string,Tensor> tensors_diff_;
+
         std::map<std::string,Tensor> parameters_;
+        std::map<std::string,Tensor> parameters_diff_;
         std::vector<std::string> inputs_;
         std::vector<std::string> outputs_;
+
+        CalculationsMode mode_;
     };
 };

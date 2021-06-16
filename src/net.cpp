@@ -8,8 +8,16 @@
 
 namespace dlprim {
     Net::Net(Context &ctx) :
-        ctx_(ctx)
+        ctx_(ctx),
+        mode_(CalculationsMode::predict)
     {
+    }
+
+    void Net::mode(CalculationsMode m)
+    {
+        mode_ = m;
+        for(auto &c:connections_)
+            c.op->mode(m);
     }
 
     void Net::add_input_tensor(std::string const &name,TensorSpecs const &ts)
@@ -118,6 +126,7 @@ namespace dlprim {
     {
         Connection conn;
         conn.op = std::move(op);
+        conn.op->mode(mode_);
         conn.name = name;
         if(connections_index_.find(name) != connections_index_.end()) {
             throw ValidationError("Operator with name " + name + " exists");
@@ -208,26 +217,57 @@ namespace dlprim {
     {
         tensors_.clear();
         parameters_.clear();
+        bool train = mode_ == CalculationsMode::train;
         for(auto const &ts : tensor_specs_) {
             tensors_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
+            if(train)
+                tensors_diff_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
         }
         for(auto const &ps : parameter_specs_) {
             parameters_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype());
+            if(train)
+                parameters_diff_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype());
         }
         for(auto &conn : connections_) {
             conn.input_tensors.clear();
             conn.output_tensors.clear();
-            for(auto const &name : conn.input_names)
+            for(auto const &name : conn.input_names) {
                 conn.input_tensors.push_back(tensors_[name]);
+                if(train) {
+                    TensorAndGradient tg;
+                    tg.data = tensors_[name];
+                    tg.diff = tensors_diff_[name];
+                    tg.accumulate_gradient = 0.0;
+                    tg.requires_gradient = std::find(inputs_.begin(),inputs_.end(),name) == inputs_.end();
+                    conn.in_grad.push_back(tg);
+                }
+            }
 
-            for(auto const &name : conn.output_names)
+            for(auto const &name : conn.output_names) {
                 conn.output_tensors.push_back(tensors_[name]);
+                if(train) {
+                    TensorAndGradient tg;
+                    tg.data = tensors_[name];
+                    tg.diff = tensors_diff_[name];
+                    tg.accumulate_gradient = 0.0;
+                    tg.requires_gradient = true;
+                    conn.out_grad.push_back(tg);
+                }
+            }
 
             if(conn.parameter_names.empty())
                 continue;
             conn.parameters.clear();
             for(auto const &name : conn.parameter_names) {
                 conn.parameters.push_back(parameters_[name]);
+                if(train) {
+                    TensorAndGradient tg;
+                    tg.data = parameters_[name];
+                    tg.diff = parameters_diff_[name];
+                    tg.accumulate_gradient = 1.0f;
+                    tg.requires_gradient = true;
+                    conn.param_grad.push_back(tg);
+                }
             }
         }
     }
@@ -244,14 +284,19 @@ namespace dlprim {
     void Net::reshape()
     {
         std::vector<Shape> in,out;
+        bool train = mode_ == CalculationsMode::train;
         for(auto &conn : connections_) {
             in.clear();
             out.clear();
             for(Tensor &s : conn.input_tensors)
                 in.push_back(s.shape());
             conn.op->reshape(in,out);
-            for(unsigned i=0;i<out.size();i++)
+            for(unsigned i=0;i<out.size();i++) {
                 conn.output_tensors[i].reshape(out[i]);
+                if(train) {
+                    conn.out_grad[i].diff.reshape(out[i]);
+                }
+            }
         }
     }
 
@@ -260,10 +305,15 @@ namespace dlprim {
         for(auto &conn : connections_) {
             conn.input_tensors.clear();
             conn.output_tensors.clear();
+            conn.in_grad.clear();
+            conn.out_grad.clear();
+            conn.param_grad.clear();
         }
         workspace_ = Tensor();
         tensors_.clear();
+        tensors_diff_.clear();
         parameters_.clear();
+        parameters_diff_.clear();
     }
 
     void Net::forward(ExecutionContext const &e)
@@ -280,6 +330,20 @@ namespace dlprim {
                 ec);
         }
     }
-
+    
+    void Net::backward(ExecutionContext const &e)
+    {
+        ExecGuard g(e,"backward");
+        for(int i=connections_.size() - 1,it=0;i > 0;i--,it++) {
+            ExecGuard g(e,connections_[i].name.c_str());
+            ExecutionContext ec = e.generate_series_context(it,connections_.size());
+            connections_[i].op->backward(
+                connections_[i].in_grad,
+                connections_[i].out_grad,
+                connections_[i].param_grad,
+                workspace_,
+                ec);
+        }
+    }
       
 } 
