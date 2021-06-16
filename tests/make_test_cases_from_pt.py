@@ -11,11 +11,11 @@ def save_report(r):
 
 def make_softmax_loss():
     report = {
-        "operator" : "SoftMax",
+        "operator" : "SoftmaxWithLoss",
         "tests" : [
             {
                 "train" : True,
-                "options" : {"loss" : True},
+                "options" : {},
                 "setup_tensors" : [ {"shape":[10,50]}, {"shape":[10],"requires_grad" : False} ],
                 "output_tensors" : [ {"shape":[1]} ],
                 "workspace": 0,
@@ -47,7 +47,7 @@ def make_softmax_loss():
 
 def make_softmax():
     report = {
-        "operator" : "SoftMax",
+        "operator" : "Softmax",
         "tests" : [
             {
                 "options" : {},

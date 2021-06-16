@@ -1,11 +1,9 @@
 {
-  "operator": "SoftMax",
+  "operator": "SoftmaxWithLoss",
   "tests": [
     {
       "train": true,
-      "options": {
-        "loss": true
-      },
+      "options": {},
       "setup_tensors": [
         {
           "shape": [

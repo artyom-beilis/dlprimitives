@@ -1,5 +1,5 @@
 {
-  "operator": "SoftMax",
+  "operator": "Softmax",
   "tests": [
     {
       "options": {},

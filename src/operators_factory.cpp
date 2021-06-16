@@ -8,9 +8,15 @@ namespace dlprim {
     
 static std::map<std::string,std::function<Operator *(Context &,json::value const &)> > generators = {
     { 
-        "SoftMax", 
+        "Softmax", 
         [](Context &ctx,json::value const &p) {
-            return new SoftMax(ctx,SoftMaxConfig::from_json(p));
+            return new Softmax(ctx,SoftmaxConfig::from_json(p));
+        }
+    },
+    { 
+        "SoftmaxWithLoss", 
+        [](Context &ctx,json::value const &p) {
+            return new SoftmaxWithLoss(ctx,SoftmaxConfig::from_json(p));
         }
     },
     {

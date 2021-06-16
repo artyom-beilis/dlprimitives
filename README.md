@@ -18,9 +18,10 @@ Please note this is only work in progress - first and preliminary stages.
 |Operator               |Features                       | Computation       |
 |-----------------------|-------------------------------|-------------------|
 |Softmax                |                               | Fwd               |
+|SoftmaxWithLoss        |                               | Fwd,Bwd           |
 |Elementwise            | ax+by, max(ax,by), ax\*y      | Fwd               |
-|MaxPool2d              |                               | Fwd               |
-|AvgPool2d              |                               | Fwd               |
+|MaxPool2d              |                               | Fwd,Bwd           |
+|AvgPool2d              |                               | Fwd,Bwd           |
 |GlobalMaxPool2d        |                               | Fwd               |
 |GlobalAvgPool2d        |                               | Fwd               |
 |Inner Product          |                               | Fwd,Bwd           |
