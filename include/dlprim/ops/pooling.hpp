@@ -3,7 +3,7 @@
 
 namespace dlprim {	
     namespace json { class value; }
-    namespace gpu  { class Scal; }
+    class Scal;
     struct PoolingBase {
         enum Mode {
             max = 0,
@@ -84,7 +84,7 @@ namespace dlprim {
         DataType dtype_;
         cl::Kernel kernel_;
         cl::Kernel bwd_kernel_;
-        std::unique_ptr<gpu::Scal> scal_;
+        std::unique_ptr<Scal> scal_;
         int wg_size_;
     };
 

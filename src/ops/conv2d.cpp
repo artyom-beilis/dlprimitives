@@ -1,6 +1,6 @@
 #include <dlprim/ops/conv2d.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
-#include <dlprim/gpu/gpu_ops.hpp>
+#include <dlprim/ops/scal.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/utils/json_helpers.hpp>
@@ -145,8 +145,9 @@ namespace dlprim {
             params.push_back(TensorSpecs(Shape(config_.channels_out),dtype_));
 
         if(mode_ == CalculationsMode::train) {
-            if(config_.bias)
-                bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],out_h_ * out_w_,dtype_));
+            if(config_.bias) {
+                bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],output_shape[2]*output_shape[3],dtype_));
+            }
             if(config_.activation != StandardActivations::identity)
                 activation_ = std::move(Activation::get_bwd_op(ctx_,config_.activation,in[0]));
         }
@@ -160,7 +161,7 @@ namespace dlprim {
         }
 
         if(mode_ != CalculationsMode::predict)
-                scal_.reset(new gpu::Scal(ctx_,dtype_));
+                scal_.reset(new Scal(ctx_,dtype_));
 
         use_ds_conv_ = is_depthwise_separable_conv();
 

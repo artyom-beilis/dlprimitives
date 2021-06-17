@@ -41,7 +41,7 @@ namespace dlprim {
 
         size_t size_no_batch() const
         {
-            if(size_ <= 1)
+            if(size_ <= 0)
                 return 0;
             size_t r=1;
             for(int i=1;i<size_;i++) {

@@ -8,18 +8,33 @@ import time
 import numpy as np
 import sys
 
-def benchmark_model(model,batch,device,warm,iters):
-    model.eval()
+def benchmark_model(model,batch,device,warm,iters,train):
+    if train:
+        model.train()
+    else:
+        model.eval()
     inp = torch.randn(batch,3,224,224).to(device)
     total_time = 0
+    total_fw = 0
+    total_bw = 0
     total_batches = 0
     total_items = 0
     print("Warming up")
-    sm = torch.nn.Softmax(dim=1)
+    if train:
+        sm = torch.nn.LogSoftmax(dim=1)
+        nll = torch.nn.NLLLoss()
+        lbl = torch.randint(1000,size=(batch,)).to(device)
+    else:
+        sm = torch.nn.Softmax(dim=1)
     for it in range(-warm,iters):
         start = time.time()
         res = sm(model(inp))
-        torch.sum(res).item()
+        loss = torch.sum(res).detach().item()
+        if train:
+            tmp = time.time()
+            l=nll(res,lbl)
+            l.backward()
+            torch.cuda.synchronize()
         end = time.time()
         msg = ''
         if it == -warm:
@@ -31,8 +46,14 @@ def benchmark_model(model,batch,device,warm,iters):
             total_time += end-start
             total_items += batch
             total_batches += 1
+            if train:
+                total_fw += tmp  - start
+                total_bw += end - tmp
     print("Time per item  %1.3fms" %(total_time / total_items *1e3))
     print("Time per batch %1.3fms" %(total_time / total_batches *1e3))
+    if train:
+        print("Time fwd batch  %1.3fms" %(total_fw / total_batches *1e3))
+        print("Time bwd batch  %1.3fms" %(total_bw / total_batches *1e3))
 
 def export_model(model,batch,path,opset,ir):
     inp = torch.randn(batch,3,224,224)
@@ -90,13 +111,13 @@ def get_config():
 
 
 def main(args):
-    m = getattr(torchvision.models,args.model)(pretrained = True)
+    m = getattr(torchvision.models,args.model)(pretrained = not args.train)
 
     if args.export:
         export_model(m,args.batch,args.export,args.onnx_opset,args.onnx_ir)
     m.to(args.device)
     if args.benchmark:
-        benchmark_model(m,args.batch,args.device,args.warm,args.iters)
+        benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train)
     if args.images:
         predict_on_images(m,args.images,args.device,get_config())
 
@@ -106,6 +127,7 @@ if __name__ == '__main__':
     p.add_argument('--device',default='cuda')
     p.add_argument('--export')
     p.add_argument('--benchmark',action='store_true')
+    p.add_argument('--train',action='store_true')
     p.add_argument('--onnx-opset',default=7,type=int)
     p.add_argument('--onnx-ir',default=3,type=int)
     p.add_argument('--batch',default=16,type=int)

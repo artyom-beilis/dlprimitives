@@ -276,13 +276,14 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     model = Net2().to(device)
-    optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
+    #optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
+    optimizer = optim.SGD(model.parameters(), lr=0.01,momentum=0.9, weight_decay=0.00)
 
-    scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    #scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)
         test(model, device, test_loader)
-        scheduler.step()
+        #scheduler.step()
 
     if args.save_model:
         model.eval()

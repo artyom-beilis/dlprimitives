@@ -1,6 +1,6 @@
 #include <dlprim/ops/softmax.hpp>
 #include <dlprim/gpu/program_cache.hpp>
-#include <dlprim/gpu/gpu_ops.hpp>
+#include <dlprim/ops/scal.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <math.h>
@@ -108,7 +108,7 @@ void SoftmaxWithLoss::setup_kernel(int sm_range)
                                                 "CALC_LOSS",2);
 
     kernel_bwd_ = cl::Kernel(prog_bwd,"softmax");
-    scal_.reset(new gpu::Scal(ctx_,dtype_));
+    scal_.reset(new Scal(ctx_,dtype_));
 }
 
 void Softmax::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
@@ -295,9 +295,9 @@ void SoftmaxWithLoss::forward(std::vector<Tensor> &input,std::vector<Tensor> &ou
     DLPRIM_CHECK(input[1].dtype() == dtype_ || input[1].dtype() == int32_data);
     DLPRIM_CHECK(output[0].shape().total_size() == 1);
     if(ctx_.is_cpu_context()) {
-        if(output[0].dtype() == float_data)
+        if(input[1].dtype() == float_data)
             forward_cpu_loss<float>(input[0],input[1],output[0]);
-        else if(output[0].dtype() == int32_data)
+        else if(input[1].dtype() == int32_data)
             forward_cpu_loss<int>(input[0],input[1],output[0]);
         else
             throw ValidationError("Invalid data type " + std::to_string(output[0].dtype()));

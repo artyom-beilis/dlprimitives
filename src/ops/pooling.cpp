@@ -4,7 +4,7 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <math.h>
 #include <dlprim/cpu/cpu_ops.hpp>
-#include <dlprim/gpu/gpu_ops.hpp>
+#include <dlprim/ops/scal.hpp>
 #include <cblas.h>
 
 namespace dlprim {
@@ -68,7 +68,7 @@ void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs
                                         "COUNT_INCLUDE_PAD",int(config_.count_include_pad));
     kernel_ = cl::Kernel(prog,"pooling");
     bwd_kernel_ = cl::Kernel(prog,"pooling_bw");
-    scal_.reset(new gpu::Scal(ctx_,dtype_));
+    scal_.reset(new Scal(ctx_,dtype_));
 }
 
 int Pooling2D::calc_output_size(int in_size,int dim)

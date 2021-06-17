@@ -3,8 +3,9 @@
 
 namespace dlprim {	
     
-    namespace gpu { class GEMM; class Scal; }
+    namespace gpu { class GEMM; }
     class BWBias;
+    class Scal;
 
 	struct Convolution2DConfig {
 		int channels_in = -1;
@@ -83,7 +84,7 @@ namespace dlprim {
         std::unique_ptr<gpu::GEMM> bwd_weights_gemm_;
         std::unique_ptr<Operator>  activation_;
         std::unique_ptr<BWBias> bwd_bias_;
-        std::unique_ptr<gpu::Scal> scal_;
+        std::unique_ptr<Scal> scal_;
         size_t ws_size_;
         size_t out_h_,out_w_;
         size_t in_h_,in_w_;

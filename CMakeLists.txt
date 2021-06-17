@@ -45,6 +45,8 @@ add_library(dlprim SHARED
         src/ops/elementwise.cpp
         src/ops/pooling.cpp
         src/ops/bwd_bias.cpp
+        src/ops/axpby.cpp
+        src/ops/scal.cpp
         src/gemm.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
@@ -59,9 +61,11 @@ add_executable(test_json tests/json_test.cpp)
 add_executable(benchmark tools/benchmark.cpp)
 add_executable(image_predict tools/image_predict.cpp)
 add_executable(mnist tests/mnist.cpp)
+add_executable(train_mnist tests/train_mnist.cpp)
 
 target_link_libraries(test_from_template dlprim)
 target_link_libraries(mnist dlprim)
+target_link_libraries(train_mnist dlprim)
 target_link_libraries(benchmark dlprim)
 target_link_libraries(image_predict dlprim)
 target_link_libraries(test_json dlprim)

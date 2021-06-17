@@ -99,22 +99,36 @@ int main(int argc,char **argv)
         int total = 0;
         int total_batches = 0;
         double total_time = 0;
+        double fw_time = 0;
+        double bw_time = 0;
         for(auto &t : data) {
             size_t total = t.shape().total_size();
-            float *ptr = t.data<float>();
-            for(size_t j=0;j<total;j++) 
-                ptr[j] = float(rand())/RAND_MAX;
+            if(t.dtype()==dp::float_data) {
+                float *ptr = t.data<float>();
+                for(size_t j=0;j<total;j++) 
+                    ptr[j] = float(rand())/RAND_MAX;
+            }
+            else if(t.dtype()==dp::int32_data) {
+                int *ptr = t.data<int>();
+                for(size_t j=0;j<total;j++) 
+                    ptr[j] = 2*(float(rand())/RAND_MAX);
+            }
+            else {
+                throw std::runtime_error("Unsuported data");
+            }
         }
         for(int i=-warm;i<iters;i++) {
             if(timing)
                 timing->reset();
-            auto start = std::chrono::system_clock::now();
+            auto start = std::chrono::high_resolution_clock::now();
+            auto bw_point = start;
             for(size_t j=0;j<data.size();j++)
                 data[j].to_device(q,false);
             net.forward(q);
             for(size_t j=0;j<res.size();j++)
                 res[j].to_host(q,j+1 == res.size());
             if(enable_backward) {
+                bw_point = std::chrono::high_resolution_clock::now();
                 for(size_t j=0;j<res.size();j++) {
                     res[j].data<float>()[0] = 0;
                     res[j].to_device(q,false);
@@ -123,9 +137,19 @@ int main(int argc,char **argv)
                 if(!ctx.is_cpu_context())
                     q.queue().finish();
             }
-            auto stop = std::chrono::system_clock::now();
+            auto stop = std::chrono::high_resolution_clock::now();
             auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();
-            std::cout << "Step " << std::setw(2) << i << " " << passed * 1e3 << std::endl;
+            std::cout << "Step " <<std::fixed << std::setw(2) << i << " " << std::setw(10) << std::setprecision(3) <<  passed * 1e3;
+            if(enable_backward) {
+                auto fw = std::chrono::duration_cast<std::chrono::duration<double> > ((bw_point-start)).count();
+                auto bw = std::chrono::duration_cast<std::chrono::duration<double> > ((stop-bw_point)).count();
+                std::cout << std::setw(10) << fw*1e3 << std::setw(10) << bw * 1e3;
+                if(i>=0) {
+                    fw_time += fw;
+                    bw_time += bw;
+                }
+            }
+            std::cout << std::endl;
             if(i == 0 && timing) {
                 double total_event_time = 0;
                 if(ctx.is_cpu_context()) {
@@ -141,7 +165,7 @@ int main(int argc,char **argv)
                             std::cout << sections.top() << ":";
                             sections.pop();
                         }
-                        std::cout << timing->sections()[i].time_sec * 1e3 << "ms" << std::endl;
+                        std::cout << timing->sections()[i].time_sec * 1e3 << " ms" << std::endl;
                     }
                 }
                 else for(auto &d : timing->events()) {
@@ -178,8 +202,12 @@ int main(int argc,char **argv)
                 total += data[0].shape()[0];
             }
         }
-        std::cout << "Time per sample: " << (total_time / total * 1e3) << "ms" << std::endl;
-        std::cout << "Time per batch:  " << (total_time / total_batches * 1e3) << "ms" << std::endl;
+        std::cout << "Time per sample: " << (total_time / total * 1e3) << " ms" << std::endl;
+        std::cout << "Time per batch:  " << (total_time / total_batches * 1e3) << " ms" << std::endl;
+        if(enable_backward) {
+            std::cout << "FW time per batch:  " << (fw_time / total_batches * 1e3) << " ms" << std::endl;
+            std::cout << "BW time per batch:  " << (bw_time / total_batches * 1e3) << " ms" << std::endl;
+        }
     }
     catch(cl::Error const &e) {
         std::cerr << "OpenCL error:" << e.what() << " " << e.err() << std::endl;

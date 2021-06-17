@@ -34,6 +34,43 @@ namespace dlprim {
         }
         outputs_.push_back(name);
     }
+    void Net::save_parameters_to_hdf5(std::string const &fname)
+    {
+        try {
+            H5::H5File f(fname,H5F_ACC_TRUNC);
+            for(auto  &pr : parameters_) {
+                std::string name = pr.first;
+                Tensor &tensor = pr.second;
+                Shape shape = tensor.shape();
+                std::vector<hsize_t> dims(1 + shape.size());
+                for(int i=0;i<shape.size();i++)
+                    dims[i] = shape[i];
+                H5::DataSpace dsp(shape.size(),dims.data());
+                H5::FloatType datatype( H5::PredType::NATIVE_FLOAT );
+                datatype.setOrder( H5T_ORDER_LE );
+                H5::DataSet dataset = f.createDataSet( name , datatype, dsp );
+                if(tensor.dtype() == float_data) {
+                    if(name == "fc1") {
+                        std::ofstream tmp("fc1_save.csv");
+                        for(int i=0;i<10;i++) {
+                            tmp << tensor.data<float>()[i] << ",";
+                        }
+                        tmp << std::endl;
+                    }
+                    dataset.write(tensor.data<float>(),H5::PredType::NATIVE_FLOAT);
+                }
+                else {
+                    throw ValidationError("FIXME load float16 from hdf5");
+                }
+            }
+            f.close();
+        }
+        catch(H5::Exception const &e) {
+            throw ValidationError("Failed to load HDF5 file " + fname + ": " + std::string(e.getCDetailMsg()));
+        }
+
+        
+    }
 
     void Net::load_parameters_from_hdf5(std::string const &fname,bool allow_missing)
     {
@@ -63,6 +100,13 @@ namespace dlprim {
                 }
                 if(tensor.dtype() == float_data) {
                     dataset.read(tensor.data<float>(),H5::PredType::NATIVE_FLOAT);
+                    if(name == "fc1") {
+                        std::ofstream tmp("fc1_load.csv");
+                        for(int i=0;i<10;i++) {
+                            tmp << tensor.data<float>()[i] << ",";
+                        }
+                        tmp << std::endl;
+                    }
                 }
                 else {
                     throw ValidationError("FIXME load float16 from hdf5");
@@ -279,6 +323,13 @@ namespace dlprim {
             pr.second.to_device(q);
         }
     }
+    void Net::copy_parameters_to_host()
+    {
+        cl::CommandQueue q = ctx_.make_queue();
+        for(auto &pr : parameters_) {
+            pr.second.to_host(q);
+        }
+    }
 
 
     void Net::reshape()
@@ -334,7 +385,7 @@ namespace dlprim {
     void Net::backward(ExecutionContext const &e)
     {
         ExecGuard g(e,"backward");
-        for(int i=connections_.size() - 1,it=0;i > 0;i--,it++) {
+        for(int i=connections_.size() - 1,it=0;i >= 0;i--,it++) {
             ExecGuard g(e,connections_[i].name.c_str());
             ExecutionContext ec = e.generate_series_context(it,connections_.size());
             connections_[i].op->backward(

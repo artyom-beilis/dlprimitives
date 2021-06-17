@@ -22,6 +22,7 @@ namespace dlprim {
         void mark_output_tensor(std::string const &name);
 
         void load_parameters_from_hdf5(std::string const &fname,bool allow_missing=false);
+        void save_parameters_to_hdf5(std::string const &fname);
 
         void add_operator(  std::unique_ptr<Operator> op,
                             std::string const &name,
@@ -33,6 +34,7 @@ namespace dlprim {
         void setup();
         void reshape();
         void copy_parameters_to_device(); 
+        void copy_parameters_to_host(); 
         void clear_memory();
 
         std::map<std::string,Tensor> &tensors()
@@ -60,11 +62,25 @@ namespace dlprim {
                 throw ValidationError("Unknown tensor name:" + name);
             return p->second;
         }
+        Tensor &tensor_diff(std::string const &name)
+        {
+            auto p=tensors_diff_.find(name);
+            if(p == tensors_diff_.end())
+                throw ValidationError("Unknown tensor name:" + name);
+            return p->second;
+        }
         
         Tensor &param(std::string const &name)
         {
             auto p=parameters_.find(name);
             if(p == parameters_.end())
+                throw ValidationError("Unknown parameter name:" + name);
+            return p->second;
+        }
+        Tensor &param_diff(std::string const &name)
+        {
+            auto p=parameters_diff_.find(name);
+            if(p == parameters_diff_.end())
                 throw ValidationError("Unknown parameter name:" + name);
             return p->second;
         }

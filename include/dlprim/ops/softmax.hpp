@@ -3,7 +3,7 @@
 
 namespace dlprim {	
     namespace json { class value; }
-    namespace gpu { class Scal; }
+    class Scal;
 
     struct SoftmaxConfig {
         static SoftmaxConfig from_json(json::value const &v);
@@ -96,6 +96,6 @@ namespace dlprim {
         DataType dtype_;
         std::string itype_;
         cl::Kernel kernel_,kernel_bwd_;
-        std::unique_ptr<gpu::Scal> scal_;
+        std::unique_ptr<Scal> scal_;
     };
 }
