@@ -38,7 +38,7 @@ namespace gpu {
                     tile_size_k_ = 16;
                     off_ = 1;
                 }
-                else {
+                else if(M >= 32 && N >= 32) {
                     tile_size_m_ = 32;
                     tile_size_n_ = 32;
                     block_size_m_ = 4;
@@ -46,6 +46,23 @@ namespace gpu {
                     tile_size_k_ = 32;
                     off_ = 0;
                 }
+                else if(M * N <= 256) {
+                    tile_size_m_ = 16;
+                    tile_size_n_ = 16;
+                    block_size_m_ = 1;
+                    block_size_n_ = 1;
+                    tile_size_k_ = 128;
+                    off_ = 0;
+                }
+                else {
+                    tile_size_m_ = 16;
+                    tile_size_n_ = 16;
+                    block_size_m_ = 2;
+                    block_size_n_ = 2;
+                    tile_size_k_ = 64;
+                    off_ = 0;
+                }
+
             }
         }
     protected:
@@ -180,6 +197,7 @@ namespace gpu {
             kernel_ = cl::Kernel(prog,"sgemm");
             bias_ = bias;
             groups_ = groups;
+            md_ = int(op_mode);
         }
         static int round_up_div(int x,int y)
         {
@@ -238,13 +256,22 @@ namespace gpu {
                 global = cl::NDRange(gs0,gs1,1);
                 local =  cl::NDRange(ls0,ls1,1);
             }
+#if 1
             queue.enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,events,event);
+#else
+            cl::Event ev;
+            queue.enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,nullptr,&ev);
+            queue.finish();
+            std::cout << (1e-3 * (ev.getProfilingInfo<CL_PROFILING_COMMAND_END>() - ev.getProfilingInfo<CL_PROFILING_COMMAND_START>())) << " " << M << "," << N << "," << K << std::endl;
+#endif
+
         }
 
     private:
         cl::Kernel kernel_;
         bool bias_;
         int groups_;
+        int md_;
     };
 
 

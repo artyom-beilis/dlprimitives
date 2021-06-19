@@ -323,26 +323,6 @@ void    sgemm(    int M,int N,int K,
     int k=0;
     for(k=0;k<K;k+=TILE_SIZE_K) {
 
-        #ifdef SIM
-        if(k==0) {
-            #pragma unroll
-            for(int i=0,read_pos = local_tile_id;i<load_step;i++,read_pos+=WG_SIZE) {
-                int tile_kdir = read_pos / TILE_SIZE_M;
-                int tile_tdir = read_pos % TILE_SIZE_M;
-                lA(tile_kdir,tile_tdir) = 1.3f;
-            }
-            #pragma unroll
-            for(int i=0,read_pos = local_tile_id;i<load_step;i++,read_pos+=WG_SIZE) {
-                int tile_kdir = read_pos / TILE_SIZE_N;
-                int tile_tdir = read_pos % TILE_SIZE_N;
-                lB(tile_kdir,tile_tdir) = 2.3f;
-            }
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-        //#elif 0
-        #elif (TILE_SIZE_M == 32  && TILE_SIZE_N == 32  && BLOCK_SIZE_M==4 && BLOCK_SIZE_N == 4 && (TILE_SIZE_K==16 || TILE_SIZE_K==32 || TILE_SIZE_K==64)) \
-          ||  (TILE_SIZE_M == 64  && TILE_SIZE_N == 64  && BLOCK_SIZE_M==8 && BLOCK_SIZE_N == 8 && (TILE_SIZE_K==16 || TILE_SIZE_K==32 || TILE_SIZE_K==64)) \
-          ||  (TILE_SIZE_M == 128 && TILE_SIZE_N == 128 && BLOCK_SIZE_M==8 && BLOCK_SIZE_N == 8 && (TILE_SIZE_K==16 || TILE_SIZE_K==32 || TILE_SIZE_K==64))
         {
             int tile_kdir0 = local_tile_id / TILE_SIZE_M;
             int tile_tdir  = local_tile_id % TILE_SIZE_M;
@@ -396,27 +376,6 @@ void    sgemm(    int M,int N,int K,
 
             barrier(CLK_LOCAL_MEM_FENCE);
         }
-        #else
-        {
-            #pragma unroll
-            for(int i=0,read_pos = local_tile_id;i<load_step;i++,read_pos+=WG_SIZE) {
-                int tile_kdir = read_pos / TILE_SIZE_M;
-                int tile_tdir = read_pos % TILE_SIZE_M;
-                int a_row = tile_tdir + tile_row0;
-                int k_rc  = tile_kdir + k;
-                lA(tile_kdir,tile_tdir) = (a_row < M && k_rc < K) ?  get_A(a_row,k_rc) : 0.0f;
-            }
-            #pragma unroll
-            for(int i=0,read_pos = local_tile_id;i<load_step;i++,read_pos+=WG_SIZE) {
-                int tile_kdir = read_pos / TILE_SIZE_N;
-                int tile_tdir = read_pos % TILE_SIZE_N;
-                int k_rc  = tile_kdir + k;
-                int b_col = tile_tdir + tile_col0;
-                lB(tile_kdir,tile_tdir) = (b_col < N && k_rc < K) ? get_B(k_rc,b_col) : 0.0f;
-            }
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-        #endif
 
         // Mutliplication loop
         #pragma unroll(4)

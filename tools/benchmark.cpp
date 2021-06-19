@@ -30,6 +30,7 @@ int main(int argc,char **argv)
     try {
         bool enable_profiling = false;
         bool enable_backward = false;
+        bool force_cpu_times = false;
         int warm = 5;
         int iters = 20;
         while(argc >= 2 && argv[1][0] == '-') {
@@ -39,6 +40,8 @@ int main(int argc,char **argv)
             }
             else if(flag == "-b") 
                 enable_backward = true;
+            else if(flag == "-C")
+                force_cpu_times = true;
             else if(flag.substr(0,2) == "-i" && flag.size() > 2) {
                 iters = atoi(flag.c_str()+2);
             }
@@ -152,7 +155,7 @@ int main(int argc,char **argv)
             std::cout << std::endl;
             if(i == 0 && timing) {
                 double total_event_time = 0;
-                if(ctx.is_cpu_context()) {
+                if(ctx.is_cpu_context()||force_cpu_times) {
                     for(unsigned i=0;i<timing->sections().size();i++) {
                         int s = i;
                         std::stack<char const *> sections;
@@ -165,7 +168,7 @@ int main(int argc,char **argv)
                             std::cout << sections.top() << ":";
                             sections.pop();
                         }
-                        std::cout << timing->sections()[i].time_sec * 1e3 << " ms" << std::endl;
+                        std::cout <<" " << timing->sections()[i].time_sec * 1e3 << " ms" << std::endl;
                     }
                 }
                 else for(auto &d : timing->events()) {
