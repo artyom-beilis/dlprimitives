@@ -49,19 +49,18 @@ void eltwise_bwd(  int size,
     da+=da_offset;
     db+=db_offset;
     dc+=dc_offset;
-    dtype value = ACTIVATION_FINV(c[pos],dc[pos]);
+    dtype dy = ACTIVATION_FINV(c[pos],dc[pos]);
     if(da_db_select & 1) { // da+a
         dtype da_val;
         #if ELTOP == 0
-        da_val = dc * c1;
+        da_val = dy * c1;
         #elif ELTOP == 1
-        da_val = dc * c1 * c2 * b[pos];
+        da_val = dy * c1 * c2 * b[pos];
         #elif ELTOP == 2
-        if(c1*a[pos] >= c2*b[pos]) {
-            da_val = c1 * dc;
+        if(c1*a[pos] >= c2*b[pos]) 
+            da_val = c1 * dy;
         else
             da_val = 0;
-        }
         #endif
         if(factor == 0)
             da[pos] = da_val;
@@ -71,15 +70,14 @@ void eltwise_bwd(  int size,
     if(da_db_select & 2) { // db+b
         dtype db_val;
         #if ELTOP == 0
-        db_val = dc * c2;
+        db_val = dy * c2;
         #elif ELTOP == 1
-        da_val = dc * c1 * c2 * a[pos];
+        db_val = dy * c1 * c2 * a[pos];
         #elif ELTOP == 2
-        if(c1*a[pos] >= c2*b[pos]) {
-            da_val = 0;
+        if(c1*a[pos] >= c2*b[pos])
+            db_val = 0;
         else
-            da_val = c2 * dc;
-        }
+            db_val = c2 * dy;
         #endif
         if(factor == 0)
             db[pos] = db_val;
