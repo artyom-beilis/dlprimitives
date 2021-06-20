@@ -4,7 +4,7 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <math.h>
-#include <cblas.h>
+#include <my_cblas.hpp>
 
 namespace dlprim {
 ActivationConfig ActivationConfig::from_json(json::value const &v)

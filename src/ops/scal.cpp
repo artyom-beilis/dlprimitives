@@ -1,7 +1,7 @@
 #include <dlprim/ops/scal.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/tensor.hpp>
-#include <cblas.h>
+#include <my_cblas.hpp>
 namespace dlprim {
     Scal::Scal(Context &ctx,DataType dt) : ctx_(ctx)
     {

@@ -5,7 +5,7 @@
 #include <math.h>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/ops/scal.hpp>
-#include <cblas.h>
+#include <my_cblas.hpp>
 
 namespace dlprim {
 PoolingBase PoolingBase::from_json(json::value const &v)

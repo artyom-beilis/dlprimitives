@@ -6,7 +6,7 @@
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
-#include <cblas.h>
+#include <my_cblas.hpp>
 
 namespace dlprim {
    

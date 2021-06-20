@@ -1,6 +1,6 @@
 #include <dlprim/ops/axpby.hpp>
 #include <dlprim/gpu/program_cache.hpp>
-#include <cblas.h>
+#include <my_cblas.hpp>
 
 namespace dlprim {
 

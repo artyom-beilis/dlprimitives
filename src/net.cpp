@@ -4,7 +4,9 @@
 #include <fstream>
 #include <algorithm>
 
+#ifndef DISABLE_HDF5
 #include "H5Cpp.h"
+#endif
 
 namespace dlprim {
     Net::Net(Context &ctx) :
@@ -34,6 +36,16 @@ namespace dlprim {
         }
         outputs_.push_back(name);
     }
+#ifdef DISABLE_HDF5
+    void Net::save_parameters_to_hdf5(std::string const &)
+    {
+        throw ValidationError("Library was build without HDF5 support");
+    }
+    void Net::load_parameters_from_hdf5(std::string const &,bool)
+    {
+        throw ValidationError("Library was build without HDF5 support");
+    }
+#else
     void Net::save_parameters_to_hdf5(std::string const &fname)
     {
         try {
@@ -119,7 +131,7 @@ namespace dlprim {
 
         
     }
-
+#endif
     void Net::load_from_json(json::value const &v)
     {
         json::array const &inputs = v["inputs"].array();

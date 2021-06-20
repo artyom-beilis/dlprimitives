@@ -5,6 +5,7 @@ find_path(OCL_PATH CL/cl2.hpp)
 find_library(OCL_LIB OpenCL) 
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include") 
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/my_blas") 
 include_directories("${OCL_PATH}")
 
 find_program(PYTHON NAMES python3 python python2)
@@ -13,7 +14,18 @@ if(NOT PYTHON)
 endif(NOT PYTHON)
 
 find_package(HDF5)
-include_directories(${HDF5_INCLUDE_DIR})
+if(HDF5_FOUND)
+    include_directories(${HDF5_INCLUDE_DIR})
+else()
+    add_definitions(-DDISABLE_HDF5)
+endif()
+
+option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
+
+if(NOT USE_INTERNAL_BLAS)
+    find_path(CBLAS_PATH cblas.h)
+    find_library(CBLAS_LIB openblas blas) 
+endif()
 
 
 
@@ -29,6 +41,18 @@ add_custom_command(
                     -I ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels
                     ${CL_SOURCES}
                   )
+if(NOT CBLAS_LIB OR NOT CBLAS_PATH) 
+    set(EXTRA_SRC src/my_blas/my_cblas.cpp)
+    set(BLAS_LIB )
+    set(EXTRA_DEFS -DUSE_INTERNAL_BLAS)
+else()
+    set(EXTRA_SRC )
+    set(BLAS_LIB ${CBLAS_LIB})
+    include_directories("${CBLAS_PATH}")
+    set(EXTRA_DEFS )
+endif()
+
+add_definitions(${EXTRA_DEFS})
 
 add_library(dlprim SHARED 
         src/context.cpp
@@ -48,10 +72,14 @@ add_library(dlprim SHARED
         src/ops/axpby.cpp
         src/ops/scal.cpp
         src/gemm.cpp
+        ${EXTRA_SRC}
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
-target_link_libraries(dlprim ${OCL_LIB} openblas ${HDF5_LIBRARIES} hdf5_cpp) 
+target_link_libraries(dlprim ${OCL_LIB} ${BLAS_LIB})
+if(HDF5_FOUND)
+    target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
+endif()
 
 add_executable(test_context tests/test_context.cpp)
 target_link_libraries(test_context dlprim)

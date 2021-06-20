@@ -4,7 +4,6 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <math.h>
-#include <cblas.h>
 
 namespace dlprim {
 ElementwiseConfig ElementwiseConfig::from_json(json::value const &v)
@@ -88,8 +87,12 @@ void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
     float *cp=c.data<float>();
     switch(config_.op) {
     case ElementwiseConfig::elementwise_sum:
-        memcpy(cp,bp,sizeof(float)*size);
-        cblas_saxpby(size,config_.coeff[0],ap,1,config_.coeff[1],cp,1); 
+        {
+            float c0 = config_.coeff[0];
+            float c1 = config_.coeff[1];
+            for(size_t i=0;i<size;i++) 
+                cp[i] = c0 * ap[i] + c1 * bp[i];
+        }
         break;
     case ElementwiseConfig::elementwise_prod:
         {
