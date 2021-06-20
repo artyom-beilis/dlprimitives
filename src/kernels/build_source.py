@@ -43,7 +43,12 @@ namespace gpu {
 std::map<std::string,std::string> kernel_sources = {
         """)
         for name in sources:
-            f.write('{"%s",R"kern_src(%s)kern_src"},' % (name,sources[name]));
+            f.write('{"%s",' % name)
+            chunk=16000
+            src = sources[name]
+            for sect in range(0,len(src),chunk):
+                f.write(' R"kern_src(%s)kern_src" ' % src[sect:sect+chunk])
+            f.write('},')
         f.write('};\n')
         f.write('}} // namespaces\n')
 
