@@ -1,0 +1,133 @@
+{
+    "inputs": [
+        {
+            "shape": [
+                128,
+                1,
+                28,
+                28
+            ],
+            "name": "data"
+        },
+        {
+            "shape": [
+                128
+            ],
+            "name": "label",
+            "dtype":"int"
+        }
+    ],
+    "outputs" : [ "loss" ],
+    "operators": [
+        {
+            "name": "cnv1",
+            "type": "Convolution2D",
+            "inputs": [
+                "data"
+            ],
+            "outputs": [
+                "cnv1"
+            ],
+            "options": {
+                "channels_out": 32,
+                "kernel": [
+                    5,
+                    5
+                ],
+                "pad": [
+                    2,
+                    2
+                ],
+                "activation": "relu"
+            }
+        },
+        {
+            "name": "p1",
+            "type": "Pooling2D",
+            "inputs": [
+                "cnv1"
+            ],
+            "outputs": [
+                "p1"
+            ],
+            "options": {
+                "kernel": 2,
+                "stride": 2
+            }
+        },
+        {
+            "name": "cnv2",
+            "type": "Convolution2D",
+            "inputs": [
+                "p1"
+            ],
+            "outputs": [
+                "cnv2"
+            ],
+            "options": {
+                "channels_out": 64,
+                "kernel": [
+                    5,
+                    5
+                ],
+                "pad": [
+                    2,
+                    2
+                ],
+                "activation": "relu"
+            }
+        },
+        {
+            "name": "p2",
+            "type": "Pooling2D",
+            "inputs": [
+                "cnv2"
+            ],
+            "outputs": [
+                "p2"
+            ],
+            "options": {
+                "kernel": 2,
+                "stride": 2
+            }
+        },
+        {
+            "name": "fc1",
+            "type": "InnerProduct",
+            "inputs": [
+                "p2"
+            ],
+            "outputs": [
+                "fc1"
+            ],
+            "options": {
+                "outputs": 256,
+                "activation": "relu"
+            }
+        },
+        {
+            "name": "fc2",
+            "type": "InnerProduct",
+            "inputs": [
+                "fc1"
+            ],
+            "outputs": [
+                "fc2"
+            ],
+            "options": {
+                "outputs": 10
+            }
+        },
+        {
+            "name": "loss",
+            "type": "SoftmaxWithLoss",
+            "inputs": [
+                "fc2",
+                "label"
+            ],
+            "outputs": [
+                "loss"
+            ]
+        }
+    ]
+}
