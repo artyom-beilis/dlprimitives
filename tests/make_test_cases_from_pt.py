@@ -229,6 +229,7 @@ def make_global_pooling():
         tin = torch.randn(4,16,32,32)
         tout = op(tin)
         test = {
+            "train" : True,
             "options" : {
                 "mode": tp,
             },
@@ -242,12 +243,16 @@ def make_global_pooling():
         for s in [[2,3,5,5],[1,1,6,6],[1,1,7,7],[1,1,8,8],
                   [8,32,64,65],[8,256,247,247],[5,1,1000,1000]]:
             print("- ",s)
-            tin = torch.randn(s)
+            tin = torch.randn(s,requires_grad=True)
             tout = op(tin)
+            dy = torch.randn(s[0],s[1],1,1);
+            tout.backward(dy,retain_graph=True);
             case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
             if np.prod(s) < 200:
                 case["in_tensors"] = [tin.reshape((-1,)).tolist()]
                 case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dy.reshape((-1,)).tolist()]
+                case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
             else:
                 case["use_cpu_reference"]=True
             cases.append(case)

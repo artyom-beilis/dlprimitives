@@ -444,9 +444,12 @@ void GlobalPooling::setup_kernel(int sm_range)
     cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"global_pooling",
                                         "POOL_MODE",int(cfg_.mode),
                                         "WG_SIZE",wg_size_,
+                                        "ENABLE_BWD",int(mode_ == CalculationsMode::train),
                                         "ITEMS_PER_WI",items_per_wi_
                                         );
     kernel_ = cl::Kernel(prog,"global_pooling");
+    if(mode_ == CalculationsMode::train)
+        kernel_bwd_ = cl::Kernel(prog,"global_pooling_bwd");
     sm_range_ = sm_range;
     int mpl = wg_size_ * items_per_wi_;
     nd_range_ = (sm_range_ + mpl - 1) / mpl * wg_size_;
@@ -487,9 +490,71 @@ void GlobalPooling::forward_cpu(Tensor &input,Tensor &output)
             *out++= sum * factor;
         }
     }
+}
 
+
+void GlobalPooling::backward_cpu(Tensor &xt,Tensor &dxt,Tensor &dyt,float scale)
+{
+    Shape in_shape = xt.shape();
+    size_t total_dx = in_shape.total_size();
+    float *x  = xt.data<float>();
+    float *dx = dxt.data<float>();
+    float *dy = dyt.data<float>();
+    size_t total = in_shape[0]*in_shape[1];
+    size_t over = in_shape[2]*in_shape[3];
+
+    if(scale == 0)
+        memset(dx,0,total_dx*sizeof(float));
+    else
+        cblas_sscal(total_dx,scale,dx,1);
+
+    if(cfg_.mode == PoolingBase::max) {
+        for(size_t i=0;i<total;i++) {
+            size_t index = 0;
+            for(size_t j=1;j<over;j++) {
+                if(x[j] > x[index])
+                    index = j;
+            }
+            float store = *dy++;
+            for(size_t j=0;j<over;j++)
+                *dx++ += store * (j == index);
+            x+=over;
+        }
+    }
+    else {
+        for(size_t i=0;i<total;i++) {
+            float store = dy[i] / over;
+            for(size_t j=0;j<over;j++) {
+                *dx++ += store;
+            }
+        }
+    }
 
 }
+void GlobalPooling::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ctx)
+{
+    Shape in_shape = dx.shape();
+    int over = in_shape[2] * in_shape[3];
+    DLPRIM_CHECK(over == sm_range_);
+    int p=0;
+    kernel_bwd_.setArg(p++,int(in_shape[0]*in_shape[1]));
+    kernel_bwd_.setArg(p++,sm_range_);
+    kernel_bwd_.setArg(p++,float(1.0f / (in_shape[2]*in_shape[3])));
+    if(cfg_.mode == PoolingBase::max) {
+        kernel_bwd_.setArg(p++,x.device_buffer());
+        kernel_bwd_.setArg(p++,int(x.device_offset()));
+    }
+    kernel_bwd_.setArg(p++,dx.device_buffer());
+    kernel_bwd_.setArg(p++,int(dx.device_offset()));
+    kernel_bwd_.setArg(p++,dy.device_buffer());
+    kernel_bwd_.setArg(p++,int(dy.device_offset()));
+    kernel_bwd_.setArg(p++,factor);
+    
+    cl::NDRange gr(in_shape[0]*in_shape[1],nd_range_);
+    cl::NDRange wg(1,wg_size_);
+    ctx.queue().enqueueNDRangeKernel(kernel_bwd_,cl::NullRange,gr,wg,ctx.events(),ctx.event("global_pooling_bwd"));
+}
+
 
 void GlobalPooling::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const &ctx)
 {
@@ -526,6 +591,35 @@ void GlobalPooling::forward(std::vector<Tensor> &input,std::vector<Tensor> &outp
     }
     else {
         forward_gpu(input[0],output[0],ctx);
+    }
+}
+
+void  GlobalPooling::backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &,
+                              Tensor &,
+                              ExecutionContext const &ctx)
+{
+    DLPRIM_CHECK(input.size()==1);
+    DLPRIM_CHECK(output.size()==1); 
+    if(!output[0].requires_gradient)
+        return;
+    DLPRIM_CHECK(input[0].data.shape().size()==4);
+    DLPRIM_CHECK(output[0].diff.shape().size()==4);
+    DLPRIM_CHECK(input[0].diff.shape()[0] == output[0].diff.shape()[0]);
+    DLPRIM_CHECK(input[0].diff.shape()[1] == output[0].diff.shape()[1]);
+    DLPRIM_CHECK(input[0].data.shape()[0] == output[0].diff.shape()[0]);
+    DLPRIM_CHECK(input[0].data.shape()[1] == output[0].diff.shape()[1]);
+    DLPRIM_CHECK(1 == output[0].diff.shape()[2]);
+    DLPRIM_CHECK(1 == output[0].diff.shape()[3]);
+    DLPRIM_CHECK(output[0].diff.dtype() == dtype_);
+    DLPRIM_CHECK(input[0].diff.dtype() == dtype_);
+    DLPRIM_CHECK(input[0].data.dtype() == dtype_);
+    if(ctx_.is_cpu_context()) {
+        backward_cpu(input[0].data,input[0].diff,output[0].diff,input[0].accumulate_gradient);
+    }
+    else {
+        backward_gpu(input[0].data,input[0].diff,output[0].diff,input[0].accumulate_gradient,ctx);
     }
 }
 

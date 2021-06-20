@@ -120,14 +120,23 @@ namespace dlprim {
                              Tensor &workspace,
                              ExecutionContext const &ctx);
 
+        virtual void backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &parameters,
+                              Tensor &workspace,
+                              ExecutionContext const &ctx);
+
     private:
    		void forward_gpu(Tensor &input,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &input,Tensor &output);
+        void backward_cpu(Tensor &x,Tensor &dx,Tensor &dy,float factor);
+        void backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ctx);
         void setup_kernel(int sm_range);
 
         GlobalPoolingConfig cfg_;
         DataType dtype_;
         cl::Kernel kernel_;
+        cl::Kernel kernel_bwd_;
         int wg_size_;
         int items_per_wi_;
         int sm_range_;
