@@ -92,11 +92,12 @@ int main(int argc,char **argv)
                 res_diff.push_back(net.tensor_diffs()[net.output_names()[i]]);
         }
         
-        cl::CommandQueue queue=ctx.make_queue(enable_profiling ? CL_QUEUE_PROFILING_ENABLE : 0);
+        cl::CommandQueue queue=ctx.make_queue((enable_profiling && !force_cpu_times)? CL_QUEUE_PROFILING_ENABLE : 0);
         std::shared_ptr<dp::TimingData> timing;
         dp::ExecutionContext q(queue);
         if(enable_profiling) {
             timing.reset(new dp::TimingData);
+            timing->cpu_only = force_cpu_times;
             q.enable_timing(timing);
         }
         int total = 0;
@@ -125,18 +126,25 @@ int main(int argc,char **argv)
                 timing->reset();
             auto start = std::chrono::high_resolution_clock::now();
             auto bw_point = start;
-            for(size_t j=0;j<data.size();j++)
-                data[j].to_device(q,false);
-            net.forward(q);
-            for(size_t j=0;j<res.size();j++)
-                res[j].to_host(q,j+1 == res.size());
+            for(size_t j=0;j<data.size();j++) {
+                dp::ExecGuard g(q,"to_device");
+                data[j].to_device(q,force_cpu_times);
+            }
+            net.forward(q,force_cpu_times);
+            for(size_t j=0;j<res.size();j++) {
+                dp::ExecGuard g(q,"to_host_results");
+                res[j].to_host(q,force_cpu_times || (j+1 == res.size()));
+            }
             if(enable_backward) {
                 bw_point = std::chrono::high_resolution_clock::now();
-                for(size_t j=0;j<res.size();j++) {
-                    res[j].data<float>()[0] = 0;
-                    res[j].to_device(q,false);
+                for(size_t j=0;j<res_diff.size();j++) {
+                    if(res_diff[j].shape().total_size() == 1) {
+                        dp::ExecGuard g(q,"to_device_loss");
+                        res_diff[j].data<float>()[0] = 1.0;
+                        res_diff[j].to_device(q,force_cpu_times);
+                    }
                 }
-                net.backward(q);
+                net.backward(q,force_cpu_times);
                 if(!ctx.is_cpu_context())
                     q.queue().finish();
             }
@@ -196,8 +204,8 @@ int main(int argc,char **argv)
                     catch(cl::Error const &e) {
                         std::cerr << "Failed for " << d->name << " " << e.what() << e.err() << std::endl;
                     }
+                    std::cout << "Total GPU " << total_event_time << " ms , real " << std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count() * 1e3 << " ms" << std::endl;
                 }
-                std::cout << "Total GPU " << total_event_time << " ms , real " << std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count() * 1e3 << " ms" << std::endl;
             }
             if(i>=0) {
                 total_time += passed;

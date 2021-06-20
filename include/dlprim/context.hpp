@@ -73,6 +73,7 @@ namespace dlprim {
 
     class TimingData {
     public:
+        bool cpu_only=false;
         typedef std::chrono::high_resolution_clock clock_type;
         typedef std::chrono::time_point<clock_type> time_point_type;
 
@@ -196,7 +197,7 @@ namespace dlprim {
         }   
         cl::Event *event(char const *name = "unknown", int id = -1) const 
         { 
-            if(timing_) {
+            if(timing_ && !timing_->cpu_only) {
                 return &timing_->add_event(name,id,event_)->event;
             }
             return event_;

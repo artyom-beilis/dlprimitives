@@ -85,8 +85,8 @@ namespace dlprim {
             return p->second;
         }
 
-        void forward(ExecutionContext const &ectx);
-        void backward(ExecutionContext const &ectx);
+        void forward(ExecutionContext const &ectx,bool sync=false);
+        void backward(ExecutionContext const &ectx,bool sync=false);
 
         std::vector<std::string> const &input_names()
         {

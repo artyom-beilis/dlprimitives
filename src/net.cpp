@@ -367,7 +367,7 @@ namespace dlprim {
         parameters_diff_.clear();
     }
 
-    void Net::forward(ExecutionContext const &e)
+    void Net::forward(ExecutionContext const &e,bool sync)
     {
         ExecGuard g(e,"forward");
         for(size_t i=0;i<connections_.size();i++) {
@@ -379,10 +379,12 @@ namespace dlprim {
                 connections_[i].parameters,
                 workspace_,
                 ec);
+            if(sync && ctx_.is_gpu_context())
+                e.queue().finish();
         }
     }
     
-    void Net::backward(ExecutionContext const &e)
+    void Net::backward(ExecutionContext const &e,bool sync)
     {
         ExecGuard g(e,"backward");
         for(int i=connections_.size() - 1,it=0;i >= 0;i--,it++) {
@@ -394,6 +396,8 @@ namespace dlprim {
                 connections_[i].param_grad,
                 workspace_,
                 ec);
+            if(sync && ctx_.is_gpu_context())
+                e.queue().finish();
         }
     }
       
