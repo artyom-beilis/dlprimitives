@@ -2,6 +2,7 @@
 #include <stdexcept>
 
 #if defined(__WIN32) || defined(_WIN32) || defined(WIN32) || defined(__CYGWIN__)
+#   define  DLPRIM_WINDOWS
 #	if defined(DLL_EXPORT)
 #		if defined(DLPRIM_SOURCE)
 #			define DLPRIM_API __declspec(dllexport)

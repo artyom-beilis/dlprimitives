@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall -Wextra")
+
+if(NOT WIN32)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall")
+endif()
 
 find_path(OCL_PATH CL/cl2.hpp)
 find_library(OCL_LIB OpenCL) 
@@ -54,7 +57,7 @@ endif()
 
 add_definitions(${EXTRA_DEFS})
 
-add_library(dlprim SHARED 
+set(DLPRIM_SRC
         src/context.cpp
         src/tensor.cpp
         src/program_cache.cpp
@@ -76,6 +79,14 @@ add_library(dlprim SHARED
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
+
+if(WIN32)
+	add_library(dlprim STATIC ${DLPRIM_SRC})
+else()
+	add_library(dlprim SHARED ${DLPRIM_SRC})
+endif()
+		
+		
 target_link_libraries(dlprim ${OCL_LIB} ${BLAS_LIB})
 if(HDF5_FOUND)
     target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 

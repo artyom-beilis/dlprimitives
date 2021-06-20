@@ -150,7 +150,7 @@ void fill_random(dp::Tensor &t)
     TEST(t.dtype() == dp::float_data);
     float *p = t.data<float>();
     for(size_t i=0;i<t.shape().total_size();i++) {
-        p[i]=random()*2.0f / RAND_MAX - 1.0f;
+        p[i]=rand()*2.0f / RAND_MAX - 1.0f;
     }
 }
 
@@ -159,7 +159,7 @@ void fill_small_int(dp::Tensor &t,int range,float factor = 1.0)
     TEST(t.dtype() == dp::float_data);
     float *p = t.data<float>();
     for(size_t i=0;i<t.shape().total_size();i++) {
-        int v = int(double(random()) / RAND_MAX * range) - range / 2;
+        int v = int(double(rand()) / RAND_MAX * range) - range / 2;
         p[i]= v * factor;
     }
 }

@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <string.h>
+#include <typeinfo>
 
 #ifndef DLPRIM_API
 #define DLPRIM_API

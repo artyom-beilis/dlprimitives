@@ -8,7 +8,6 @@
 #include <dlprim/ops/bwd_bias.hpp>
 #include <dlprim/ops/activation.hpp>
 #include <my_cblas.hpp>
-#include <boost/compute/event.hpp>
 
 namespace dlprim {
    

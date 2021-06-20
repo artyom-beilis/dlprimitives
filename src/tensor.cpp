@@ -19,7 +19,7 @@ namespace dlprim {
         //if(cpu_tensor_) {
             void *ptr = 
             #ifndef DLPRIM_WINDOWS
-              aligned_alloc(128,size);
+			  aligned_alloc(128,size);
             #else
               _aligned_malloc(size,128);
             #endif
@@ -27,7 +27,13 @@ namespace dlprim {
                 std::cerr << "Allocated size " << size << " " << shape_.total_size() << std::endl;
                 throw std::bad_alloc();
             }
-            host_ = std::shared_ptr<void>(ptr,[](void *p) { free(p); });
+            host_ = std::shared_ptr<void>(ptr,[](void *p) { 
+	            #ifndef DLPRIM_WINDOWS
+					free(p); 
+				#else
+					_aligned_free(p);
+				#endif
+			});
         //}
         if(!cpu_tensor_) {
             buffer_ = cl::Buffer(ctx.context(),CL_MEM_READ_WRITE,size);
