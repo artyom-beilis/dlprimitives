@@ -61,6 +61,19 @@
     float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
     #endif
     {
+#if KERN_W == 1 && KERN_H == 1 && STRIDE_H == 1 && STRIDE_W == 1 && DILATE_H == 1 && DILATE_W == 1 \
+        && PAD_H == 0 && PAD_W == 0 && GROUPS == 1 && IMG_COLS == SRC_COLS && IMG_ROWS == SRC_ROWS 
+        int channel = matrix_col;
+        int b  = matrix_row / (IMG_COLS * IMG_ROWS);
+        int rc = matrix_row % (IMG_COLS * IMG_ROWS);
+
+        int address = (b * CHANNELS_IN + channel) * (SRC_ROWS * SRC_COLS) + rc;
+        #if CONVGEMM != 3
+            return ptr[address];
+        #else
+            ptr[address] += dV;
+        #endif
+#else
         int channel = matrix_col / (KERN_H * KERN_W);
         int k_index = matrix_col % (KERN_H * KERN_W);
         
@@ -98,6 +111,7 @@
                 atomic_addf(ptr+address,dV);
             #endif
         #endif
+#endif  
     }
 #endif
 
