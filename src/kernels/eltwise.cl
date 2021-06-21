@@ -36,9 +36,8 @@ void eltwise_bwd(  int size,
                     __global dtype *db,int db_offset,
                     __global const dtype *c, int c_offset,
                     __global const dtype *dc,int dc_offset,
-                    dtype c1,
-                    dtype c2,
-                    dtype factor)
+                    dtype c1,dtype c2,
+                    dtype factor_a,dtype factor_b)
 {
     int pos = get_global_id(0);
     if(pos >= size)
@@ -62,10 +61,10 @@ void eltwise_bwd(  int size,
         else
             da_val = 0;
         #endif
-        if(factor == 0)
+        if(factor_a == 0)
             da[pos] = da_val;
         else
-            da[pos] = da[pos] * factor + da_val;
+            da[pos] = da[pos] * factor_a + da_val;
     }
     if(da_db_select & 2) { // db+b
         dtype db_val;
@@ -79,10 +78,10 @@ void eltwise_bwd(  int size,
         else
             db_val = c2 * dy;
         #endif
-        if(factor == 0)
+        if(factor_b == 0)
             db[pos] = db_val;
         else
-            db[pos] = db[pos] * factor + db_val;
+            db[pos] = db[pos] * factor_b + db_val;
     }
 }
 

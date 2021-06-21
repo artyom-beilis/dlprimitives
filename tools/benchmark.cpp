@@ -179,30 +179,32 @@ int main(int argc,char **argv)
                         std::cout <<" " << timing->sections()[i].time_sec * 1e3 << " ms" << std::endl;
                     }
                 }
-                else for(auto &d : timing->events()) {
-                    try {
-                        auto end =   d->event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
-                        auto start = d->event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
-                        double time = (end - start) * 1e-6;
-                        total_event_time += time;
-                        int s = d->section;
-                        std::stack<char const *> sections;
-                        while(s!=-1) {
-                            auto &sec = timing->sections().at(s);
-                            sections.push(sec.name);
-                            s=sec.parent;
+                else {
+                    for(auto &d : timing->events()) {
+                        try {
+                            auto end =   d->event.getProfilingInfo<CL_PROFILING_COMMAND_END>();
+                            auto start = d->event.getProfilingInfo<CL_PROFILING_COMMAND_START>();
+                            double time = (end - start) * 1e-6;
+                            total_event_time += time;
+                            int s = d->section;
+                            std::stack<char const *> sections;
+                            while(s!=-1) {
+                                auto &sec = timing->sections().at(s);
+                                sections.push(sec.name);
+                                s=sec.parent;
+                            }
+                            while(!sections.empty()) {
+                                std::cout << sections.top() << ":";
+                                sections.pop();
+                            }
+                            std::cout << d->name;
+                            if(d->index != -1)
+                                std::cout << '[' << d->index << ']';
+                            std::cout << "  " << time << " ms" << std::endl;
                         }
-                        while(!sections.empty()) {
-                            std::cout << sections.top() << ":";
-                            sections.pop();
+                        catch(cl::Error const &e) {
+                            std::cerr << "Failed for " << d->name << " " << e.what() << e.err() << std::endl;
                         }
-                        std::cout << d->name;
-                        if(d->index != -1)
-                            std::cout << '[' << d->index << ']';
-                        std::cout << "  " << time << " ms" << std::endl;
-                    }
-                    catch(cl::Error const &e) {
-                        std::cerr << "Failed for " << d->name << " " << e.what() << e.err() << std::endl;
                     }
                     std::cout << "Total GPU " << total_event_time << " ms , real " << std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count() * 1e3 << " ms" << std::endl;
                 }

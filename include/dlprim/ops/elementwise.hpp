@@ -40,15 +40,41 @@ namespace dlprim {
                              std::vector<Tensor> &parameters,
                              Tensor &workspace,
                              ExecutionContext const &ctx);
+        
+        virtual void backward(std::vector<TensorAndGradient> &input,
+                              std::vector<TensorAndGradient> &output,
+                              std::vector<TensorAndGradient> &parameters,
+                              Tensor &workspace,
+                              ExecutionContext const &ctx);
 
 
         
     private:
    		void forward_gpu(Tensor &a,Tensor &b,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &a,Tensor &b,Tensor &output);
+
+        struct SumTraits;
+        struct MaxTraits;
+        struct ProdTraits;
+        
+        template<typename Traits>
+        void backward_cpu(Tensor &a,Tensor &da,
+                          Tensor &b,Tensor &db,
+                          Tensor &c,Tensor &dc,
+                          bool l,bool r, 
+                          float ba,float bb);
+
+        void backward_gpu(Tensor &a,Tensor &da,
+                          Tensor &b,Tensor &db,
+                          Tensor &c,Tensor &dc,
+                          bool l,bool r, 
+                          float ba,float bb,
+                          ExecutionContext const &e);
+
         ElementwiseConfig config_;
         DataType dtype_;
         cl::Kernel kernel_;
+        cl::Kernel kernel_bwd_;
     };
 } // namespace
  

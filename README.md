@@ -19,7 +19,7 @@ Please note this is only work in progress - first and preliminary stages.
 |-----------------------|-------------------------------|-------------------|
 |Softmax                |                               | Fwd               |
 |SoftmaxWithLoss        |                               | Fwd,Bwd           |
-|Elementwise            | ax+by, max(ax,by), ax\*y      | Fwd               |
+|Elementwise            | ax+by, max(ax,by), ax\*y      | Fwd,Bwd           |
 |MaxPool2d              |                               | Fwd,Bwd           |
 |AvgPool2d              |                               | Fwd,Bwd           |
 |GlobalMaxPool2d        |                               | Fwd,Bwd           |
@@ -50,6 +50,8 @@ BN layers are merged into conv layers by torch optimizer.
 |GTX 960    | NVidia    |                               |
 |GTX 1080   | NVidia    |                               |
 |RTX 2060S  | NVidia    |                               |
+
+Devices Tested on Windows: AMD RX 560, NVidia GTX 960.
 
 ## Other features
 

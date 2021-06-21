@@ -95,6 +95,7 @@ def make_eltwise():
                              ("relu",torch.nn.ReLU()) ]:
                     cases=[]
                     test = {
+                        "train":True,
                         "options" : {
                             "operation":op,
                             "activation": act,
@@ -111,11 +112,15 @@ def make_eltwise():
                     for shape in [[5,2],[32,6,16,16],[128,256,16,16],[10023]]:
                         case = dict(in_shapes = [ shape, shape] ,out_shapes = [shape])
                         if np.prod(shape) < 100:
-                            a = torch.randn(*shape)
-                            b = torch.randn(*shape)
+                            a = torch.randn(*shape,requires_grad=True)
+                            b = torch.randn(*shape,requires_grad=True)
                             c = final_op(a,b)
+                            dc = torch.randn(*shape)
+                            c.backward(dc,retain_graph=True)
                             case["in_tensors"] = [a.reshape((-1,)).tolist(),b.reshape((-1,)).tolist()]
                             case["out_tensors"] = [c.reshape((-1,)).tolist()]
+                            case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+                            case["in_diffs"] = [a.grad.reshape((-1)).tolist(),b.grad.reshape((-1)).tolist()]
                         else:
                             case["use_cpu_reference"]=True
                         cases.append(case)
