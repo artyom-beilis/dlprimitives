@@ -154,7 +154,8 @@ namespace dlprim {
                     M.device_buffer(),M.device_offset(),config_.inputs,
                     out.device_buffer(),out.device_offset(),config_.outputs,
                     bias_buffer,bias_offset,0.0f,
-                    ctx.queue(),ctx.events(),ctx.event("ip_gemm"));
+                    out.shape().total_size(),
+                    ctx);
     }
 
     void InnerProduct::forward_cpu(Tensor &in,Tensor &out,Tensor &mat,Tensor *bias)
@@ -248,7 +249,8 @@ namespace dlprim {
                                 dM.shape()[1],
                                 nullptr,0,
                                 factor,
-                                ec.queue(),ec.events(),ec.event("bw_gemm_weights"));
+                                dM.shape().total_size(),
+                                ec);
 
     }
     void InnerProduct::backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dM,float factor)
@@ -278,7 +280,8 @@ namespace dlprim {
                         config_.inputs,
                         nullptr,0,
                         factor,
-                        ec.queue(),ec.events(),ec.event("bw_gemm_data"));
+                        dx.shape().total_size(),
+                        ec);
 
     }
     void InnerProduct::backward_data_cpu(Tensor &dy,Tensor &dx,Tensor &M,float factor)

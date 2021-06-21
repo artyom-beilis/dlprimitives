@@ -50,6 +50,8 @@ namespace dlprim {
         bool check_device_extension(std::string const &name);
         std::string const &device_extensions();
 
+        int estimated_core_count();
+
         cl::Context &context()
         {
             return context_;
@@ -161,6 +163,9 @@ namespace dlprim {
             queue_(&q),event_(event),events_(events)
         {
         }
+
+        ExecutionContext(ExecutionContext const &) = default;
+        ExecutionContext &operator=(ExecutionContext const &) = default;
         
         bool timing_enabled() const
         {

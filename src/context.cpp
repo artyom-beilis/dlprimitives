@@ -45,6 +45,22 @@ namespace dlprim {
         return res;
     }
 
+    int Context::estimated_core_count()
+    {
+        int cu = device().getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+        std::string const &ext = device_extensions();
+        if(ext.find("cl_nv_")!=std::string::npos) {
+            cu *= 128;
+        }
+        else if(ext.find("cl_amd_")!=std::string::npos) {
+            cu *= 64;
+        }
+        else if(ext.find("cl_intel_")!=std::string::npos) {
+            cu *= 8;
+        }
+        return cu;
+    }
+
     std::string const &Context::device_extensions()
     {
         if(is_cpu_context())

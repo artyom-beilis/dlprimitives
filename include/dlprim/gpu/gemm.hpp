@@ -28,9 +28,8 @@ namespace gpu {
                           cl::Buffer *bias,
                           int bias_offset,
                           float beta,
-                          cl::CommandQueue &queue,
-                          std::vector<cl::Event> *events = nullptr,
-                          cl::Event *event=nullptr) = 0;
+                          int size_of_c,
+                          ExecutionContext const &e) = 0;
 
         static std::unique_ptr<GEMM> get_optimal_gemm(
             Context &ctx,DataType dtype,

@@ -353,7 +353,8 @@ namespace dlprim {
                 bias_buffer,
                 bias_offset,
                 0.0f,
-                ec.queue(),ec.events(),ec.event("conv_gemm"));
+                out.shape().total_size(),
+                ec);
         }
     }
 
@@ -557,6 +558,9 @@ namespace dlprim {
     void Convolution2D::backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ec)
     {
         if(use_ds_conv_) {
+            ExecutionContext ec1 = ec.generate_series_context(0,2);
+            ExecutionContext ec2 = ec.generate_series_context(1,2);
+            scal_->scale(factor,dx,ec1);
             int batch = dx.shape()[0];
             int height = dx.shape()[2];
             int width = dx.shape()[3];
@@ -582,7 +586,7 @@ namespace dlprim {
             
             cl::NDRange wg(lD,lH,lW);
             cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
-            ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv_bw_data"));
+            ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec2.events(),ec2.event("sep_conv_bw_data"));
             return;
         }
 
@@ -604,7 +608,8 @@ namespace dlprim {
             nullptr,  // no bias for BW
             0,
             factor,
-            ec.queue(),ec.events(),ec.event("bw_data_conv_gemm"));
+            dx.shape().total_size(),
+            ec);
     }
 
     void Convolution2D::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ec)
@@ -649,7 +654,8 @@ namespace dlprim {
             nullptr,  // no bias for BW
             0,
             factor,
-            ec.queue(),ec.events(),ec.event("bw_filter_conv_gemm"));
+            dK.shape().total_size(),
+            ec);
     }
 
     void Convolution2D::fwd_bwd_cpu(GemmOpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
@@ -726,7 +732,7 @@ namespace dlprim {
                                  ExecutionContext const &e)
     {
         int steps =     2*int(input[0].requires_gradient) 
-                        + int(parameters[0].requires_gradient)
+                        + 2*int(parameters[0].requires_gradient)
                         + int(config_.bias && parameters[1].requires_gradient)
                         + int(config_.activation != StandardActivations::identity);
         int step = 0;
@@ -743,10 +749,11 @@ namespace dlprim {
                                 e.generate_series_context(step++,steps));
         }
         if(parameters[0].requires_gradient) {
-            auto ec = e.generate_series_context(step++,steps);
+            auto ec1 = e.generate_series_context(step++,steps);
+            auto ec2 = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
                 backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
-                                    parameters[0].accumulate_gradient,ec);
+                                    parameters[0].accumulate_gradient,ec2);
             }
             else {
                 backward_filter_cpu(output[0].diff,input[0].data,parameters[0].diff,workspace,
@@ -757,7 +764,6 @@ namespace dlprim {
             auto ec1 = e.generate_series_context(step++,steps);
             auto ec2 = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                scal_->scale(input[0].accumulate_gradient,input[0].diff,ec1);
                 backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,
                                     input[0].accumulate_gradient,ec2);
             }

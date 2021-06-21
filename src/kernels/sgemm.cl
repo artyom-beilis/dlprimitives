@@ -50,7 +50,7 @@
 #define CONVGEMM 0
 #endif
 
-#if CONVGEMM == 3
+#if CONVGEMM == 3 || REDUCE_K > 1
 #include "atomic.h"
 #endif
 
@@ -232,15 +232,20 @@
 #endif
 
 
+#ifndef REDUCE_K
+#define REDUCE_K 1
+#endif
 
-#if GROUPS == 1
+#if GROUPS == 1 && REDUCE_K == 1
 #define DIM_M 0
 #define DIM_N 1
 #define DIM_G 2
+#define EXTRA_DIM 0
 #else
 #define DIM_M 1
 #define DIM_N 2
 #define DIM_G 0
+#define EXTRA_DIM 1
 #endif
 
 
@@ -248,7 +253,7 @@ __kernel
 #if INTEL_PLATFORM == 1
 __attribute__((intel_reqd_sub_group_size(8)))
 #endif
-#if GROUPS == 1
+#if EXTRA_DIM == 0
 __attribute__((reqd_work_group_size(BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N, 1)))
 #else
 __attribute__((reqd_work_group_size(1,BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N)))
@@ -268,9 +273,9 @@ void    sgemm(    int M,int N,int K,
     C += offset_C;
 
 #if CONVGEMM > 0 && GROUPS > 1
-    int group = get_global_id(DIM_G);
-    if(group >= GROUPS)
+    if(get_global_id(DIM_G) >= REDUCE_K * GROUPS)
         return;
+    int group = get_global_id(DIM_G) / REDUCE_K;
     #if CONVGEMM == 1
         A += M*K*group;
         B += SRC_COLS*SRC_ROWS*CHANNELS_IN*group;
@@ -332,10 +337,19 @@ void    sgemm(    int M,int N,int K,
     #endif
 #endif    
 
+#if REDUCE_K > 1
+    int KS = (K + REDUCE_K - 1) / REDUCE_K;
+    int sec = get_global_id(DIM_G) % REDUCE_K;
+    int k_start=KS * sec;
+    K = min(K,KS * (sec + 1));
+    int k = k_start;
+#else
+    int k=0;
+#endif
+
 #if INTEL_PLATFORM == 0
  
-    int k=0;
-    for(k=0;k<K;k+=TILE_SIZE_K) {
+    for(;k<K;k+=TILE_SIZE_K) {
 
         {
             int tile_kdir0 = local_tile_id / TILE_SIZE_M;
@@ -417,8 +431,7 @@ void    sgemm(    int M,int N,int K,
     // for intel we don't use local memory
     // we use optimized loads from global memory for A
     // and intel_sub_group_shuffle for optimal loading B
-    int k=0;
-    for(k=0;k<K;k+=TILE_SIZE_K) {
+    for(;k<K;k+=TILE_SIZE_K) {
         if(row + BLOCK_SIZE_M - 1 < M && k + TILE_SIZE_K-1 < K) {
             #if CONVGEMM == 2 || CONVGEMM == 3
                 #pragma unroll
@@ -486,6 +499,9 @@ void    sgemm(    int M,int N,int K,
 #endif
 
 #if BIAS == 1
+    #if REDUCE_K > 1
+    if(k_start == 0)
+    #endif
     {
         float offset;
         #pragma unroll
@@ -498,6 +514,9 @@ void    sgemm(    int M,int N,int K,
         }
     }
 #elif BIAS == 2
+    #if REDUCE_K > 1
+    if(k_start == 0)
+    #endif
     {
         float offset;
         #pragma unroll
@@ -525,10 +544,14 @@ void    sgemm(    int M,int N,int K,
             for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
                 if(row+dr < M) {
                     int index =(row + dr)*ldc + offset;
+                    #if REDUCE_K > 1
+                    atomic_addf(C+index,ACTIVATION_F(c[dr][dc]));
+                    #else
                     if(beta_factor != 0)
                         C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
                     else
                         C[index] = ACTIVATION_F(c[dr][dc]);
+                    #endif
                 }
             }
         }
@@ -544,10 +567,14 @@ void    sgemm(    int M,int N,int K,
                         add_img_value(C,row+dr,col+dc,c[dr][dc]);
                     #else
                         int index = (row+dr)*ldc+col+dc;
+                        #if REDUCE_K > 1
+                        atomic_addf(C+index,ACTIVATION_F(c[dr][dc]));
+                        #else
                         if(beta_factor != 0)
                             C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
                         else
                             C[index] = ACTIVATION_F(c[dr][dc]);
+                        #endif
                     #endif
                 }
             }

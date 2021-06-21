@@ -1,5 +1,6 @@
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <dlprim/ops/scal.hpp>
 #include <iostream>
 
 namespace dlprim {
@@ -7,8 +8,10 @@ namespace gpu {
     
     class StandardSGEMMBase : public GEMM {
     public:
-        StandardSGEMMBase(Context &ctx,int M,int N,int /*K*/)
+        StandardSGEMMBase(Context &ctx,int M,int N,int K)
         {
+            sep_scale_ = false;
+            reduce_k_ = 1;
             if(ctx.check_device_extension("cl_intel_subgroups")) {
                 block_size_m_ = 8;
                 block_size_n_ = 8;
@@ -62,13 +65,44 @@ namespace gpu {
                     tile_size_k_ = 64;
                     off_ = 0;
                 }
+            }
 
+            int cores = ctx.estimated_core_count();
+            if(M * N / (block_size_m_ * block_size_n_) < 4 * cores && K > M*16 && K > N*16) {
+                reduce_k_ = 8;
+                set_scale(ctx);
             }
         }
     protected:
+        void set_scale(Context &ctx)
+        {
+            if(sep_scale_ == false) {
+                cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"scal");
+                scal_ = std::move(cl::Kernel(prog,"sscal"));
+                sep_scale_ = true;
+            }
+        }
+
+        void scale(size_t size,float s,cl::Buffer &x,size_t x_offset,ExecutionContext const &ec)
+        {
+            int wg = 64;
+            if(size >= 1024)
+                wg = 256;
+            int p=0;
+            scal_.setArg(p++,int(size));
+            scal_.setArg(p++,s);
+            scal_.setArg(p++,x);
+            scal_.setArg(p++,int(x_offset));
+            cl::NDRange l(wg);
+            cl::NDRange g=gpu::round_range(size,l);
+            ec.queue().enqueueNDRangeKernel(scal_,cl::NullRange,g,l,ec.events(),ec.event("gemm_beta_scale"));
+        }
         int tile_size_n_,tile_size_m_,tile_size_k_;
         int block_size_n_,block_size_m_;
         int off_;
+        int reduce_k_;
+        bool sep_scale_;
+        cl::Kernel scal_;
     };
 
     class StandardSGEMM : public StandardSGEMMBase {
@@ -93,6 +127,7 @@ namespace gpu {
                                         "ATRANS",int(atrans),
                                         "BTRANS",int(btrans),
                                         "IM2COL_OCHAN",im2col_chan,
+                                        "REDUCE_K",reduce_k_,
                                         "ACTIVATION",int(act));
             kernel_ = cl::Kernel(prog,"sgemm");
             bias_ = bias;
@@ -114,10 +149,18 @@ namespace gpu {
                           cl::Buffer *bias,
                           int bias_offset,
                           float beta,
-                          cl::CommandQueue &queue,
-                          std::vector<cl::Event> *events,
-                          cl::Event *event)
+                          int size_of_c,
+                          ExecutionContext const &ein)
         {
+            ExecutionContext e;
+            if(sep_scale_) {
+                scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,2));
+                e=ein.generate_series_context(1,2);
+                beta = 1.0;
+            }
+            else {
+                e=ein;
+            }
             int ind=0;
             kernel_.setArg(ind++,M);
             kernel_.setArg(ind++,N);
@@ -145,9 +188,16 @@ namespace gpu {
             int ls1 = tile_size_n_ / block_size_n_; 
             int gs0 = round_up_div(M,tile_size_m_) * tile_size_m_ / block_size_m_;
             int gs1 = round_up_div(N,tile_size_n_) * tile_size_n_ / block_size_n_;
-            cl::NDRange global(gs0,gs1);
-            cl::NDRange local(ls0,ls1);
-            queue.enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,events,event);
+            cl::NDRange global,local;
+            if(reduce_k_ > 1) {
+                global = cl::NDRange(reduce_k_,gs0,gs1);
+                local =  cl::NDRange(1,ls0,ls1);
+            }
+            else {
+                global = cl::NDRange(gs0,gs1);
+                local =  cl::NDRange(ls0,ls1);
+            }
+            e.queue().enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,e.events(),e.event("gemm"));
         }
 
     private:
@@ -193,11 +243,25 @@ namespace gpu {
                                         "SRC_ROWS",src_rows,
                                         "IMG_COLS",tgt_cols,
                                         "IMG_ROWS",tgt_rows,
+                                        "REDUCE_K",reduce_k_,
                                         "ACTIVATION",int(act));
+            if(op_mode == GemmOpMode::backward_data) {
+                set_scale(ctx);
+                gemm_name_="conv_gemm_bwd_data";
+            }
+            else if(op_mode == GemmOpMode::backward_filter)
+                gemm_name_="conv_gemm_bwd_filter";
+            else
+                gemm_name_="conv_gemm";
             kernel_ = cl::Kernel(prog,"sgemm");
             bias_ = bias;
             groups_ = groups;
             md_ = int(op_mode);
+            k_ = kernel[0];
+            pad_ = padding[0];
+            s_ = stride[0];
+            ci_ = src_channels;
+            w_ = src_cols;
         }
         static int round_up_div(int x,int y)
         {
@@ -216,10 +280,18 @@ namespace gpu {
                           cl::Buffer *bias,
                           int bias_offset,
                           float beta,
-                          cl::CommandQueue &queue,
-                          std::vector<cl::Event> *events,
-                          cl::Event *event)
+                          int size_of_c,
+                          ExecutionContext const &ein)
         {
+            ExecutionContext e;
+            if(sep_scale_) {
+                scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,2));
+                e=ein.generate_series_context(1,2);
+                beta = 1.0;
+            }
+            else {
+                e=ein;
+            }
             int ind=0;
             kernel_.setArg(ind++,M);
             kernel_.setArg(ind++,N);
@@ -248,30 +320,26 @@ namespace gpu {
             int gs0 = round_up_div(M,tile_size_m_) * tile_size_m_ / block_size_m_;
             int gs1 = round_up_div(N,tile_size_n_) * tile_size_n_ / block_size_n_;
             cl::NDRange global,local;
-            if(groups_ > 1) {
-                global = cl::NDRange(groups_,gs0,gs1);
+            if(groups_ > 1 || reduce_k_ > 1) {
+                global = cl::NDRange(groups_ * reduce_k_,gs0,gs1);
                 local =  cl::NDRange(1,ls0,ls1);
             }
             else {
                 global = cl::NDRange(gs0,gs1,1);
                 local =  cl::NDRange(ls0,ls1,1);
             }
-#if 1
-            queue.enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,events,event);
-#else
-            cl::Event ev;
-            queue.enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,nullptr,&ev);
-            queue.finish();
-            std::cout << (1e-3 * (ev.getProfilingInfo<CL_PROFILING_COMMAND_END>() - ev.getProfilingInfo<CL_PROFILING_COMMAND_START>())) << " " << M << "," << N << "," << K << std::endl;
-#endif
-
+            e.queue().enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,e.events(),e.event(gemm_name_));
         }
 
     private:
+        char const *gemm_name_;
         cl::Kernel kernel_;
+        cl::Kernel scal_;
         bool bias_;
         int groups_;
         int md_;
+        int w_;
+        int ci_,co_,k_,pad_,s_;
     };
 
 
