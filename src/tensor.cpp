@@ -14,7 +14,7 @@ namespace dlprim {
 		{
 			if(p) {
 			#ifndef DLPRIM_WINDOWS
-				free(p); 
+				::free(p); 
 			#else
 				_aligned_free(p);
 			#endif
