@@ -16,13 +16,17 @@
 
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
-void bwd_bias(int features,int over,__global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset,float beta)
+void bwd_bias(int features,int over,__global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset,int dx_stride,float beta)
 {
     dy += dy_offset;
     dx += dx_offset;
     
     int feature = get_global_id(1);
     if(feature >= features)
+        return;
+
+    int dx_pos = get_group_id(0);
+    if(dx_pos >= dx_stride)
         return;
 
     int position   = get_global_id(0) * ITEMS_PER_WI;
@@ -44,11 +48,13 @@ void bwd_bias(int features,int over,__global dtype *dy,int dy_offset,__global dt
     
     my_work_group_reduce_add(val);
 
+    int pos = feature * dx_stride + dx_pos;
+    
     if(get_local_id(0) == 0) {
         if(beta == 0)
-            dx[feature] = val;
+            dx[pos] = val;
         else
-            dx[feature] = dx[feature] * beta + val;
+            dx[pos] = dx[feature] * beta + val;
     }
 }
 

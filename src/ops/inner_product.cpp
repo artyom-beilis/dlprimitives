@@ -54,8 +54,10 @@ namespace dlprim {
         workspace = 0;
 
         if(mode_ != CalculationsMode::predict) { 
-            if(config_.bias)
+            if(config_.bias) {
                 bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],1,dtype_));
+                workspace = bwd_bias_->workspace(config_.outputs);
+            }
             
             if(config_.activation != StandardActivations::identity) {
                 ActivationConfig cfg;
@@ -207,6 +209,7 @@ namespace dlprim {
         if(config_.bias && parameters[1].requires_gradient) {
             bwd_bias_->backward(output[0].diff,
                                 parameters[1].diff,
+                                ws,
                                 parameters[1].accumulate_gradient,
                                 e.generate_series_context(step++,steps));
         }

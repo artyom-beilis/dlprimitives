@@ -156,7 +156,11 @@ namespace dlprim {
             return;
         }
         else {
-             ws_size_ = workspace = 0;
+             size_t ws = 0;
+             if(bwd_bias_.get()) {
+                 ws = bwd_bias_->workspace(config_.channels_out);
+             }
+             ws_size_ = workspace = ws;
         }
 
         if(mode_ != CalculationsMode::predict)
@@ -745,6 +749,7 @@ namespace dlprim {
         if(config_.bias && parameters[1].requires_gradient) {
             bwd_bias_->backward(output[0].diff,
                                 parameters[1].diff,
+                                workspace,
                                 parameters[1].accumulate_gradient,
                                 e.generate_series_context(step++,steps));
         }
