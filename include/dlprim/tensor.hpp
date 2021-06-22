@@ -84,7 +84,8 @@ namespace dlprim {
         void to_host(ExecutionContext const &c,bool sync=true);
 
     private:
-        std::shared_ptr<void> host_;
+		struct HostMem;
+        std::shared_ptr<HostMem> host_;
         bool cpu_tensor_;
         int offset_;
         cl::Buffer buffer_;
