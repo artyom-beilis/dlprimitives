@@ -1,7 +1,6 @@
 #include <dlprim/ops/bwd_bias.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <my_cblas.hpp>
-#include <iostream>
 
 namespace dlprim {
     BWBias::~BWBias() {}
@@ -12,7 +11,7 @@ namespace dlprim {
         rows_columns_(rows_columns)
     {
         DLPRIM_CHECK(dt == float_data);
-        int total_size = rows_columns_;
+        int total_size = batch_ * rows_columns_;
         if(ctx_.is_cpu_context())
             return;
 
@@ -24,41 +23,31 @@ namespace dlprim {
             wg_ = 256;
         items_per_wi_ = (total_size + wg_ - 1) / wg_;
 
-        cl::Program const &prog1 = gpu::Cache::instance().get_program(ctx_,"bwd_bias",
+        cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"bwd_bias",
                                         "WG_SIZE",wg_,
                                         "ITEMS_PER_WI",items_per_wi_,
                                         "SIZE_2D",rows_columns_
                                         );
-        kernel_ = cl::Kernel(prog1,"bwd_bias");
-        cl::Program const &prog2 = gpu::Cache::instance().get_program(ctx_,"scal");
-        scal_ = cl::Kernel(prog2,"sscal");
+        kernel_ = cl::Kernel(prog,"bwd_bias");
     }
 
     void BWBias::backward_gpu(Tensor &dy,Tensor &dw,float beta,ExecutionContext const &e)
     {
-        int b = dy.shape()[0];
+        int total_size = dy.shape()[0] * rows_columns_;
         int features = dw.shape()[0];
-        cl::NDRange l(wg_,1,1);
-        cl::NDRange g(wg_,b,features);
-
-        auto ec1 = e.generate_series_context(0,2);
-        auto ec2 = e.generate_series_context(1,2);
+        int norm_size = (total_size + items_per_wi_ - 1) / items_per_wi_;
+        cl::NDRange l(wg_,1);
+        cl::NDRange g=gpu::round_range(norm_size,features,l);
+       
         int p=0;
-        scal_.setArg(p++,features);
-        scal_.setArg(p++,beta);
-        scal_.setArg(p++,dw.device_buffer());
-        scal_.setArg(p++,int(dw.device_offset()));
-
-        p=0;
-        kernel_.setArg(p++,b);
         kernel_.setArg(p++,features);
+        kernel_.setArg(p++,total_size);
         kernel_.setArg(p++,dy.device_buffer());
         kernel_.setArg(p++,int(dy.device_offset()));
         kernel_.setArg(p++,dw.device_buffer());
         kernel_.setArg(p++,int(dw.device_offset()));
-
-        e.queue().enqueueNDRangeKernel(scal_,cl::NullRange,cl::NDRange(features),cl::NullRange,ec1.events(),ec1.event("bwd_bias_scal")); 
-        e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,g,l,ec2.events(),ec2.event("bwd_bias"));
+        kernel_.setArg(p++,beta);
+        e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,g,l,e.events(),e.event("bwd_bias"));
     }
     void BWBias::backward_cpu(Tensor &dy,Tensor &dw,float beta)
     {
