@@ -1,6 +1,5 @@
 #include "defs.h"
 #include "reduce.h"
-#include "atomic.h"
 
 #ifndef WG_SIZE
 #define WG_SIZE 256
@@ -17,36 +16,45 @@
 
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
-void bwd_bias(int batches,int features,__global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset)
+void bwd_bias(int features,int over,__global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset,int dx_stride,float beta)
 {
     dy += dy_offset;
     dx += dx_offset;
-
-    int batch = get_global_id(1);
-    if(batch >= batches)
-        return;
     
-    int feature = get_global_id(2);
+    int feature = get_global_id(1);
     if(feature >= features)
         return;
 
-    int index = get_local_id(0) * ITEMS_PER_WI;
-    dy += (batch * features + feature) * SIZE_2D + index;
+    int dx_pos = get_group_id(0);
+    if(dx_pos >= dx_stride)
+        return;
+
+    int position   = get_global_id(0) * ITEMS_PER_WI;
     
     REDUCE_PREPARE(WG_SIZE,dtype);
 
     dtype val = 0;
+    int batch_scale = features * SIZE_2D;
     #pragma unroll
-    for(int i=0;i<ITEMS_PER_WI;i++,index++) {
-        if(index >=SIZE_2D)
-            break;
-        val += *dy++;
+    for(int i=0;i<ITEMS_PER_WI;i++) {
+        int index = position + i;
+        if(index >= over)
+            continue;
+
+        int batch = index / SIZE_2D;
+        int rcpos = index % SIZE_2D;
+        val += dy[batch * batch_scale + feature * SIZE_2D + rcpos];
     }
     
     my_work_group_reduce_add(val);
 
+    int pos = feature * dx_stride + dx_pos;
+    
     if(get_local_id(0) == 0) {
-        atomic_addf(dx + feature,val);
+        if(beta == 0)
+            dx[pos] = val;
+        else
+            dx[pos] = dx[feature] * beta + val;
     }
 }
 
