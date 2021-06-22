@@ -65,13 +65,13 @@ namespace gpu {
                     tile_size_k_ = 64;
                     off_ = 0;
                 }
+                int cores = ctx.estimated_core_count();
+                if(M * N / (block_size_m_ * block_size_n_) < 4 * cores && K > M*16 && K > N*16) {
+                    reduce_k_ = 8;
+                    set_scale(ctx);
+                }
             }
 
-            int cores = ctx.estimated_core_count();
-            if(M * N / (block_size_m_ * block_size_n_) < 4 * cores && K > M*16 && K > N*16) {
-                reduce_k_ = 8;
-                set_scale(ctx);
-            }
         }
     protected:
         void set_scale(Context &ctx)
@@ -220,7 +220,6 @@ namespace gpu {
                     int im2col_chan = 0) :
                 StandardSGEMMBase(ctx,M,N,K)
         {
-
             cl::Program const &prog = Cache::instance().get_program(ctx,"sgemm",
                                         "TILE_SIZE_M",tile_size_m_,
                                         "TILE_SIZE_N",tile_size_n_,
