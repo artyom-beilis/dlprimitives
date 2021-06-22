@@ -35,5 +35,6 @@ namespace dlprim {
         int wg_;
         int items_per_wi_;
         cl::Kernel kernel_;
+        cl::Kernel scal_;
     };
 }
