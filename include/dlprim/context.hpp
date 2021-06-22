@@ -52,6 +52,10 @@ namespace dlprim {
 
         int estimated_core_count();
 
+        bool is_amd();
+        bool is_nvidia();
+        bool is_intel();
+
         cl::Context &context()
         {
             return context_;
