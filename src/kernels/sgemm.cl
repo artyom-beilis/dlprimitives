@@ -249,6 +249,31 @@
 #endif
 
 
+int twizzle_a(int id)
+{
+    return 
+          ((id & (1<<0 )) >> 0)
+        | ((id & (1<<2 )) >> 1)
+        | ((id & (1<<4 )) >> 2)
+        | ((id & (1<<6 )) >> 3)
+        | ((id & (1<<8 )) >> 4)
+        | ((id & (1<<10)) >> 5)
+        | ((id & (1<<12)) >> 6)
+        | ((id & (1<<14)) >> 7)
+        | ((id & (1<<16)) >> 8)
+        | ((id & (1<<18)) >> 9)
+        | ((id & (1<<20)) >> 10);
+}
+
+int twizzle_b(int id)
+{
+    return twizzle_a(id>>1);
+}
+
+
+
+
+
 __kernel 
 #if INTEL_PLATFORM == 1
 __attribute__((intel_reqd_sub_group_size(8)))
@@ -304,17 +329,30 @@ void    sgemm(    int M,int N,int K,
     #else
     #error "Invalid CONVGEMM Value"
     #endif
-#endif   
-    int row = get_global_id(DIM_M) * BLOCK_SIZE_M;
-    int col = get_global_id(DIM_N) * BLOCK_SIZE_N;
+#endif  
+    int group_row,group_col;
+    if(get_num_groups(DIM_M) == get_num_groups(DIM_N)) {
+        int group_id = get_group_id(DIM_M) * get_num_groups(DIM_N) + get_group_id(DIM_N);
+    
+        group_row = twizzle_a(group_id);
+        group_col = twizzle_b(group_id);
+
+    }
+    else {
+        group_row = get_group_id(DIM_M);
+        group_col = get_group_id(DIM_N);
+    }
+    
+    int row = group_row * TILE_SIZE_M + get_local_id(DIM_M) * BLOCK_SIZE_M;
+    int col = group_col * TILE_SIZE_N + get_local_id(DIM_N) * BLOCK_SIZE_N;
 
     int lid0 = get_local_id(DIM_M);
     int lid1 = get_local_id(DIM_N);
     
     int local_tile_id = lid0 * get_local_size(DIM_N) + lid1;
 
-    int tile_row0 = get_group_id(DIM_M)*TILE_SIZE_M;
-    int tile_col0 = get_group_id(DIM_N)*TILE_SIZE_N;
+    int tile_row0 = group_row*TILE_SIZE_M;
+    int tile_col0 = group_col*TILE_SIZE_N;
 
     const int local_wg_size = BLOCKS_IN_TILE_M * BLOCKS_IN_TILE_N;
     const int load_step = TILE_SIZE_M * TILE_SIZE_K / local_wg_size;
