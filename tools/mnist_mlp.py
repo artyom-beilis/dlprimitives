@@ -183,6 +183,7 @@ class Net2(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
+    start = time.time()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
@@ -196,6 +197,8 @@ def train(args, model, device, train_loader, optimizer, epoch):
                 100. * batch_idx / len(train_loader), loss.item()))
             if args.dry_run:
                 break
+    end = time.time()
+    print("Training epch time ",end - start)
 
 
 def test(model, device, test_loader):
@@ -233,7 +236,7 @@ def main():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=5, metavar='N',
                         help='number of epochs to train (default: 5)')
-    parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
@@ -253,6 +256,7 @@ def main():
     torch.manual_seed(args.seed)
 
     device = torch.device("cuda" if use_cuda else "cpu")
+    print("Device",device)
 
     train_kwargs = {'batch_size': args.batch_size}
     test_kwargs = {'batch_size': args.test_batch_size}
@@ -276,8 +280,8 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     model = Net2().to(device)
-    #optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
-    optimizer = optim.SGD(model.parameters(), lr=0.01,momentum=0.9, weight_decay=0.00)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    #optimizer = optim.SGD(model.parameters(), lr=0.01,momentum=0.9, weight_decay=0.00)
 
     #scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(1, args.epochs + 1):

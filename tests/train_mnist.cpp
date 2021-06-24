@@ -1,9 +1,11 @@
 #include <dlprim/net.hpp>
 #include <dlprim/solvers/sgd.hpp>
+#include <dlprim/solvers/adam.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <chrono>
 
 namespace dp = dlprim;
 
@@ -106,7 +108,8 @@ int main(int argc,char **argv)
 
     cl::CommandQueue queue=ctx.make_queue();
     dp::ExecutionContext q(queue);
-    dp::solvers::SGD sgd(ctx);
+    //dp::solvers::SGD sgd(ctx);
+    dp::solvers::Adam sgd(ctx);
     sgd.init(net,q);
 
     loss_diff.data<float>()[0] = 1.0;
@@ -115,6 +118,7 @@ int main(int argc,char **argv)
     std::cout << "Start training" << std::endl;
 
     for(int epoch = 0;epoch < 5;epoch ++) {
+        auto start = std::chrono::high_resolution_clock::now();
         float total_loss = 0;
         int total = 0;
         int n;
@@ -146,17 +150,20 @@ int main(int argc,char **argv)
                         argmax = k;
                 acc += float(argmax == labels.data<int>()[j]);
             }
-            if(bc == 100 && epoch == 0)
-                sgd.lr *= 0.1;
+            //if(bc == 100 && epoch == 0)
+            //    sgd.lr *= 0.1;
             if((bc+1) % 100 == 0)
                 std::cout << "Epoch/iter " << epoch << "/" << (bc+1) << " loss=" << total_loss / total << " acc="<< acc /total << std::endl;
         }
         std::cout << "Epoch/iter " << epoch << "/" << bc << " loss=" << total_loss / total << " acc="<< acc /total << std::endl;
         reader.rewind();
-        if(epoch <= 2)
-            sgd.lr *= 0.1;
+        //if(epoch <= 2)
+        //    sgd.lr *= 0.1;
         net.copy_parameters_to_host();
         net.save_parameters_to_hdf5("snap_" + std::to_string(epoch+1) + ".h5");
+        auto end = std::chrono::high_resolution_clock::now();
+        auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((end-start)).count();
+        std::cout << "Executed in " << passed << " second" << std::endl;
     }
 
 }
