@@ -28,6 +28,8 @@ Please note this is only work in progress - first and preliminary stages.
 |Conv2d                 |                               | Fwd,Bwd           |
 |Activation             | relu, sigmoid, tanh, relu6    | Fwd,Bwd           |
 
+Solvers: SGD, Adam
+
 ## Validated Networks
 
 | Network       | Source of model       | Operation     |
