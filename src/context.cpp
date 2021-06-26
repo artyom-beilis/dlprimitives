@@ -47,15 +47,24 @@ namespace dlprim {
 
     bool Context::is_amd()
     {
-        return device_extensions().find("cl_amd_") != std::string::npos;
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1002;
+        //return device_extensions().find("cl_amd_") != std::string::npos;
     }
     bool Context::is_intel()
     {
-        return device_extensions().find("cl_intel_") != std::string::npos;
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x8086;
+        //return device_extensions().find("cl_intel_") != std::string::npos;
     }
     bool Context::is_nvidia()
     {
-        return device_extensions().find("cl_nv_") != std::string::npos;
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x10DE;
+        //return device_extensions().find("cl_nv_") != std::string::npos;
     }
 
     int Context::estimated_core_count()
