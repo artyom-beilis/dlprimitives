@@ -472,7 +472,7 @@ void    sgemm(    int M,int N,int K,
         #endif
 
         // Mutliplication loop
-        #pragma unroll
+        #pragma unroll(4)
         for(int dk=0;dk<TILE_SIZE_K;dk++) {
             #pragma unroll
             for(int dr=0;dr<BLOCK_SIZE_M;dr++) {
