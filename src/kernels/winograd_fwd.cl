@@ -25,40 +25,8 @@
  * assembly
  */
 
-
-float16 load_4x4_tile_and_transform(__global const float * restrict channel,int stride, 
-                                                int H, int W,
-                                                int row, int col)
+float16 transform_tile(float4 a[4])
 {
-    float4 a[4];
-    __global const float * frame = channel + row * stride + col;
-    
-    int r=row;
-    #pragma unroll
-    for(int i=0;i<4;i++,r++,frame+=stride) {
-        if(r >= 0 && r < H) {
-            if(col >= 0 && col + 3 < W) {
-                a[i] = vload4(0,frame);
-            }
-            else {
-                int c=col;
-                a[i].s0 = c >= 0 && c < W ? frame[0] : 0.0f;
-                c++;
-                a[i].s1 = c >= 0 && c < W ? frame[1] : 0.0f;
-                c++;
-                a[i].s2 = c >= 0 && c < W ? frame[2] : 0.0f;
-                c++;
-                a[i].s3 = c >= 0 && c < W ? frame[3] : 0.0f;
-                c++;
-            }
-        }
-        else {
-            a[i] = 0.0f;
-        }
-    }
-
-
-    
     float bta[4][4];
 
     bta[0][0] = a[0].s0 - a[2].s0;
@@ -92,6 +60,38 @@ float16 load_4x4_tile_and_transform(__global const float * restrict channel,int 
     
     return (float16)(btab[0],btab[1],btab[2],btab[3]);
 }
+
+
+float16 load_4x4_tile_and_transform_v2(__global const float * restrict frame,int pos,int limit,int end,int stride,int4 mask[4])
+{
+    float4 a[4];
+    frame += pos;
+    
+    if(pos >= 0 && pos < limit) {
+        #pragma unroll
+        for(int i=0;i<4;i++,frame+=stride) {
+            a[i] = as_float4(as_int4(vload4(0,frame)) & mask[i]);
+        }
+    }
+    else {
+        #pragma unroll
+        for(int i=0;i<4;i++,frame+=stride,pos+=stride) {
+            if(pos >= 0 && pos + 4 <= end)
+               a[i] = as_float4(as_int4(vload4(0,frame)) & mask[i]);
+            else {
+                float4 tmp;
+                tmp.s0 = pos+0 >= 0 && pos+0 < end ? frame[0] : 0.0;
+                tmp.s1 = pos+1 >= 0 && pos+1 < end ? frame[1] : 0.0;
+                tmp.s2 = pos+2 >= 0 && pos+2 < end ? frame[2] : 0.0;
+                tmp.s3 = pos+3 >= 0 && pos+3 < end ? frame[3] : 0.0;
+                a[i] = as_float4(as_int4(tmp) & mask[i]);
+            }
+        }
+    }
+    return transform_tile(a);
+}
+
+
 
 float16 load_3x3_kernel_and_transform(__global const float *kern_ptr)
 {
@@ -259,8 +259,28 @@ void winconv_3x3(int B, int N,int C,int H,int W,
     int l_row = l_rc / half_W * 2;
     int l_col = l_rc % half_W * 2;
 
-    image += l_b * H * W * C;
-
+    int image_pos = l_b * H * W * C + (l_row - 1) * W + l_col - 1 + (l_tile_k) * (H * W);
+    int image_end   = B * C * W * H;
+    int image_step  = H*W*WG_K;
+    int image_limit = image_end - W*4;
+    int4 load_mask[4];
+    #pragma unroll
+    for(int dr=0;dr<4;dr++) {
+        if(l_row - 1 + dr < 0 || l_row - 1 + dr >= H) {
+            load_mask[dr] = 0;
+        }
+        else {
+            int c=l_col - 1;
+            load_mask[dr].s0 = c >= 0 && c < W ? -1 : 0;
+            c++;
+            load_mask[dr].s1 = c >= 0 && c < W ? -1 : 0;
+            c++;
+            load_mask[dr].s2 = c >= 0 && c < W ? -1 : 0;
+            c++;
+            load_mask[dr].s3 = c >= 0 && c < W ? -1 : 0;
+            c++;
+        }
+    }
 
     #define s_img_tile(k,t,indx) wg_local_memory[(k)*(TILES_IN_WG/2*16 + 1) + (t/2) * 16 + (indx)]
     
@@ -278,10 +298,11 @@ void winconv_3x3(int B, int N,int C,int H,int W,
 
     // store
 
-    for(int k=0;k < C;k+=WG_K) {
+    for(int k=0;k < C;k+=WG_K,image_pos += WG_K*W*H)
+    {
 
         // load relevant tile        
-        float16 my_tile = (l_b < B && k + l_tile_k < C) ? load_4x4_tile_and_transform(image + (k + l_tile_k) * (H * W),W,H,W,l_row - PAD_H,l_col - PAD_W) : 0; 
+        float16 my_tile = (l_b < B && k + l_tile_k < C) ? load_4x4_tile_and_transform_v2(image,image_pos,image_limit,image_end,W,load_mask) : 0; 
         store_local(l_tile_ptr,l_tile_stride,my_tile);
         
         // load relevant kernel
