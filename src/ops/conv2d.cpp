@@ -80,6 +80,33 @@ namespace dlprim {
             && config_.kernel[0] / 2 == config_.pad[0];
     }
 
+    size_t Convolution2D::setup_winograd_conv()
+    {
+        if(ctx_.is_cpu_context())
+            return 0;
+        cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_fwd",
+                                        "ACTIVATION",int(config_.activation),
+                                        "BIAS",int(config_.bias));
+        conv_kernel_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
+        conv_ = cl::Kernel(prog,"winconv_3x3");
+        size_t res = sizeof(float)*16 * config_.channels_in * config_.channels_out;
+        return res;
+    }
+
+    bool Convolution2D::is_winograd_candidate()
+    {
+        return 
+            config_.kernel[0] == config_.kernel[1] 
+            && config_.pad[0] == config_.pad[1] 
+            && config_.dilate[0] == config_.dilate[1]
+            && config_.stride[0] == config_.stride[1]
+            && config_.groups == 1
+            && config_.dilate[0] == 1
+            && config_.stride[0] == 1
+            && config_.kernel[0] == 3
+            && config_.pad[0] == 1;
+    }
+
     void Convolution2D::setup_depthwise_separable_conv(Shape const &s)
     {
         if(ctx_.is_cpu_context())
@@ -125,6 +152,7 @@ namespace dlprim {
         if(config_.channels_in == -1) {
             config_.channels_in = chn;
         }
+        workspace = 0;
 
         DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
         DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
@@ -133,6 +161,7 @@ namespace dlprim {
         out.assign({TensorSpecs(output_shape,dtype_)});
 
         use_ds_conv_=false;
+        use_winograd_=false;
 
         Shape params_shape(config_.channels_out,
                            config_.channels_in / config_.groups,
@@ -160,13 +189,18 @@ namespace dlprim {
              if(bwd_bias_.get()) {
                  ws = bwd_bias_->workspace(config_.channels_out);
              }
-             ws_size_ = workspace = ws;
+             ws_size_ = workspace = std::max(ws,workspace);
         }
 
         if(mode_ != CalculationsMode::predict)
                 scal_.reset(new Scal(ctx_,dtype_));
 
         use_ds_conv_ = is_depthwise_separable_conv();
+        use_winograd_ = is_winograd_candidate();
+        if(use_winograd_) {
+            size_t ws = setup_winograd_conv();
+            ws_size_ = workspace = std::max(ws,workspace);
+        }
 
         get_gemm(in[0].shape(),out[0].shape());
     }
@@ -185,22 +219,24 @@ namespace dlprim {
             return;
         
         if(!use_ds_conv_){
-            int M = config_.channels_out / config_.groups;
-            int N = out_h_*out_w_ * out[0];
-            int K = get_im2col_width(); 
+            if(!use_winograd_) {
+                int M = config_.channels_out / config_.groups;
+                int N = out_h_*out_w_ * out[0];
+                int K = get_im2col_width(); 
 
-            auto gemm = gpu::GEMM::get_optimal_conv_gemm(
-                ctx_,dtype_,GemmOpMode::forward,
-                false,true,
-                M,N,K,
-                config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
-                config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
-                (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
-                config_.activation,
-                out_h_ * out_w_
-            );
+                auto gemm = gpu::GEMM::get_optimal_conv_gemm(
+                    ctx_,dtype_,GemmOpMode::forward,
+                    false,true,
+                    M,N,K,
+                    config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
+                    config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
+                    (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
+                    config_.activation,
+                    out_h_ * out_w_
+                );
 
-            gemm_ = std::move(gemm);
+                gemm_ = std::move(gemm);
+            }
 
             if(mode_ != CalculationsMode::predict) {
                 int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
@@ -277,7 +313,10 @@ namespace dlprim {
             forward_cpu(in[0],out[0],W,bias,ws.host_data());
         }
         else {
-            forward_gpu(in[0],out[0],W,bias,ectx);
+            if(use_winograd_)
+                forward_winograd_gpu(in[0],out[0],W,ws,bias,ectx);
+            else
+                forward_gpu(in[0],out[0],W,bias,ectx);
         }
     }
 
@@ -296,6 +335,50 @@ namespace dlprim {
 
 
     
+    void Convolution2D::forward_winograd_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor &ws,Tensor *bias,ExecutionContext const &ec)
+    {
+        int B = in.shape()[0];
+        int N = config_.channels_out;
+        int C = in.shape()[1];
+        int h = in.shape()[2];
+        int w = in.shape()[3];
+
+        int p=0;
+        conv_kernel_.setArg(p++,config_.channels_out);
+        conv_kernel_.setArg(p++,config_.channels_in);
+        conv_kernel_.setArg(p++,W.device_buffer());
+        conv_kernel_.setArg(p++,int(W.device_offset()));
+        conv_kernel_.setArg(p++,ws.device_buffer());
+        conv_kernel_.setArg(p++,int(ws.device_offset()));
+
+        p=0;
+        conv_.setArg(p++,B);
+        conv_.setArg(p++,N);
+        conv_.setArg(p++,C);
+        conv_.setArg(p++,h);
+        conv_.setArg(p++,w);
+
+        conv_.setArg(p++,in.device_buffer());
+        conv_.setArg(p++,int(in.device_offset()));
+        conv_.setArg(p++,ws.device_buffer());
+        conv_.setArg(p++,int(ws.device_offset()));
+        if(bias) {
+            conv_.setArg(p++,bias->device_buffer());
+            conv_.setArg(p++,int(bias->device_offset()));
+        }
+        conv_.setArg(p++,out.device_buffer());
+        conv_.setArg(p++,int(out.device_offset()));
+        auto ec1 = ec.generate_series_context(0,2);
+        auto ec2 = ec.generate_series_context(1,2);
+
+        cl::NDRange l1(8,8);
+        cl::NDRange g1 = gpu::round_range(config_.channels_out,config_.channels_in,l1);
+        ec.queue().enqueueNDRangeKernel(conv_kernel_,cl::NullRange,g1,l1,ec.events(),ec1.event("winograd_3to4_kernel"));
+        cl::NDRange l2(256,1);
+        int tiles = ((w + 1) / 2 * (h + 1) / 2 * B + 31)/32;
+        cl::NDRange g2(tiles * 256,(N + 31) / 32);
+        ec.queue().enqueueNDRangeKernel(conv_,cl::NullRange,g2,l2,ec.events(),ec2.event("winograd_3x3_main"));
+    }
 
     void Convolution2D::forward_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
     {

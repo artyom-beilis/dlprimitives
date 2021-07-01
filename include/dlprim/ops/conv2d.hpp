@@ -55,6 +55,7 @@ namespace dlprim {
 	protected:
         void get_gemm(Shape const &in,Shape const &out);
         int get_im2col_width();
+        void forward_winograd_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor &ws,Tensor *bias,ExecutionContext const &ec);
         void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,void *ws);
 
@@ -74,7 +75,9 @@ namespace dlprim {
 
 
         void setup_depthwise_separable_conv(Shape const &s);
+        size_t setup_winograd_conv();
         bool is_depthwise_separable_conv();
+        bool is_winograd_candidate();
         static int get_opt_val(int v);
 		
         Convolution2DConfig config_;
@@ -92,6 +95,8 @@ namespace dlprim {
         constexpr static int ds_patch_rows = 2;
         constexpr static int ds_patch_cols = 2;
         bool use_ds_conv_;
+        bool use_winograd_ = false;
+        cl::Kernel conv_kernel_;
         cl::Kernel conv_,bw_conv_data_,bw_conv_filter_;
         int dwsc_bw_filter_wg_;
 	};
