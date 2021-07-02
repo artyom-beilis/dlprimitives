@@ -1,15 +1,15 @@
 # DLPrimitives
 
-This project that aims to provide cross platform OpenCL tools for deep learning and inference.
+This project aims to provide cross platform OpenCL tools for deep learning and inference.
 
-Today most of deep learning training is done on NVidia GPUs using closed source CUDA and CUDNN libraries.
-Using AMD or Intel GPUs either challenging or virtually impossible.
-For example: also AMD provided ROCm platform, there is no support of RDNA platforms yet (more than a year since a release),
-there is no support of APUs and of course no support 
-of operating systems other than Linux.
+Today, most of deep learning training is done on NVidia GPUs using closed source CUDA and CUDNN libraries.
+It is either challenging or virtually impossible to use AMD or Intel GPUs.
+For example: AMD provides ROCm platform, but there is no support of RDNA platforms yet (more than a year since a release),
+there is no support of APUs and no support 
+of any operating systems other than Linux.
 
-So this project aims to provide deep learning primitives similar to cuDNN or MIOpen that would support
-multiple GPUs and provide tools that can perform efficient inference of pre-trained models similar to TensorRT or MIGraphX.
+This project aims to provide open source deep learning primitives similar to cuDNN and MIOpen that would support
+multiple GPU architectures. Another goal is to provide tools for inference of pre-trained models similar to TensorRT or MIGraphX.
 
 Please note this is only work in progress - first and preliminary stages.
 
