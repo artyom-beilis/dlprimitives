@@ -95,6 +95,8 @@ namespace dlprim {
 
     bool Convolution2D::is_winograd_candidate()
     {
+        if(!ctx_.is_amd() && !ctx_.is_nvidia())
+            return false;
         return 
             config_.kernel[0] == config_.kernel[1] 
             && config_.pad[0] == config_.pad[1] 
