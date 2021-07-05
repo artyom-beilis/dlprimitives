@@ -75,7 +75,7 @@ namespace dlprim {
 
 
         void setup_depthwise_separable_conv(Shape const &s);
-        size_t setup_winograd_conv();
+        size_t setup_winograd_conv(int h,int w);
         bool is_depthwise_separable_conv();
         bool is_winograd_candidate();
         static int get_opt_val(int v);

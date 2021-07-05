@@ -80,7 +80,7 @@ namespace dlprim {
             && config_.kernel[0] / 2 == config_.pad[0];
     }
 
-    size_t Convolution2D::setup_winograd_conv()
+    size_t Convolution2D::setup_winograd_conv(int h,int w)
     {
         if(ctx_.is_cpu_context())
             return 0;
@@ -95,6 +95,12 @@ namespace dlprim {
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_bwd_data");
             conv_kernel_bwd_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
             bw_conv_data_ = cl::Kernel(prog,"winconv_3x3_bwd_data");
+        }
+        {
+            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_bwd_filter"
+                                                                                ,"IMG_H",h,"IMG_W",w
+                                                                                );
+            bw_conv_filter_ = cl::Kernel(prog,"winconv_3x3_bwd_filter");
         }
         size_t res = sizeof(float)*16 * config_.channels_in * config_.channels_out;
         return res;
@@ -207,7 +213,7 @@ namespace dlprim {
         use_ds_conv_ = is_depthwise_separable_conv();
         use_winograd_ = is_winograd_candidate();
         if(use_winograd_) {
-            size_t ws = setup_winograd_conv();
+            size_t ws = setup_winograd_conv(in[0].shape()[2],in[0].shape()[3]);
             ws_size_ = workspace = std::max(ws,workspace);
         }
 
@@ -297,6 +303,9 @@ namespace dlprim {
             if(bwd_bias_->batch() < b || bwd_bias_->rows_columns() != rc) {
                 bwd_bias_.reset(new BWBias(ctx_,b,rc,dtype_));
             }
+        }
+        if(use_winograd_) {
+            setup_winograd_conv(in[0][2],in[0][3]);
         }
         get_gemm(in[0],out[0]);
     }
@@ -751,7 +760,32 @@ namespace dlprim {
 
     void Convolution2D::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ec)
     {
-        if(use_ds_conv_) {
+        if(use_winograd_ && (config_.channels_in / 32) * (config_.channels_out / 32) * 256 > 2048)  {
+            int B = x.shape()[0];
+            int H = x.shape()[2];
+            int W = x.shape()[3];
+            int N = config_.channels_out;
+            int C = config_.channels_in;
+            int p=0;
+            bw_conv_filter_.setArg(p++,B);
+            bw_conv_filter_.setArg(p++,N);
+            bw_conv_filter_.setArg(p++,C);
+            bw_conv_filter_.setArg(p++,H);
+            bw_conv_filter_.setArg(p++,W);
+            bw_conv_filter_.setArg(p++,x.device_buffer());
+            bw_conv_filter_.setArg(p++,int(x.device_offset()));
+            bw_conv_filter_.setArg(p++,dK.device_buffer());
+            bw_conv_filter_.setArg(p++,int(dK.device_offset()));
+            bw_conv_filter_.setArg(p++,dy.device_buffer());
+            bw_conv_filter_.setArg(p++,int(dy.device_offset()));
+            bw_conv_filter_.setArg(p++,factor);
+            
+            cl::NDRange wg(256,1);
+            cl::NDRange gr(256 * ((C+31)/32),(N+31)/32);
+            ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec.events(),ec.event("winograd_bwd_filter"));
+            return;
+        }
+        else if(use_ds_conv_) {
             int kitems = dK.shape().total_size();
             int batch = x.shape()[0];
             int height = x.shape()[2];
