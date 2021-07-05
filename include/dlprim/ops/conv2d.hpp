@@ -67,7 +67,7 @@ namespace dlprim {
         void backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ctx);
         void backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dK,Tensor &ws,float factor);
 
-        void backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ctx);
+        void backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor,ExecutionContext const &ctx);
         void backward_data_cpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor);
 
 
@@ -96,7 +96,7 @@ namespace dlprim {
         constexpr static int ds_patch_cols = 2;
         bool use_ds_conv_;
         bool use_winograd_ = false;
-        cl::Kernel conv_kernel_;
+        cl::Kernel conv_kernel_,conv_kernel_bwd_;
         cl::Kernel conv_,bw_conv_data_,bw_conv_filter_;
         int dwsc_bw_filter_wg_;
 	};

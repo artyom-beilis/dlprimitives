@@ -84,11 +84,18 @@ namespace dlprim {
     {
         if(ctx_.is_cpu_context())
             return 0;
-        cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_fwd",
-                                        "ACTIVATION",int(config_.activation),
-                                        "BIAS",int(config_.bias));
-        conv_kernel_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
-        conv_ = cl::Kernel(prog,"winconv_3x3");
+        {
+            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_fwd",
+                                            "ACTIVATION",int(config_.activation),
+                                            "BIAS",int(config_.bias));
+            conv_kernel_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
+            conv_ = cl::Kernel(prog,"winconv_3x3");
+        }
+        {
+            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_bwd_data");
+            conv_kernel_bwd_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
+            bw_conv_data_ = cl::Kernel(prog,"winconv_3x3_bwd_data");
+        }
         size_t res = sizeof(float)*16 * config_.channels_in * config_.channels_out;
         return res;
     }
@@ -644,38 +651,79 @@ namespace dlprim {
         scale_cpu(dK,factor);
         fwd_bwd_cpu(GemmOpMode::backward_filter,x,dy,dK,nullptr,ws.host_data());
     }
-    void Convolution2D::backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,float factor,ExecutionContext const &ec)
+    void Convolution2D::backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor,ExecutionContext const &ec)
     {
-        if(use_ds_conv_) {
-            ExecutionContext ec1 = ec.generate_series_context(0,2);
-            ExecutionContext ec2 = ec.generate_series_context(1,2);
+        if(use_ds_conv_ || use_winograd_) {
+            ExecutionContext ec1 = ec.generate_series_context(0,2 + use_winograd_);
             scal_->scale(factor,dx,ec1);
-            int batch = dx.shape()[0];
-            int height = dx.shape()[2];
-            int width = dx.shape()[3];
-            int p=0;
-            bw_conv_data_.setArg(p++,batch);
-            bw_conv_data_.setArg(p++,height);
-            bw_conv_data_.setArg(p++,width);
-            bw_conv_data_.setArg(p++,dx.device_buffer());
-            bw_conv_data_.setArg(p++,int(dx.device_offset()));
-            bw_conv_data_.setArg(p++,K.device_buffer());
-            bw_conv_data_.setArg(p++,int(K.device_offset()));
-            bw_conv_data_.setArg(p++,dy.device_buffer());
-            bw_conv_data_.setArg(p++,int(dy.device_offset()));
-            
-            int gW = (width+1)/2;
-            int gH = (height+1)/2;
+            if(use_winograd_) {
+                int B = dx.shape()[0];
+                int N = config_.channels_out;
+                int C = dx.shape()[1];
+                int h = dx.shape()[2];
+                int w = dx.shape()[3];
 
-            int lW = get_opt_val(gW);
-            int lH = get_opt_val(gH);
-            int lD = 1;
-            if(lW * lH < 64)
-                lD = 64 / (lW * lH);
-            
-            cl::NDRange wg(lD,lH,lW);
-            cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
-            ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec2.events(),ec2.event("sep_conv_bw_data"));
+                int p=0;
+                conv_kernel_bwd_.setArg(p++,config_.channels_out);
+                conv_kernel_bwd_.setArg(p++,config_.channels_in);
+                conv_kernel_bwd_.setArg(p++,K.device_buffer());
+                conv_kernel_bwd_.setArg(p++,int(K.device_offset()));
+                conv_kernel_bwd_.setArg(p++,ws.device_buffer());
+                conv_kernel_bwd_.setArg(p++,int(ws.device_offset()));
+
+                p=0;
+                bw_conv_data_.setArg(p++,B);
+                bw_conv_data_.setArg(p++,N);
+                bw_conv_data_.setArg(p++,C);
+                bw_conv_data_.setArg(p++,h);
+                bw_conv_data_.setArg(p++,w);
+
+                bw_conv_data_.setArg(p++,dx.device_buffer());
+                bw_conv_data_.setArg(p++,int(dx.device_offset()));
+                bw_conv_data_.setArg(p++,ws.device_buffer());
+                bw_conv_data_.setArg(p++,int(ws.device_offset()));
+                bw_conv_data_.setArg(p++,dy.device_buffer());
+                bw_conv_data_.setArg(p++,int(dy.device_offset()));
+                auto ec2 = ec.generate_series_context(1,3);
+                auto ec3 = ec.generate_series_context(2,3);
+
+                cl::NDRange l1(8,8);
+                cl::NDRange g1 = gpu::round_range(config_.channels_out,config_.channels_in,l1);
+                ec.queue().enqueueNDRangeKernel(conv_kernel_bwd_,cl::NullRange,g1,l1,ec2.events(),ec2.event("winograd_3to4_kernel"));
+                cl::NDRange l2(256,1);
+                int tiles = ((w + 1) / 2 * (h + 1) / 2 * B + 31)/32;
+                cl::NDRange g2(tiles * 256,(C + 31) / 32);
+                ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,g2,l2,ec.events(),ec2.event("winograd_3x3_main_bwd"));
+            }
+            else { // use_ds_conv_
+                ExecutionContext ec2 = ec.generate_series_context(1,2);
+                int batch = dx.shape()[0];
+                int height = dx.shape()[2];
+                int width = dx.shape()[3];
+                int p=0;
+                bw_conv_data_.setArg(p++,batch);
+                bw_conv_data_.setArg(p++,height);
+                bw_conv_data_.setArg(p++,width);
+                bw_conv_data_.setArg(p++,dx.device_buffer());
+                bw_conv_data_.setArg(p++,int(dx.device_offset()));
+                bw_conv_data_.setArg(p++,K.device_buffer());
+                bw_conv_data_.setArg(p++,int(K.device_offset()));
+                bw_conv_data_.setArg(p++,dy.device_buffer());
+                bw_conv_data_.setArg(p++,int(dy.device_offset()));
+                
+                int gW = (width+1)/2;
+                int gH = (height+1)/2;
+
+                int lW = get_opt_val(gW);
+                int lH = get_opt_val(gH);
+                int lD = 1;
+                if(lW * lH < 64)
+                    lD = 64 / (lW * lH);
+                
+                cl::NDRange wg(lD,lH,lW);
+                cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
+                ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec2.events(),ec2.event("sep_conv_bw_data"));
+            }
             return;
         }
 
@@ -854,7 +902,7 @@ namespace dlprim {
             auto ec1 = e.generate_series_context(step++,steps);
             auto ec2 = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,
+                backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,workspace,
                                     input[0].accumulate_gradient,ec2);
             }
             else {
