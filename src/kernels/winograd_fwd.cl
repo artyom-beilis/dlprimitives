@@ -127,36 +127,6 @@ float16 load_3x3_kernel_and_transform(__global const float *kern_ptr)
     return k4;
 }
 
-float16 tile2x2_to_4x4(float4 v)
-{
-    //[ 1.  0.]
-    //[ 1.  1.]
-    //[ 1. -1.]
-    //[ 0. -1.]
-
-    float y[2][2] = { { v.s0, v.s1 }, {v.s2, v.s3} };
-    float Av[4][2];
-    #pragma unroll
-    for(int dc=0;dc<2;dc++) {
-        Av[0][dc] = y[0][dc];
-        Av[1][dc] = y[0][dc] + y[1][dc];
-        Av[2][dc] = y[0][dc] - y[1][dc];
-        Av[3][dc] =          - y[1][dc];
-    }
-    // A'
-    // 1  1  1  0 
-    // 0  1 -1 -1 
-    float4 AvAT[4];
-    #pragma unroll
-    for(int dr=0;dr<4;dr++) {
-        AvAT[dr].s0 = Av[dr][0];
-        AvAT[dr].s1 = Av[dr][0] + Av[dr][1];
-        AvAT[dr].s2 = Av[dr][0] - Av[dr][1];
-        AvAT[dr].s3 =           - Av[dr][1];
-    }
-    return (float16)(AvAT[0],AvAT[1],AvAT[2],AvAT[3]);
-}
-
 
 float4 tile4x4_after_wingorad_to_2x2(float16 tile)
 {
