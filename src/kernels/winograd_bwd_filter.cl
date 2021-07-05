@@ -93,19 +93,19 @@ float16 transform_tile(float4 a[4])
 }
 
 
-float16 load_4x4_tile_and_transform(__global const float * restrict img,int r,int c,int stride,int H,int W)
+float16 load_4x4_tile_and_transform(__global const float * restrict img,int r,int c)
 {
     float4 vals[4];
     #pragma unroll
-    for(int dr=0;dr<4;dr++,img+=stride) {
-        if(r+dr >= 0 && r+dr < H) { 
-            if(c>= 0 && c + 3 < W)
+    for(int dr=0;dr<4;dr++,img+=IMG_W) {
+        if(r+dr >= 0 && r+dr < IMG_H) { 
+            if(c>= 0 && c + 3 < IMG_W)
                 vals[dr] = vload4(0,img);
             else {
-                vals[dr].s0 = (c+0 >= 0 && c+0 < W) ? img[0] : 0;
-                vals[dr].s1 = (c+1 >= 0 && c+1 < W) ? img[1] : 0;
-                vals[dr].s2 = (c+2 >= 0 && c+2 < W) ? img[2] : 0;
-                vals[dr].s3 = (c+3 >= 0 && c+3 < W) ? img[3] : 0;
+                vals[dr].s0 = (c+0 >= 0 && c+0 < IMG_W) ? img[0] : 0;
+                vals[dr].s1 = (c+1 >= 0 && c+1 < IMG_W) ? img[1] : 0;
+                vals[dr].s2 = (c+2 >= 0 && c+2 < IMG_W) ? img[2] : 0;
+                vals[dr].s3 = (c+3 >= 0 && c+3 < IMG_W) ? img[3] : 0;
             }
         }
         else {
@@ -119,20 +119,20 @@ float16 load_4x4_tile_and_transform(__global const float * restrict img,int r,in
 }
 
 
-float16 load_2x2_tile_and_transform(__global const float * restrict img,int r,int c,int stride,int H,int W)
+float16 load_2x2_tile_and_transform(__global const float * restrict img,int r,int c)
 {
     float4 v;
-    if(r < H) {
-        v.s0 = c+0 < W ? img[0] : 0.0;
-        v.s1 = c+1 < W ? img[1] : 0.0;
+    if(r < IMG_H) {
+        v.s0 = c+0 < IMG_W ? img[0] : 0.0;
+        v.s1 = c+1 < IMG_W ? img[1] : 0.0;
     }
     else {
         v.lo = 0;
     }
-    if(r + 1 < H) {
-        img += stride;
-        v.s2 = c+0 < W ? img[0] : 0.0;
-        v.s3 = c+1 < W ? img[1] : 0.0;
+    if(r + 1 < IMG_H) {
+        img += IMG_W;
+        v.s2 = c+0 < IMG_W ? img[0] : 0.0;
+        v.s3 = c+1 < IMG_W ? img[1] : 0.0;
     }
     else {
         v.hi = 0;
@@ -216,7 +216,6 @@ inline void store_local(__local float *l_val,int strd,float16 v)
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3_bwd_filter(int B, int N,int C,
-                            int img_H,int img_W,
                           __global float const * restrict image,int image_offset,
                           __global float * restrict kernels,int kernels_offset,
                           __global float const *restrict result,int result_offset,
@@ -227,16 +226,9 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
     kernels += kernels_offset;
     result += result_offset;
 
-#ifdef IMG_H
-    const int H=IMG_H;
-    const int W=IMG_W;
-#else
-    const int H=img_H;
-    const int W=img_W;
-#endif    
-    const int half_W = (W+1)/2;
-    const int half_H = (H+1)/2;
-    const int half_WG = half_W * half_H;
+    #define half_W  ((IMG_W+1)/2)
+    #define half_H  ((IMG_H+1)/2)
+    #define half_WG (half_W * half_H)
 
     __local float wg_local_memory[(XTILES_IN_WG + YTILES_IN_WG + 16) * WG_K * 16];
 
@@ -271,12 +263,20 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
 
     float p_C[PATCH_Y][PATCH_X]={{0}};
 
+    int k=0;
     int K_limit = B * half_WG;
+    bool reduce_k=false;
+    if(get_global_size(2) != 1) {
+        int K_size = (K_limit + get_global_size(2) - 1) / get_global_size(2);
+        k = K_size * get_global_id(2);
+        K_limit = min(K_limit,k + K_size);
+        reduce_k = true;
+    }
     
-    image  += (wg_ch_in  + l_xtile_c) * H * W;
-    result += (wg_ch_out + l_ytile_n) * H * W;
+    image  += (wg_ch_in  + l_xtile_c) * (IMG_H * IMG_W);
+    result += (wg_ch_out + l_ytile_n) * (IMG_H * IMG_W);
 
-    for(int k=0;k < K_limit;k+=WG_K)
+    for(;k < K_limit;k+=WG_K)
     {
         {
             int my_k = k + l_xtile_k;
@@ -284,9 +284,9 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
             int rowcol = my_k % half_WG;
             int row    = rowcol / half_W * 2;
             int col    = rowcol % half_W * 2;
-            __global float const *x = image + batch * C * H * W + (row - 1) * W + (col - 1);
+            __global float const *x = image + batch * C * IMG_H * IMG_W + (row - 1) * IMG_W + (col - 1);
             // load relevant tile       
-            float16 my_xtile = (k + l_xtile_k < K_limit && l_xtile_c + wg_ch_in < C) ? load_4x4_tile_and_transform(x,row-1,col-1,W,H,W) : 0; 
+            float16 my_xtile = (k + l_xtile_k < K_limit && l_xtile_c + wg_ch_in < C) ? load_4x4_tile_and_transform(x,row-1,col-1) : 0; 
             store_local(l_xtile_ptr,l_xtile_stride,my_xtile);
         }
         {
@@ -295,9 +295,9 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
             int rowcol = my_k % half_WG;
             int row    = rowcol / half_W * 2;
             int col    = rowcol % half_W * 2;
-             __global float const *dy = result + batch * N * H * W + row *W + col;
+             __global float const *dy = result + batch * N * IMG_H * IMG_W + row * IMG_W + col;
             // load relevant kernel
-            float16 my_ytile = (k + l_ytile_k < K_limit && l_ytile_n + wg_ch_out < N) ? load_2x2_tile_and_transform(dy,row,col,W,H,W) : 0;
+            float16 my_ytile = (k + l_ytile_k < K_limit && l_ytile_n + wg_ch_out < N) ? load_2x2_tile_and_transform(dy,row,col) : 0;
             store_local(l_ytile_ptr,l_ytile_stride,my_ytile);
         }
 
@@ -363,12 +363,20 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
             float s_kern9[9];
             transform_kernel_bwd(s_kern16,s_kern9);
             __global float *ptr = kernels + 9* (kern_ch_in +  kern_ch_out * C);
-            #pragma unroll
-            for(int i=0;i<9;i++) {
-                if(beta == 0)
-                    ptr[i] = s_kern9[i];
-                else
-                    ptr[i] = ptr[i] * beta + s_kern9[i];
+            if(reduce_k) {
+                #pragma unroll
+                for(int i=0;i<9;i++) {
+                    atomic_addf(ptr + i, s_kern9[i]);
+                }
+            }
+            else {
+                #pragma unroll
+                for(int i=0;i<9;i++) {
+                    if(beta == 0)
+                        ptr[i] = s_kern9[i];
+                    else
+                        ptr[i] = ptr[i] * beta + s_kern9[i];
+                }
             }
         }
         

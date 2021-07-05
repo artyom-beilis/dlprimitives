@@ -216,10 +216,10 @@ int main(int argc,char **argv)
             }
         }
         std::cout << "Time per sample: " << (total_time / total * 1e3) << " ms" << std::endl;
-        std::cout << "Time per batch:  " << (total_time / total_batches * 1e3) << " ms" << std::endl;
         if(enable_backward) {
-            std::cout << "FW time per batch:  " << (fw_time / total_batches * 1e3) << " ms" << std::endl;
-            std::cout << "BW time per batch:  " << (bw_time / total_batches * 1e3) << " ms" << std::endl;
+            std::cout << "FWD time per batch:  " << (fw_time / total_batches * 1e3) << " ms" << std::endl;
+            std::cout << "BWD time per batch:  " << (bw_time / total_batches * 1e3) << " ms" << std::endl;
+            std::cout << "TOT time per batch:  " << (total_time / total_batches * 1e3) << " ms" << std::endl;
         }
     }
     catch(cl::Error const &e) {
