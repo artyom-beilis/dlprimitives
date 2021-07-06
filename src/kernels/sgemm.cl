@@ -21,6 +21,10 @@
 #define TILE_OFFSET 1
 #endif
 
+#ifndef ZORDER
+#define ZORDER 0
+#endif
+
 
 #ifndef ATRANS
 #define ATRANS 0
@@ -248,6 +252,28 @@
 #define EXTRA_DIM 1
 #endif
 
+int zorder_a(int x)
+{
+    return
+          ((x & (1<<0)) >> 0 )
+        | ((x & (1<<2)) >> 1 )
+        | ((x & (1<<4)) >> 2 )
+        | ((x & (1<<6)) >> 3 )
+        | ((x & (1<<8)) >> 4 )
+        | ((x & (1<<10)) >> 5 )
+        | ((x & (1<<12)) >> 6 )
+        | ((x & (1<<14)) >> 7 )
+        | ((x & (1<<16)) >> 8 )
+        | ((x & (1<<18)) >> 9 )
+        | ((x & (1<<20)) >> 10 )
+        | ((x & (1<<22)) >> 11 )
+        | ((x & (1<<24)) >> 12 );
+}
+int zorder_b(int x)
+{
+    return zorder_a(x>>1);
+}
+
 
 __kernel 
 #if INTEL_PLATFORM == 1
@@ -305,16 +331,37 @@ void    sgemm(    int M,int N,int K,
     #error "Invalid CONVGEMM Value"
     #endif
 #endif   
-    int row = get_global_id(DIM_M) * BLOCK_SIZE_M;
-    int col = get_global_id(DIM_N) * BLOCK_SIZE_N;
+
+#if ZORDER == 1
+    int gr_m = get_group_id(DIM_M);
+    int gr_n = get_group_id(DIM_N);
+    int gr_size_m = get_num_groups(DIM_M);
+    int gr_size_n = get_num_groups(DIM_N);
+    if(gr_size_m == gr_size_n && popcount(gr_size_m) == 1) {
+        int grs  = gr_n * gr_size_m + gr_m;
+        gr_n = zorder_a(grs);
+        gr_m = zorder_b(grs);
+    }
+#else
+    int gr_m = get_group_id(DIM_M);
+    int gr_n = get_group_id(DIM_N);
+#endif
+    int tile_row0 = gr_m*TILE_SIZE_M;
+    int tile_col0 = gr_n*TILE_SIZE_N;
+
+#if ZORDER == 1
+    if(tile_row0 >= M || tile_col0 >= N)
+        return;
+#endif        
+
+    int row = tile_row0 + get_local_id(DIM_M) * BLOCK_SIZE_M;
+    int col = tile_col0 + get_local_id(DIM_N) * BLOCK_SIZE_N;
+
 
     int lid0 = get_local_id(DIM_M);
     int lid1 = get_local_id(DIM_N);
     
     int local_tile_id = lid0 * get_local_size(DIM_N) + lid1;
-
-    int tile_row0 = get_group_id(DIM_M)*TILE_SIZE_M;
-    int tile_col0 = get_group_id(DIM_N)*TILE_SIZE_N;
 
     #define local_wg_size (BLOCKS_IN_TILE_M * BLOCKS_IN_TILE_N)
     #define load_step (TILE_SIZE_M * TILE_SIZE_K / local_wg_size)

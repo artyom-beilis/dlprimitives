@@ -8,7 +8,7 @@ namespace gpu {
     
     class StandardSGEMMBase : public GEMM {
     public:
-        StandardSGEMMBase(Context &ctx,int M,int N,int K)
+        StandardSGEMMBase(Context &ctx,int M,int N,int K,bool actual_gemm)
         {
             sep_scale_ = false;
             reduce_k_ = 1;
@@ -25,8 +25,8 @@ namespace gpu {
                 }
             }
             else {
-                if(ctx.is_amd()) {
-                    if(M >= 96 && N >= 96) {
+                if(ctx.is_amd() && !actual_gemm) {
+                    if(M >= 256 && N >= 256) {
                         tile_size_m_ = 96;
                         tile_size_n_ = 96;
                         block_size_m_ = 6;
@@ -157,9 +157,19 @@ namespace gpu {
                         int bias,
                         StandardActivations act,
                         int im2col_chan = 0) : 
-                StandardSGEMMBase(ctx,M,N,K)
+                StandardSGEMMBase(ctx,M,N,K,true)
         {
-
+            ///
+            /// on AMD lda % 1024==0 / ldb % 1024==0 wipes cache out - so we reorder 
+            //  all ops in Z-order/Morton order
+            ///
+            zorder_ = 0;
+            if(ctx.is_amd() && (M % 1024 == 0 || N % 1024 == 0)) {
+                if(M >= N && N*10 >= M)
+                    zorder_ = 1;
+                if(N >= M && M*10 >= N)
+                    zorder_ = 1;
+            }
             cl::Program const &prog = Cache::instance().get_program(ctx,"sgemm",
                                         "TILE_SIZE_M",tile_size_m_,
                                         "TILE_SIZE_N",tile_size_n_,
@@ -172,6 +182,7 @@ namespace gpu {
                                         "BTRANS",int(btrans),
                                         "IM2COL_OCHAN",im2col_chan,
                                         "REDUCE_K",reduce_k_,
+                                        "ZORDER",zorder_,
                                         "ACTIVATION",int(act));
             kernel_ = cl::Kernel(prog,"sgemm");
             bias_ = bias;
@@ -196,6 +207,7 @@ namespace gpu {
                           int size_of_c,
                           ExecutionContext const &ein)
         {
+
             ExecutionContext e;
             if(sep_scale_) {
                 scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,2));
@@ -230,8 +242,20 @@ namespace gpu {
            
             int ls0 = tile_size_m_ / block_size_m_;
             int ls1 = tile_size_n_ / block_size_n_; 
-            int gs0 = round_up_div(M,tile_size_m_) * tile_size_m_ / block_size_m_;
-            int gs1 = round_up_div(N,tile_size_n_) * tile_size_n_ / block_size_n_;
+            int gr0 = round_up_div(M,tile_size_m_);
+            int gr1 = round_up_div(N,tile_size_n_);
+
+            if(zorder_) {
+                int gr = std::max(gr0,gr1);
+                int n=1;
+                while(gr > n) {
+                    n<<=1;
+                }
+                gr0 = gr1 = n;
+            }
+            
+            int gs0 = gr0 * ls0;
+            int gs1 = gr1 * ls1;
             cl::NDRange global,local;
             if(reduce_k_ > 1) {
                 global = cl::NDRange(reduce_k_,gs0,gs1);
@@ -247,6 +271,7 @@ namespace gpu {
     private:
         cl::Kernel kernel_;
         bool bias_;
+        bool zorder_;
     };
 
 
@@ -262,7 +287,7 @@ namespace gpu {
                     int bias,
                     StandardActivations act,
                     int im2col_chan = 0) :
-                StandardSGEMMBase(ctx,M,N,K)
+                StandardSGEMMBase(ctx,M,N,K,false)
         {
             cl::Program const &prog = Cache::instance().get_program(ctx,"sgemm",
                                         "TILE_SIZE_M",tile_size_m_,

@@ -272,6 +272,7 @@ def make_inner_product():
     for inp,out in \
         [ (5,11),
           (1024,1024),
+          (4096,4096),
           (500,1000) ]:
           for bias in [True,False]:
             op = torch.nn.Linear(inp,out,bias=bias) 
@@ -303,7 +304,7 @@ def make_inner_product():
                 print(test["options"])
                 tests.append(test)
                 final_op = lambda x: mact(op(x))
-                for s in [[2,inp],[8,inp],[127,inp],[128,inp]]:
+                for s in [[2,inp],[8,inp],[16,inp],[127,inp],[128,inp]]:
                     print("- ",s)
                     tin = torch.randn(s)
                     tin.requires_grad = True
