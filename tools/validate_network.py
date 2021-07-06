@@ -49,11 +49,11 @@ def benchmark_model(model,batch,device,warm,iters,train):
             if train:
                 total_fw += tmp  - start
                 total_bw += end - tmp
-    print("Time per item  %1.3fms" %(total_time / total_items *1e3))
-    print("Time per batch %1.3fms" %(total_time / total_batches *1e3))
+    print("Time per item  %1.3f ms" %(total_time / total_items *1e3))
     if train:
-        print("Time fwd batch  %1.3fms" %(total_fw / total_batches *1e3))
-        print("Time bwd batch  %1.3fms" %(total_bw / total_batches *1e3))
+        print("Time fwd batch  %1.3f ms" %(total_fw / total_batches *1e3))
+        print("Time bwd batch  %1.3f ms" %(total_bw / total_batches *1e3))
+    print("Time per batch %1.3f ms" %(total_time / total_batches *1e3))
 
 def export_model(model,batch,path,opset,ir):
     inp = torch.randn(batch,3,224,224)
