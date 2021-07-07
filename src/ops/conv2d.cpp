@@ -190,7 +190,7 @@ namespace dlprim {
 
         if(mode_ == CalculationsMode::train) {
             if(config_.bias) {
-                bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],output_shape[2]*output_shape[3],dtype_));
+                bwd_bias_.reset(new BWBias(ctx_,output_shape,dtype_));
             }
             if(config_.activation != StandardActivations::identity)
                 activation_ = std::move(Activation::get_bwd_op(ctx_,config_.activation,in[0]));
@@ -203,7 +203,7 @@ namespace dlprim {
         else {
              size_t ws = 0;
              if(bwd_bias_.get()) {
-                 ws = bwd_bias_->workspace(config_.channels_out);
+                 ws = bwd_bias_->workspace();
              }
              ws_size_ = workspace = std::max(ws,workspace);
         }
@@ -299,11 +299,7 @@ namespace dlprim {
             activation_->reshape(out,tmp);
         }
         if(bwd_bias_) {
-            int rc = out[0][2]*out[0][3];
-            int b = out[0][0];
-            if(bwd_bias_->batch() < b || bwd_bias_->rows_columns() != rc) {
-                bwd_bias_.reset(new BWBias(ctx_,b,rc,dtype_));
-            }
+            bwd_bias_.reset(new BWBias(ctx_,out[0],dtype_));
         }
         if(use_winograd_) {
             setup_winograd_conv(in[0][2],in[0][3]);

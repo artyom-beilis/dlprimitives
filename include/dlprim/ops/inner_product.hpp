@@ -3,6 +3,7 @@
 namespace dlprim {
     namespace gpu { class GEMM; }
     namespace json { class value; }
+    namespace core { class IPForward; class IPBackwardData; class IPBackwardFilter; }
     class BWBias;
 
 	struct InnerProductConfig {
@@ -46,21 +47,16 @@ namespace dlprim {
 
 
 	protected:
-        void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);
         void forward_cpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias);
-        
-        void backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dM,float factor,ExecutionContext const &ctx);
         void backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dM,float factor);
-
-        void backward_data_gpu(Tensor &dy,Tensor &dx,Tensor &M,float factor,ExecutionContext const &ctx);
         void backward_data_cpu(Tensor &dy,Tensor &dx,Tensor &M,float factor);
 
 
 		InnerProductConfig config_;
         DataType dtype_;
-        std::unique_ptr<gpu::GEMM> gemm_;
-        std::unique_ptr<gpu::GEMM> bwd_gemm_;
-        std::unique_ptr<gpu::GEMM> bwd_weights_gemm_;
+        std::unique_ptr<core::IPForward> ip_;
+        std::unique_ptr<core::IPBackwardData> bwd_ip_;
+        std::unique_ptr<core::IPBackwardFilter> bwd_weights_ip_;
         std::unique_ptr<Operator>  activation_;
         std::unique_ptr<BWBias> bwd_bias_;
 	};

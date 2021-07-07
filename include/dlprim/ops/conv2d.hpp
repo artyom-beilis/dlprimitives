@@ -7,14 +7,7 @@ namespace dlprim {
     class BWBias;
     class Scal;
 
-	struct Convolution2DConfig {
-		int channels_in = -1;
-		int channels_out = -1;
-		int kernel[2] = {1,1};
-		int stride[2] = {1,1};
-		int dilate[2] = {1,1};
-		int pad[2] = {0,0};
-		int groups = {1};
+	struct Convolution2DConfig : public Convolution2DConfigBase {
 		bool bias = true;
 		StandardActivations activation=StandardActivations::identity;
         static Convolution2DConfig from_json(json::value const &v);

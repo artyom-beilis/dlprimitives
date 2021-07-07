@@ -144,6 +144,16 @@ namespace dlprim {
         backward_filter = 2,
         backward_data = 3
     };
+	
+    struct Convolution2DConfigBase {
+		int channels_in = -1;
+		int channels_out = -1;
+		int kernel[2] = {1,1};
+		int stride[2] = {1,1};
+		int dilate[2] = {1,1};
+		int pad[2] = {0,0};
+		int groups = 1;
+    };
 
 
 }
