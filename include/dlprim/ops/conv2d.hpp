@@ -10,6 +10,11 @@ namespace dlprim {
 
 	struct Convolution2DConfig : public Convolution2DConfigBase {
 		bool bias = true;
+        
+        std::string fwd_algo="auto";
+        std::string bwd_data_algo="auto";
+        std::string bwd_filter_algo="auto";
+
 		StandardActivations activation=StandardActivations::identity;
         static Convolution2DConfig from_json(json::value const &v);
 	};

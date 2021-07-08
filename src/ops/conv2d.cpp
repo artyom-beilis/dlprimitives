@@ -25,6 +25,9 @@ namespace dlprim {
         cfg.groups = v.get("groups",cfg.groups);
         cfg.bias = v.get("bias",cfg.bias);
         cfg.activation = utils::activation_from_json(v); 
+        cfg.fwd_algo = v.get("fwd_algo",cfg.fwd_algo);
+        cfg.bwd_data_algo = v.get("bwd_data_algo",cfg.bwd_data_algo);
+        cfg.bwd_filter_algo = v.get("bwd_filter_algo",cfg.bwd_filter_algo);
         return cfg;
     }
     
@@ -140,16 +143,19 @@ namespace dlprim {
                     ctx_,
                     cfg,
                     config_.bias,
-                    config_.activation));
+                    config_.activation,
+                    config_.fwd_algo));
 
         if(mode_ == CalculationsMode::train) {
             conv_bwd_data_ = std::move(core::Conv2DBackwardData::create(
                         ctx_,
-                        cfg));
+                        cfg,
+                        config_.bwd_data_algo));
 
             conv_bwd_filter_ = std::move(core::Conv2DBackwardFilter::create(
                         ctx_,
-                        cfg));
+                        cfg,
+                        config_.bwd_filter_algo));
 
         }
     }
@@ -486,6 +492,7 @@ namespace dlprim {
             activation_->backward(tmp,tmp,empty,workspace,e.generate_series_context(step++,steps));
         }
         if(config_.bias && parameters[1].requires_gradient) {
+            DLPRIM_CHECK(bwd_bias_->workspace() <= workspace.shape().total_size());
             bwd_bias_->backward(output[0].diff,
                                 parameters[1].diff,
                                 workspace,

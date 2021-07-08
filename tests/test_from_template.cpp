@@ -173,7 +173,7 @@ void initialize_tensors(std::vector<dp::Tensor> &tensors,std::string const &op)
         else if(op == "small_int")
             fill_small_int(t,5,1.0f);
         else if(op == "small_frac")
-            fill_small_int(t,5,0.25f);
+            fill_small_int(t,5,0.5f);
         else
             throw std::runtime_error("Unknown methods " + op);
     }
