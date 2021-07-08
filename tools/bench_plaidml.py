@@ -78,6 +78,7 @@ def get_model(path):
     plaidml.settings.prohibit_winograd=False
 
     model = onnx.load(path)
+    model.ir_version = 3
 
     rep = onnx_plaidml.backend.prepare(model)
     return rep
