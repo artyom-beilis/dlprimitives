@@ -76,6 +76,7 @@ set(DLPRIM_SRC
         src/ops/scal.cpp
         src/gemm.cpp
         src/core_ip.cpp
+        src/core_conv.cpp
         ${EXTRA_SRC}
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )

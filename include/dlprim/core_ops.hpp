@@ -67,18 +67,33 @@ namespace core {
 
 
     ///
-    /// Configuration of InnerProduct layer 
+    /// Configuration of Convoltion
     ///
     struct Conv2DSettings : public Convolution2DConfigBase {
+        Conv2DSettings(Conv2DSettings const &) = default;
+        Conv2DSettings(Convolution2DConfigBase const &v,Shape s,DataType dt) :
+            Convolution2DConfigBase(v),
+            shape(s),
+            dtype(dt)
+        {
+        }
+
         Shape shape; // input shape size, note batch is hint rather than requirement
         DataType dtype=float_data;
     };
-    
+   
+    class Conv2DBase  {
+    public:
+        virtual ~Conv2DBase() {};
+        virtual char const *algo() const = 0;
+        virtual size_t workspace() { return 0; }
+        static Shape get_output_shape(Convolution2DConfigBase const &config,Shape const &in);
+    };
     ///
     /// Perform InnerProduct/FullyConnected/Dense forward calulations, allow fusing bias and activation
     /// into same GPU kernel
     /// 
-    class Conv2DForward {
+    class Conv2DForward : public Conv2DBase {
     public:
         virtual ~Conv2DForward() {}
         virtual void enqueue(Tensor &x,Tensor &w,Tensor *bias,Tensor &y,Tensor &ws,ExecutionContext const &e) = 0;
@@ -96,11 +111,10 @@ namespace core {
                                                  std::string const &algo = std::string());
     };
 
-
     ///
     /// Perform InnerProduct/FullyConnected/Dense backward data calculations
     /// 
-    class Conv2DBackwardData {
+    class Conv2DBackwardData: public Conv2DBase  {
     public:
         virtual ~Conv2DBackwardData() {}
         virtual void enqueue(Tensor &dx,Tensor &w,Tensor &dy,Tensor &ws,float factor,ExecutionContext const &e) = 0;
@@ -110,13 +124,12 @@ namespace core {
     ///
     /// Perform Conv2D backward filter calcilations
     ///
-    class Conv2DBackwardFilter {
+    class Conv2DBackwardFilter: public Conv2DBase  {
     public:
         virtual ~Conv2DBackwardFilter() {}
         virtual void enqueue(Tensor &x,Tensor &dw,Tensor &dy,Tensor &ws,float factor,ExecutionContext const &e) = 0;
         static std::unique_ptr<Conv2DBackwardFilter> create(Context &ctx,Conv2DSettings const &config,std::string const &algo = std::string());
     };
-
 
 
     ///
@@ -142,6 +155,16 @@ namespace core {
         ///
         static std::unique_ptr<BiasBackwardFilter> create(Context &ctx,Shape const &dy_shape,DataType dt=float_data);
     };
+
+    class Scale {
+    public:
+        Scale(Context &ctx,DataType dtype=float_data);
+        void enqueue(float s,Tensor &t,ExecutionContext const &ec);
+    private:
+        cl::Kernel k_;
+    };
+
+    
 
 } // core
 } // dprim

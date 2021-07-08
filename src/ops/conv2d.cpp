@@ -7,6 +7,7 @@
 #include <dlprim/json.hpp>
 #include <dlprim/ops/bwd_bias.hpp>
 #include <dlprim/ops/activation.hpp>
+#include <dlprim/core_ops.hpp>
 #include <my_cblas.hpp>
 
 namespace dlprim {
@@ -57,105 +58,15 @@ namespace dlprim {
         DLPRIM_CHECK(dtype_==float_data);
         DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
         DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
-        out_h_ = out_w_ = -1;
-        in_h_ = in_w_ = -1;
+        out_h_ = out_w_ = 0;
+        in_h_ = in_w_ = 0;
+        bs_ = 0;
     }
     
     Convolution2D::~Convolution2D()
     {
     }
 
-    bool Convolution2D::is_depthwise_separable_conv()
-    {
-        return 
-            config_.kernel[0] == config_.kernel[1] 
-            && config_.pad[0] == config_.pad[1] 
-            && config_.dilate[0] == config_.dilate[1]
-            && config_.stride[0] == config_.stride[1]
-            && config_.groups == config_.channels_in
-            && config_.channels_in > 1
-            && config_.dilate[0] == 1
-            && config_.stride[0] == 1
-            && config_.kernel[0] % 2 == 1
-            && config_.kernel[0] / 2 == config_.pad[0];
-    }
-
-    size_t Convolution2D::setup_winograd_conv(int h,int w)
-    {
-        if(ctx_.is_cpu_context())
-            return 0;
-        {
-            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_fwd",
-                                            "ACTIVATION",int(config_.activation),
-                                            "BIAS",int(config_.bias));
-            conv_kernel_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
-            conv_ = cl::Kernel(prog,"winconv_3x3");
-        }
-        {
-            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_bwd_data");
-            conv_kernel_bwd_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
-            bw_conv_data_ = cl::Kernel(prog,"winconv_3x3_bwd_data");
-        }
-        {
-            cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"winograd_bwd_filter",
-                                                                            "IMG_H",h,"IMG_W",w);
-            bw_conv_filter_ = cl::Kernel(prog,"winconv_3x3_bwd_filter");
-        }
-        size_t res = sizeof(float)*16 * config_.channels_in * config_.channels_out;
-        return res;
-    }
-
-    bool Convolution2D::is_winograd_candidate()
-    {
-        if(!ctx_.is_amd() && !ctx_.is_nvidia())
-            return false;
-        return 
-            config_.channels_in >= 8
-            && config_.channels_out >= 8
-            && config_.kernel[0] == config_.kernel[1] 
-            && config_.pad[0] == config_.pad[1] 
-            && config_.dilate[0] == config_.dilate[1]
-            && config_.stride[0] == config_.stride[1]
-            && config_.groups == 1
-            && config_.dilate[0] == 1
-            && config_.stride[0] == 1
-            && config_.kernel[0] == 3
-            && config_.pad[0] == 1;
-    }
-
-    void Convolution2D::setup_depthwise_separable_conv(Shape const &s)
-    {
-        if(ctx_.is_cpu_context())
-            return;
-        cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"depthwise_separable_conv",
-                                    "ACTIVATION",int(config_.activation),
-                                    "BIAS",int(config_.bias),
-                                    "PATCH_ROWS",ds_patch_rows,
-                                    "PATCH_COLS",ds_patch_cols,
-                                    "KERN",config_.kernel[0],
-                                    "CHANNELS",config_.channels_in);
-        conv_ = cl::Kernel(prog,"conv");
-        bw_conv_data_ = cl::Kernel(prog,"backward_data_conv");
-
-        
-        int total = s[0] * s[2] * s[3];
-        if(total >= 256)
-            dwsc_bw_filter_wg_ = 256;
-        else if(total >= 128)
-            dwsc_bw_filter_wg_ = 128;
-        else
-            dwsc_bw_filter_wg_ = 64;
-        cl::Program const &prog2 = gpu::Cache::instance().get_program(ctx_,
-                    "depthwise_separable_bw_filter",
-                    "KERN",config_.kernel[0],
-                    "WG_SIZE",dwsc_bw_filter_wg_,
-                    "CHANNELS",config_.channels_in);
-
-        bw_conv_filter_ = cl::Kernel(prog2,"conv_bw_filter");
-
-        use_ds_conv_=true;
-    }
-    
     void Convolution2D::setup(std::vector<TensorSpecs> const &in,
                               std::vector<TensorSpecs> &out,
                               std::vector<TensorSpecs> &params,
@@ -176,14 +87,11 @@ namespace dlprim {
         Shape output_shape = get_output_shape(in_shape);
         out.assign({TensorSpecs(output_shape,dtype_)});
 
-        use_ds_conv_=false;
-        use_winograd_=false;
-
         Shape params_shape(config_.channels_out,
                            config_.channels_in / config_.groups,
                            config_.kernel[0],
                            config_.kernel[1]);
-        
+
         params.push_back(TensorSpecs(params_shape,dtype_));
         if(config_.bias) 
             params.push_back(TensorSpecs(Shape(config_.channels_out),dtype_));
@@ -197,95 +105,52 @@ namespace dlprim {
         }
 
         if(ctx_.is_cpu_context()) {
-            ws_size_ = workspace =  output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
+            ws_size_ = workspace = output_shape[2] * output_shape[3] 
+            * size_of_data_type(dtype_) * get_im2col_width();
             return;
         }
-        else {
-             size_t ws = 0;
-             if(bwd_bias_.get()) {
-                 ws = bwd_bias_->workspace();
-             }
-             ws_size_ = workspace = std::max(ws,workspace);
+        in_h_ = in[0].shape()[2];
+        in_w_ = in[0].shape()[3];
+        out_h_ = output_shape[2];
+        out_w_ = output_shape[3];
+        bs_ = in[0].shape()[0];
+
+        core::Conv2DSettings cfg(config_,in_shape,dtype_);
+
+        setup_algo(in_shape);
+
+        ws_size_ = 0;
+        if(bwd_bias_)
+            ws_size_ = bwd_bias_->workspace();
+
+        ws_size_ = std::max(ws_size_,conv_->workspace());
+
+        if(mode_ == CalculationsMode::train) {
+            ws_size_ = std::max(ws_size_,conv_bwd_data_->workspace());
+            ws_size_ = std::max(ws_size_,conv_bwd_filter_->workspace());
         }
 
-        if(mode_ != CalculationsMode::predict)
-                scal_.reset(new Scal(ctx_,dtype_));
-
-        use_ds_conv_ = is_depthwise_separable_conv();
-        use_winograd_ = is_winograd_candidate();
-        if(use_winograd_) {
-            size_t ws = setup_winograd_conv(in[0].shape()[2],in[0].shape()[3]);
-            ws_size_ = workspace = std::max(ws,workspace);
-        }
-
-        get_gemm(in[0].shape(),out[0].shape());
+        workspace = ws_size_;
     }
-    
-    void Convolution2D::get_gemm(Shape const &in,Shape const &out)
+    void Convolution2D::setup_algo(Shape const &in)
     {
-        if(out_h_ == out[2] && out_w_ == out[3] && in_h_ == in[2] && out_w_ == in[3])
-            return;
-        out_h_ = out[2];
-        out_w_ = out[3];
-        in_h_ = in[2];
-        in_w_ = in[3];
-       
-        
-        if(ctx_.is_cpu_context())
-            return;
-        
-        if(!use_ds_conv_){
-            if(!use_winograd_) {
-                int M = config_.channels_out / config_.groups;
-                int N = out_h_*out_w_ * out[0];
-                int K = get_im2col_width(); 
+        core::Conv2DSettings cfg(config_,in,dtype_);
 
-                auto gemm = gpu::GEMM::get_optimal_conv_gemm(
-                    ctx_,dtype_,GemmOpMode::forward,
-                    false,true,
-                    M,N,K,
-                    config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
-                    config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
-                    (config_.bias ? gpu::GEMM::bias_M : gpu::GEMM::no_bias),
-                    config_.activation,
-                    out_h_ * out_w_
-                );
+        conv_ = std::move(core::Conv2DForward::create(
+                    ctx_,
+                    cfg,
+                    config_.bias,
+                    config_.activation));
 
-                gemm_ = std::move(gemm);
-            }
+        if(mode_ == CalculationsMode::train) {
+            conv_bwd_data_ = std::move(core::Conv2DBackwardData::create(
+                        ctx_,
+                        cfg));
 
-            if(mode_ != CalculationsMode::predict) {
-                int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
-                int im2col_rows = out[2]*out[3]*out[0];
-                auto bw = gpu::GEMM::get_optimal_conv_gemm(
-                        ctx_,dtype_,
-                        GemmOpMode::backward_filter,
-                        false,false,
-                        config_.channels_out / config_.groups,kernel_cols,im2col_rows,
-                        config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
-                        config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
-                        gpu::GEMM::no_bias,
-                        StandardActivations::identity,
-                        out_h_ * out_w_
-                    );
-                bwd_weights_gemm_ = std::move(bw);
+            conv_bwd_filter_ = std::move(core::Conv2DBackwardFilter::create(
+                        ctx_,
+                        cfg));
 
-                auto bwd = gpu::GEMM::get_optimal_conv_gemm(
-                        ctx_,dtype_,
-                        GemmOpMode::backward_data,
-                        true,false,
-                        im2col_rows,kernel_cols,config_.channels_out / config_.groups,
-                        config_.kernel,config_.dilate,config_.pad,config_.stride,config_.groups,
-                        config_.channels_in / config_.groups,in[2],in[3],out[2],out[3],
-                        gpu::GEMM::no_bias,
-                        StandardActivations::identity,
-                        out_h_ * out_w_
-                    );
-                bwd_data_gemm_ = std::move(bwd);
-            }
-        }
-        else {
-            setup_depthwise_separable_conv(in);
         }
     }
 
@@ -301,10 +166,16 @@ namespace dlprim {
         if(bwd_bias_) {
             bwd_bias_.reset(new BWBias(ctx_,out[0],dtype_));
         }
-        if(use_winograd_) {
-            setup_winograd_conv(in[0][2],in[0][3]);
+        if(in[0][0] > bs_ || in[0][2] != in_h_ || in[0][3] != in_w_) {
+            if(ctx_.is_gpu_context())
+                setup_algo(in[0]);
+
+            bs_ = in[0][0];
+            in_h_ = in[0][2];
+            in_w_ = in[0][3];
+            out_h_ = out[0][2];
+            out_w_ = out[0][3];
         }
-        get_gemm(in[0],out[0]);
     }
     void Convolution2D::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,std::vector<Tensor> &parameters,Tensor &ws,
             ExecutionContext const &ectx)
@@ -328,135 +199,7 @@ namespace dlprim {
             forward_cpu(in[0],out[0],W,bias,ws.host_data());
         }
         else {
-            if(use_winograd_)
-                forward_winograd_gpu(in[0],out[0],W,ws,bias,ectx);
-            else
-                forward_gpu(in[0],out[0],W,bias,ectx);
-        }
-    }
-
-    int Convolution2D::get_opt_val(int x)
-    {
-        if(x <= 2)
-            return 1;
-        if(x <= 4)
-            return 2;
-        if(x <= 8)
-            return 4;
-        if(x <= 16)
-            return 8;
-        return 16;
-    }
-
-
-    
-    void Convolution2D::forward_winograd_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor &ws,Tensor *bias,ExecutionContext const &ec)
-    {
-        int B = in.shape()[0];
-        int N = config_.channels_out;
-        int C = in.shape()[1];
-        int h = in.shape()[2];
-        int w = in.shape()[3];
-
-        int p=0;
-        conv_kernel_.setArg(p++,config_.channels_out);
-        conv_kernel_.setArg(p++,config_.channels_in);
-        conv_kernel_.setArg(p++,W.device_buffer());
-        conv_kernel_.setArg(p++,int(W.device_offset()));
-        conv_kernel_.setArg(p++,ws.device_buffer());
-        conv_kernel_.setArg(p++,int(ws.device_offset()));
-
-        p=0;
-        conv_.setArg(p++,B);
-        conv_.setArg(p++,N);
-        conv_.setArg(p++,C);
-        conv_.setArg(p++,h);
-        conv_.setArg(p++,w);
-
-        conv_.setArg(p++,in.device_buffer());
-        conv_.setArg(p++,int(in.device_offset()));
-        conv_.setArg(p++,ws.device_buffer());
-        conv_.setArg(p++,int(ws.device_offset()));
-        if(bias) {
-            conv_.setArg(p++,bias->device_buffer());
-            conv_.setArg(p++,int(bias->device_offset()));
-        }
-        conv_.setArg(p++,out.device_buffer());
-        conv_.setArg(p++,int(out.device_offset()));
-        auto ec1 = ec.generate_series_context(0,2);
-        auto ec2 = ec.generate_series_context(1,2);
-
-        cl::NDRange l1(8,8);
-        cl::NDRange g1 = gpu::round_range(config_.channels_out,config_.channels_in,l1);
-        ec.queue().enqueueNDRangeKernel(conv_kernel_,cl::NullRange,g1,l1,ec.events(),ec1.event("winograd_3to4_kernel"));
-        cl::NDRange l2(256,1);
-        int tiles = ((w + 1) / 2 * (h + 1) / 2 * B + 31)/32;
-        cl::NDRange g2(tiles * 256,(N + 31) / 32);
-        ec.queue().enqueueNDRangeKernel(conv_,cl::NullRange,g2,l2,ec.events(),ec2.event("winograd_3x3_main"));
-    }
-
-    void Convolution2D::forward_gpu(Tensor &in,Tensor &out,Tensor &W,Tensor *bias,ExecutionContext const &ec)
-    {
-        cl::Buffer *bias_buffer = nullptr;
-        int bias_offset = 0;
-         if(config_.bias) {
-            bias_buffer = &bias->device_buffer();
-            bias_offset = bias->device_offset();
-        }
-        int batch = in.shape()[0];
-        int height = in.shape()[2];
-        int width = in.shape()[3];
-        
-        if(use_ds_conv_) {
-            int p=0;
-            conv_.setArg(p++,batch);
-            conv_.setArg(p++,height);
-            conv_.setArg(p++,width);
-            conv_.setArg(p++,in.device_buffer());
-            conv_.setArg(p++,int(in.device_offset()));
-            conv_.setArg(p++,W.device_buffer());
-            conv_.setArg(p++,int(W.device_offset()));
-            if(config_.bias) {
-                conv_.setArg(p++,bias->device_buffer());
-                conv_.setArg(p++,bias_offset);
-            }
-            conv_.setArg(p++,out.device_buffer());
-            conv_.setArg(p++,int(out.device_offset()));
-            
-            int gW = (width+1)/2;
-            int gH = (height+1)/2;
-
-            int lW = get_opt_val(gW);
-            int lH = get_opt_val(gH);
-            int lD = 1;
-            if(lW * lH < 64)
-                lD = 64 / (lW * lH);
-            
-            cl::NDRange wg(lD,lH,lW);
-            cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
-            ec.queue().enqueueNDRangeKernel(conv_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv"));
-        }
-        else {
-            int M = config_.channels_out / config_.groups;
-            int N = out.shape()[2]*out.shape()[3];
-            int K = get_im2col_width(); 
-            
-           
-            gemm_->gemm(M,N*batch,K,
-                W.device_buffer(),
-                W.device_offset(),
-                K,
-                in.device_buffer(),
-                in.device_offset(),
-                K,
-                out.device_buffer(),
-                out.device_offset(),
-                N,
-                bias_buffer,
-                bias_offset,
-                0.0f,
-                out.shape().total_size(),
-                ec);
+            conv_->enqueue(in[0],W,bias,out[0],ws,ectx);
         }
     }
 
@@ -657,182 +400,6 @@ namespace dlprim {
         scale_cpu(dK,factor);
         fwd_bwd_cpu(GemmOpMode::backward_filter,x,dy,dK,nullptr,ws.host_data());
     }
-    void Convolution2D::backward_data_gpu(Tensor &dy,Tensor &K,Tensor &dx,Tensor &ws,float factor,ExecutionContext const &ec)
-    {
-        if(use_ds_conv_ || use_winograd_) {
-            ExecutionContext ec1 = ec.generate_series_context(0,2 + use_winograd_);
-            scal_->scale(factor,dx,ec1);
-            if(use_winograd_) {
-                int B = dx.shape()[0];
-                int N = config_.channels_out;
-                int C = dx.shape()[1];
-                int h = dx.shape()[2];
-                int w = dx.shape()[3];
-
-                int p=0;
-                conv_kernel_bwd_.setArg(p++,config_.channels_out);
-                conv_kernel_bwd_.setArg(p++,config_.channels_in);
-                conv_kernel_bwd_.setArg(p++,K.device_buffer());
-                conv_kernel_bwd_.setArg(p++,int(K.device_offset()));
-                conv_kernel_bwd_.setArg(p++,ws.device_buffer());
-                conv_kernel_bwd_.setArg(p++,int(ws.device_offset()));
-
-                p=0;
-                bw_conv_data_.setArg(p++,B);
-                bw_conv_data_.setArg(p++,N);
-                bw_conv_data_.setArg(p++,C);
-                bw_conv_data_.setArg(p++,h);
-                bw_conv_data_.setArg(p++,w);
-
-                bw_conv_data_.setArg(p++,dx.device_buffer());
-                bw_conv_data_.setArg(p++,int(dx.device_offset()));
-                bw_conv_data_.setArg(p++,ws.device_buffer());
-                bw_conv_data_.setArg(p++,int(ws.device_offset()));
-                bw_conv_data_.setArg(p++,dy.device_buffer());
-                bw_conv_data_.setArg(p++,int(dy.device_offset()));
-                auto ec2 = ec.generate_series_context(1,3);
-                auto ec3 = ec.generate_series_context(2,3);
-
-                cl::NDRange l1(8,8);
-                cl::NDRange g1 = gpu::round_range(config_.channels_out,config_.channels_in,l1);
-                ec.queue().enqueueNDRangeKernel(conv_kernel_bwd_,cl::NullRange,g1,l1,ec2.events(),ec2.event("winograd_3to4_kernel"));
-                cl::NDRange l2(256,1);
-                int tiles = ((w + 1) / 2 * (h + 1) / 2 * B + 31)/32;
-                cl::NDRange g2(tiles * 256,(C + 31) / 32);
-                ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,g2,l2,ec.events(),ec2.event("winograd_3x3_main_bwd"));
-            }
-            else { // use_ds_conv_
-                ExecutionContext ec2 = ec.generate_series_context(1,2);
-                int batch = dx.shape()[0];
-                int height = dx.shape()[2];
-                int width = dx.shape()[3];
-                int p=0;
-                bw_conv_data_.setArg(p++,batch);
-                bw_conv_data_.setArg(p++,height);
-                bw_conv_data_.setArg(p++,width);
-                bw_conv_data_.setArg(p++,dx.device_buffer());
-                bw_conv_data_.setArg(p++,int(dx.device_offset()));
-                bw_conv_data_.setArg(p++,K.device_buffer());
-                bw_conv_data_.setArg(p++,int(K.device_offset()));
-                bw_conv_data_.setArg(p++,dy.device_buffer());
-                bw_conv_data_.setArg(p++,int(dy.device_offset()));
-                
-                int gW = (width+1)/2;
-                int gH = (height+1)/2;
-
-                int lW = get_opt_val(gW);
-                int lH = get_opt_val(gH);
-                int lD = 1;
-                if(lW * lH < 64)
-                    lD = 64 / (lW * lH);
-                
-                cl::NDRange wg(lD,lH,lW);
-                cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
-                ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec2.events(),ec2.event("sep_conv_bw_data"));
-            }
-            return;
-        }
-
-        int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
-        int im2col_rows = dy.shape()[2]*dy.shape()[3]*dy.shape()[0];
-        bwd_data_gemm_->gemm(
-            im2col_rows,
-            kernel_cols,
-            config_.channels_out / config_.groups,
-            dy.device_buffer(),
-            dy.device_offset(),
-            im2col_rows,
-            K.device_buffer(),
-            K.device_offset(),
-            kernel_cols,
-            dx.device_buffer(),
-            dx.device_offset(),
-            kernel_cols,
-            nullptr,  // no bias for BW
-            0,
-            factor,
-            dx.shape().total_size(),
-            ec);
-    }
-
-    void Convolution2D::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dK,float factor,ExecutionContext const &ec)
-    {
-        int winograd_work_items = (config_.channels_in / 32) * (config_.channels_out / 32) * 256;
-        if(use_winograd_) {
-            bool reduce_k = winograd_work_items < ctx_.estimated_core_count();
-            int B = x.shape()[0];
-            int N = config_.channels_out;
-            int C = config_.channels_in;
-            int p=0;
-            bw_conv_filter_.setArg(p++,B);
-            bw_conv_filter_.setArg(p++,N);
-            bw_conv_filter_.setArg(p++,C);
-            bw_conv_filter_.setArg(p++,x.device_buffer());
-            bw_conv_filter_.setArg(p++,int(x.device_offset()));
-            bw_conv_filter_.setArg(p++,dK.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dK.device_offset()));
-            bw_conv_filter_.setArg(p++,dy.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dy.device_offset()));
-            bw_conv_filter_.setArg(p++,factor);
-            
-            cl::NDRange wg(256,1);
-            int g1 = 256 * ((C+31)/32);
-            int g2 = (N+31)/32;
-            cl::NDRange gr(g1,g2,reduce_k ? 8 : 1);
-            if(reduce_k) {
-                ExecutionContext ec1 = ec.generate_series_context(0,2);
-                ExecutionContext ec2 = ec.generate_series_context(1,2);
-                scal_->scale(factor,dK,ec1);
-                ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec2.events(),ec2.event("winograd_bwd_filter"));
-            }
-            else {
-                ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec.events(),ec.event("winograd_bwd_filter"));
-            }
-            return;
-        }
-        else if(use_ds_conv_) {
-            int kitems = dK.shape().total_size();
-            int batch = x.shape()[0];
-            int height = x.shape()[2];
-            int width = x.shape()[3];
-            int p=0;
-            bw_conv_filter_.setArg(p++,batch);
-            bw_conv_filter_.setArg(p++,height);
-            bw_conv_filter_.setArg(p++,width);
-            bw_conv_filter_.setArg(p++,x.device_buffer());
-            bw_conv_filter_.setArg(p++,int(x.device_offset()));
-            bw_conv_filter_.setArg(p++,dK.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dK.device_offset()));
-            bw_conv_filter_.setArg(p++,dy.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dy.device_offset()));
-            bw_conv_filter_.setArg(p++,factor);
-            
-            cl::NDRange wg(dwsc_bw_filter_wg_,1);
-            cl::NDRange gr(dwsc_bw_filter_wg_,kitems);
-            ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv_bw_filter"));
-            return;
-        }
-        int kernel_cols = config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
-        int im2col_rows = dy.shape()[2]*dy.shape()[3]*dy.shape()[0];
-        bwd_weights_gemm_->gemm(
-            config_.channels_out / config_.groups,  // M
-            kernel_cols,                            // N
-            im2col_rows,                            // K
-            dy.device_buffer(),
-            dy.device_offset(),
-            im2col_rows,
-            x.device_buffer(),
-            x.device_offset(),
-            kernel_cols,
-            dK.device_buffer(),
-            dK.device_offset(),
-            kernel_cols,
-            nullptr,  // no bias for BW
-            0,
-            factor,
-            dK.shape().total_size(),
-            ec);
-    }
 
     void Convolution2D::fwd_bwd_cpu(GemmOpMode mode,Tensor &in,Tensor &out,Tensor &W,Tensor *bias_tensor,void *ws)
     {
@@ -907,8 +474,8 @@ namespace dlprim {
                                  Tensor &workspace,
                                  ExecutionContext const &e)
     {
-        int steps =     2*int(input[0].requires_gradient) 
-                        + 2*int(parameters[0].requires_gradient)
+        int steps =     int(input[0].requires_gradient) 
+                        + int(parameters[0].requires_gradient)
                         + int(config_.bias && parameters[1].requires_gradient)
                         + int(config_.activation != StandardActivations::identity);
         int step = 0;
@@ -926,23 +493,24 @@ namespace dlprim {
                                 e.generate_series_context(step++,steps));
         }
         if(parameters[0].requires_gradient) {
-            auto ec1 = e.generate_series_context(step++,steps);
-            auto ec2 = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
-                                    parameters[0].accumulate_gradient,ec2);
+                auto ec = e.generate_series_context(step++,steps);
+                conv_bwd_filter_->enqueue(input[0].data,parameters[0].diff,output[0].diff,
+                                          workspace,
+                                          parameters[0].accumulate_gradient,ec);
             }
             else {
                 backward_filter_cpu(output[0].diff,input[0].data,parameters[0].diff,workspace,
                                     parameters[0].accumulate_gradient);
             }
         }
+
         if(input[0].requires_gradient) {
-            auto ec1 = e.generate_series_context(step++,steps);
-            auto ec2 = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                backward_data_gpu(output[0].diff,parameters[0].data,input[0].diff,workspace,
-                                    input[0].accumulate_gradient,ec2);
+                auto ec = e.generate_series_context(step++,steps);
+                conv_bwd_data_->enqueue(input[0].diff,parameters[0].data,output[0].diff,
+                                        workspace,
+                                        input[0].accumulate_gradient,ec);
             }
             else {
                 backward_data_cpu(output[0].diff,parameters[0].data,input[0].diff,workspace,
