@@ -63,8 +63,8 @@ def benchmark_model(model,batch,warm,iters):
             total_time += end-start
             total_items += batch
             total_batches += 1
-    print("Time per item  %1.3fms" %(total_time / total_items *1e3))
-    print("Time per batch %1.3fms" %(total_time / total_batches *1e3))
+    print("Time per item  %1.3f ms" %(total_time / total_items *1e3))
+    print("Time per batch %1.3f ms" %(total_time / total_batches *1e3))
 
 
 def get_config():

@@ -330,7 +330,16 @@ def _at(x,n):
         return x[n]
     return x
 
-def make_conv2d():
+def make_conv2d_gemm():
+    return make_conv2d(algo="gemm")
+
+def make_conv2d_win():
+    return make_conv2d(algo="winograd")
+
+def make_conv2d_dsc():
+    return make_conv2d(algo="depthwise_separable")
+
+def make_conv2d(algo=None):
     report = {
         "operator" : "Convolution2D",
         "tests" : []
@@ -382,6 +391,15 @@ def make_conv2d():
             "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
             "cases": cases
         }
+        if algo is not None:
+            test['options'].update(
+                {
+                    "fwd_algo" : algo,
+                    "bwd_data_algo" : algo,
+                    "bwd_filter_algo" : algo
+
+                })
+
         if np.prod(params[0].shape) < 1000:
             pred_param=True
             test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
@@ -433,6 +451,9 @@ if __name__ == "__main__":
         "global_pooling" : make_global_pooling,
         "inner_product" : make_inner_product,
         "conv2d" : make_conv2d,
+        "conv2d_gemm" : make_conv2d_gemm,
+        "conv2d_win" : make_conv2d_win,
+        "conv2d_dsc" : make_conv2d_dsc,
         "activation" : make_activation,
     }
     parse = argparse.ArgumentParser()

@@ -3,7 +3,7 @@
 #include <dlprim/ops/activation.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
-#include <dlprim/gpu/gemm.hpp>
+#include <dlprim/core_ops.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
 #include <my_cblas.hpp>
@@ -55,8 +55,8 @@ namespace dlprim {
 
         if(mode_ != CalculationsMode::predict) { 
             if(config_.bias) {
-                bwd_bias_.reset(new BWBias(ctx_,in[0].shape()[0],1,dtype_));
-                workspace = bwd_bias_->workspace(config_.outputs);
+                bwd_bias_.reset(new BWBias(ctx_,out[0].shape(),dtype_));
+                workspace = bwd_bias_->workspace();
             }
             
             if(config_.activation != StandardActivations::identity) {
@@ -76,30 +76,19 @@ namespace dlprim {
             return;
         }
         
-        gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
-            ctx_,dtype_,false,true,
-            batch,config_.outputs,config_.inputs,
-            (config_.bias ? gpu::GEMM::bias_N : gpu::GEMM::no_bias),
-            config_.activation            
-        ));
+        core::IPSettings cfg;
+        cfg.inputs = config_.inputs;
+        cfg.outputs = config_.outputs;
+        cfg.dtype = dtype_;
+        cfg.optimal_batch_size = batch;
+
+        ip_ = std::move(core::IPForward::create(ctx_,cfg,config_.bias,config_.activation));
        
         if(mode_ == CalculationsMode::predict)
             return;
 
-        bwd_gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
-            ctx_,dtype_,false,false,
-            batch,config_.inputs,config_.outputs,
-            gpu::GEMM::no_bias,
-            StandardActivations::identity            
-        ));
-
-        bwd_weights_gemm_ = std::move(gpu::GEMM::get_optimal_gemm(
-            ctx_,dtype_,true,false,
-            config_.outputs,config_.inputs,batch,
-            gpu::GEMM::no_bias,
-            StandardActivations::identity            
-        ));
-
+        bwd_ip_ = std::move(core::IPBackwardData::create(ctx_,cfg));
+        bwd_weights_ip_ = std::move(core::IPBackwardFilter::create(ctx_,cfg));
     }
 
     void InnerProduct::reshape(std::vector<Shape> const &in,
@@ -109,8 +98,8 @@ namespace dlprim {
         DLPRIM_CHECK(in[0].size() >= 2);
         DLPRIM_CHECK(int(in[0].size_no_batch()) == config_.inputs);
         out.assign({Shape(in[0][0],config_.outputs)});
-        if(mode_ != CalculationsMode::predict && config_.bias && size_t(bwd_bias_->batch()) < in[0][0]) {
-            bwd_bias_.reset(new BWBias(ctx_,in[0][0],1,dtype_));
+        if(mode_ != CalculationsMode::predict && config_.bias) {
+            bwd_bias_.reset(new BWBias(ctx_,out[0],dtype_));
         }
     }
 
@@ -135,29 +124,7 @@ namespace dlprim {
         if(ctx_.is_cpu_context())
             forward_cpu(in[0],out[0],M,bias);
         else
-            forward_gpu(in[0],out[0],M,bias,ectx);
-    }
-
-    void InnerProduct::forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx)
-    {
-        int batch = in.shape()[0];
-
-        int bias_offset = 0;
-        cl::Buffer *bias_buffer = nullptr;
-        
-        if(config_.bias) {
-            DLPRIM_CHECK(bias);
-            bias_buffer = &bias->device_buffer();
-            bias_offset = bias->device_offset();
-        }
-        
-        gemm_->gemm(batch,config_.outputs,config_.inputs,
-                    in.device_buffer(),in.device_offset(),config_.inputs,
-                    M.device_buffer(),M.device_offset(),config_.inputs,
-                    out.device_buffer(),out.device_offset(),config_.outputs,
-                    bias_buffer,bias_offset,0.0f,
-                    out.shape().total_size(),
-                    ctx);
+            ip_->enqueue(in[0],M,bias,out[0],ectx);
     }
 
     void InnerProduct::forward_cpu(Tensor &in,Tensor &out,Tensor &mat,Tensor *bias)
@@ -216,8 +183,7 @@ namespace dlprim {
         if(parameters[0].requires_gradient) {
             auto ec = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                backward_filter_gpu(output[0].diff,input[0].data,parameters[0].diff,
-                                    parameters[0].accumulate_gradient,ec);
+                bwd_weights_ip_->enqueue(input[0].data,parameters[0].diff,output[0].diff,parameters[0].accumulate_gradient,ec);
             }
             else {
                 backward_filter_cpu(output[0].diff,input[0].data,parameters[0].diff,
@@ -227,8 +193,7 @@ namespace dlprim {
         if(input[0].requires_gradient) {
             auto ec = e.generate_series_context(step++,steps);
             if(!ctx_.is_cpu_context()) {
-                backward_data_gpu(output[0].diff,input[0].diff,parameters[0].data,
-                                    input[0].accumulate_gradient,ec);
+                bwd_ip_->enqueue(input[0].diff,parameters[0].data,output[0].diff,input[0].accumulate_gradient,ec);
             }
             else {
                 backward_data_cpu(output[0].diff,input[0].diff,parameters[0].data,
@@ -238,24 +203,6 @@ namespace dlprim {
 
     }
 
-    void InnerProduct::backward_filter_gpu(Tensor &dy,Tensor &x,Tensor &dM,float factor,ExecutionContext const &ec)
-    {
-        bwd_weights_gemm_->gemm(config_.outputs,config_.inputs,dy.shape()[0],
-                                dy.device_buffer(),
-                                dy.device_offset(),
-                                config_.outputs,
-                                x.device_buffer(),
-                                x.device_offset(),
-                                config_.inputs,
-                                dM.device_buffer(),
-                                dM.device_offset(),
-                                dM.shape()[1],
-                                nullptr,0,
-                                factor,
-                                dM.shape().total_size(),
-                                ec);
-
-    }
     void InnerProduct::backward_filter_cpu(Tensor &dy,Tensor &x,Tensor &dM,float factor)
     {
         cblas_sgemm(CblasRowMajor,CblasTrans,CblasNoTrans,
@@ -268,24 +215,6 @@ namespace dlprim {
                     factor,
                     dM.data<float>(),
                     dM.shape()[1]);
-    }
-    void InnerProduct::backward_data_gpu(Tensor &dy,Tensor &dx,Tensor &M,float factor,ExecutionContext const &ec)
-    {
-        bwd_gemm_->gemm(dy.shape()[0],config_.inputs,config_.outputs,
-                        dy.device_buffer(),
-                        dy.device_offset(),
-                        config_.outputs,
-                        M.device_buffer(),
-                        M.device_offset(),
-                        M.shape()[1],
-                        dx.device_buffer(),
-                        dx.device_offset(),
-                        config_.inputs,
-                        nullptr,0,
-                        factor,
-                        dx.shape().total_size(),
-                        ec);
-
     }
     void InnerProduct::backward_data_cpu(Tensor &dy,Tensor &dx,Tensor &M,float factor)
     {
