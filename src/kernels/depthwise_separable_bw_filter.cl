@@ -1,6 +1,9 @@
 #include "defs.h"
 #include "reduce.h"
 
+#ifndef SECOND_REDUCE_SIZE
+#define SECOND_REDUCE_SIZE 1
+#endif
 
 __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
@@ -8,8 +11,11 @@ void conv_bw_filter(
           int batch,int height,int width,
           __global float const *input,int input_offset,
           __global float *kern,int kernel_offset,
-          __global float const *output,int output_offset,
-          float factor)
+          __global float const *output,int output_offset
+#if SECOND_REDUCE_SIZE == 1
+          ,float factor
+#endif          
+          )
 {
     input   += input_offset;
     output  += output_offset;
@@ -29,8 +35,9 @@ void conv_bw_filter(
     output += d * (width * height);
 
     int items = batch * (width * height);
-    int items_per_wg = (items + WG_SIZE - 1) / WG_SIZE;
-    int my_start = items_per_wg * get_local_id(0);
+    const int wg_size2 = WG_SIZE * SECOND_REDUCE_SIZE;
+    int items_per_wg = (items + wg_size2 - 1) / wg_size2;
+    int my_start = items_per_wg * get_global_id(0); // it is same as local id for 1stage reduce
     int my_end   = min(my_start + items_per_wg,items);
 
     float sum = 0;
@@ -64,12 +71,42 @@ void conv_bw_filter(
     my_work_group_reduce_add(sum);
 
     if(get_local_id(0) == 0) {
+        #if SECOND_REDUCE_SIZE == 1
         if(factor == 0)
             kern[k] = sum;
         else
             kern[k] = mad(kern[k],factor,sum);
+        #else
+            #define STRIDE (KERN * KERN * CHANNELS)
+            kern[k + STRIDE * get_group_id(0)] = sum;
+        #endif
     }
 
 }
 
+#if SECOND_REDUCE_SIZE > 1
+__kernel
+__attribute__((reqd_work_group_size(SECOND_REDUCE_SIZE,1,1)))
+void reduce(__global float const * restrict partial_values,int partial_values_offset,__global float * restrict sums,int sums_offset,float factor)
+{
+    sums += sums_offset;
+    partial_values += partial_values_offset;
+    int k = get_global_id(1);
+    if(k > KERN * KERN * CHANNELS)
+        return;
+    
+    REDUCE_PREPARE(SECOND_REDUCE_SIZE,float);
 
+    float val = partial_values[k + get_local_id(0) * STRIDE];
+
+    my_work_group_reduce_add(val);
+
+    if(get_local_id(0) == 0) {
+        if(factor == 0)
+            sums[k] = val;
+        else
+            sums[k] = mad(sums[k],factor,val);
+    }    
+}
+
+#endif

@@ -552,25 +552,48 @@ namespace core {
             return "winograd";
         }
 
+        virtual size_t workspace()
+        {
+            return config_.kernel[0] * config_.kernel[1] * config_.channels_in * second_reduce_ * sizeof(float);
+        }
+
         Conv2DBackwardFilterDepthwiseSeparable(Context &ctx,Conv2DSettings const &config) : 
             config_(config)
         {
             int total = config.shape[0] * config.shape[2] * config.shape[3];
-            if(total >= 256)
+            int second_size = (total + 255) / 256;
+            if(second_size < 64) {
+                if(total >= 256)
+                    dwsc_bw_filter_wg_ = 256;
+                else if(total >= 128)
+                    dwsc_bw_filter_wg_ = 128;
+                else
+                    dwsc_bw_filter_wg_ = 64;
+                second_reduce_ = 1;
+            }
+            else {
                 dwsc_bw_filter_wg_ = 256;
-            else if(total >= 128)
-                dwsc_bw_filter_wg_ = 128;
-            else
-                dwsc_bw_filter_wg_ = 64;
+                if(second_size >= 256)
+                    second_reduce_ = 256;
+                else if(second_size >= 128)
+                    second_reduce_ = 128;
+                else
+                    second_reduce_ = 64;
+                
+            }
+            
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx,
                         "depthwise_separable_bw_filter",
                         "KERN",config_.kernel[0],
                         "WG_SIZE",dwsc_bw_filter_wg_,
+                        "SECOND_REDUCE_SIZE",second_reduce_,
                         "CHANNELS",config_.channels_in);
 
             bw_conv_filter_ = cl::Kernel(prog,"conv_bw_filter");
+            if(second_reduce_ > 1)
+                reduce_ = cl::Kernel(prog,"reduce");
         }
-        virtual void enqueue(Tensor &x,Tensor &dK,Tensor &dy,Tensor &,float factor,ExecutionContext const &ec) 
+        virtual void enqueue(Tensor &x,Tensor &dK,Tensor &dy,Tensor &ws,float factor,ExecutionContext const &ec) 
         {
             int kitems = dK.shape().total_size();
             int batch = x.shape()[0];
@@ -582,20 +605,50 @@ namespace core {
             bw_conv_filter_.setArg(p++,width);
             bw_conv_filter_.setArg(p++,x.device_buffer());
             bw_conv_filter_.setArg(p++,int(x.device_offset()));
-            bw_conv_filter_.setArg(p++,dK.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dK.device_offset()));
+            if(second_reduce_ == 1) {
+               bw_conv_filter_.setArg(p++,dK.device_buffer());
+               bw_conv_filter_.setArg(p++,int(dK.device_offset()));
+            }
+            else {
+               bw_conv_filter_.setArg(p++,ws.device_buffer());
+               bw_conv_filter_.setArg(p++,int(ws.device_offset())/4);
+            }
             bw_conv_filter_.setArg(p++,dy.device_buffer());
             bw_conv_filter_.setArg(p++,int(dy.device_offset()));
-            bw_conv_filter_.setArg(p++,factor);
+            if(second_reduce_ == 1)
+               bw_conv_filter_.setArg(p++,factor);
             
             cl::NDRange wg(dwsc_bw_filter_wg_,1);
-            cl::NDRange gr(dwsc_bw_filter_wg_,kitems);
-            ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv_bw_filter"));
+            cl::NDRange gr(dwsc_bw_filter_wg_ * second_reduce_,kitems);
+
+            if(second_reduce_ == 1) {
+                ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv_bw_filter"));
+            }
+            else  {
+                auto ec1 = ec.generate_series_context(0,2);
+                auto ec2 = ec.generate_series_context(1,2);
+                ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec1.events(),ec1.event("sep_conv_bw_filter"));
+                p=0;
+                int reduce_items = dK.shape().total_size();
+                reduce_.setArg(p++,ws.device_buffer());
+                reduce_.setArg(p++,int(ws.device_offset()) / 4);
+                reduce_.setArg(p++,dK.device_buffer());
+                reduce_.setArg(p++,int(dK.device_offset()));
+                reduce_.setArg(p++,factor);
+                ec.queue().enqueueNDRangeKernel(reduce_,
+                            cl::NullRange,
+                            cl::NDRange(second_reduce_,reduce_items),
+                            cl::NDRange(second_reduce_,1),
+                            ec2.events(),ec2.event("sep_conv_bw_filter_reduce"));
+
+            }
         }
     private:
         Conv2DSettings config_;
         cl::Kernel bw_conv_filter_;
+        cl::Kernel reduce_;
         int dwsc_bw_filter_wg_;
+        int second_reduce_;
     };
 
 
