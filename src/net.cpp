@@ -391,7 +391,7 @@ namespace dlprim {
                 connections_[i].parameters,
                 workspace_,
                 ec);
-            if(sync && ctx_.is_gpu_context())
+            if(sync && ctx_.is_opencl_context())
                 e.queue().finish();
         }
     }
@@ -408,7 +408,7 @@ namespace dlprim {
                 connections_[i].param_grad,
                 workspace_,
                 ec);
-            if(sync && ctx_.is_gpu_context())
+            if(sync && ctx_.is_opencl_context())
                 e.queue().finish();
         }
     }

@@ -16,7 +16,7 @@ namespace dlprim {
                 ctx_(ctx),
                 scal_(ctx,dtype)
             {
-                if(ctx_.is_gpu_context()) {
+                if(ctx_.is_opencl_context()) {
                     cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"adam");
                     adam_ = cl::Kernel(prog,"adam");
                 }

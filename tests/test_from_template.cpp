@@ -301,15 +301,15 @@ int main(int argc,char **argv)
                     initialize_tensors(in_tensors,rnd);
                     ref_op->forward(in_tensors,ref_tensors,ref_params,ref_ws_tensor,cpu_e);
                 }
-                if(ctx.is_gpu_context()) {
+                if(ctx.is_opencl_context()) {
                     for(dp::Tensor &tensor : in_tensors)
                         tensor.to_device(e,false);
                 }
                 op->forward(in_tensors,out_tensors,params,res_ws_tensor,e);
-                if(ctx.is_gpu_context()) {
+                if(ctx.is_opencl_context()) {
                     for(dp::Tensor &tensor : out_tensors)
                         tensor.to_host(e,false);
-                    if(ctx.is_gpu_context())    
+                    if(ctx.is_opencl_context())    
                         e.queue().finish();
                 }
                 double eps = cases[i].get<double>("eps",1e-5);
@@ -337,7 +337,7 @@ int main(int argc,char **argv)
                         ref_op->backward(a,b,c,ref_ws_tensor,cpu_e);
                     }
                     for(int accum = 0;accum<2;accum++) {
-                        if(ctx.is_gpu_context()) {
+                        if(ctx.is_opencl_context()) {
                             for(dp::Tensor &tensor : out_diffs)
                                 tensor.to_device(e,false);
                         }
@@ -347,12 +347,12 @@ int main(int argc,char **argv)
                             auto c = join_grad(params,param_diffs,accum * 0.5f);
                             op->backward(a,b,c,res_ws_tensor,e);
                         }
-                        if(ctx.is_gpu_context()) {
+                        if(ctx.is_opencl_context()) {
                             for(dp::Tensor &tensor : in_diffs)
                                 tensor.to_host(e,false);
                             for(dp::Tensor &tensor : param_diffs)
                                 tensor.to_host(e,false);
-                            if(ctx.is_gpu_context())    
+                            if(ctx.is_opencl_context())    
                                 e.queue().finish();
                         }
                         compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter");

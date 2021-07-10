@@ -19,11 +19,11 @@ namespace dlprim {
         if(!ss || demim != ':' || !ss.eof()) {
             throw ValidationError("Invalid device identification expecting one of `cpu` or `paltform_no:device_no`");
         }
-        type_ = gpu;
+        type_ = ocl;
         select_opencl_device(p,d);
     }
 
-    Context::Context(DeviceType dt,int platform,int device) :
+    Context::Context(ContextType dt,int platform,int device) :
         type_(dt)
     {
         if(dt == cpu)
@@ -119,7 +119,7 @@ namespace dlprim {
         platform_(p),
         device_(d),
         context_(c),
-        type_(Context::gpu)
+        type_(Context::ocl)
     {
     }
 }

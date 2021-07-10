@@ -173,7 +173,7 @@ namespace dlprim {
             bwd_bias_.reset(new BWBias(ctx_,out[0],dtype_));
         }
         if(in[0][0] > bs_ || in[0][2] != in_h_ || in[0][3] != in_w_) {
-            if(ctx_.is_gpu_context())
+            if(ctx_.is_opencl_context())
                 setup_algo(in[0]);
 
             bs_ = in[0][0];
