@@ -4,17 +4,21 @@
 #include <memory>
 namespace dlprim {
     
+    ///
+    /// Definition of Tensor without actual memory/object
+    ///
     class TensorSpecs {
     public:
-        TensorSpecs(Shape const &s=Shape(),DataType d=float_data) :
+        TensorSpecs(Shape const &s=Shape(),DataType d=float_data,bool trainable = true) :
             shape_(s),
             dtype_(d)
         {
+            is_trainable_ = trainable && is_floating_point_data_type(d);
         }
         
         bool operator==(TensorSpecs const &other) const
         {
-            return shape_ == other.shape_ && dtype_ == other.dtype_;
+            return shape_ == other.shape_ && dtype_ == other.dtype_ && is_trainable_ == other.is_trainable_;
         }
         
         bool operator!=(TensorSpecs const &other) const
@@ -25,6 +29,11 @@ namespace dlprim {
         Shape const &shape() const
         {
             return shape_;
+        }
+
+        bool is_trainable() const
+        {
+            return is_trainable_;
         }
 
         size_t memory_size() const
@@ -38,6 +47,7 @@ namespace dlprim {
     protected:
         Shape shape_;
         DataType dtype_;
+        bool is_trainable_;
     };
 
     inline std::ostream &operator<<(std::ostream &out,TensorSpecs const &ts)

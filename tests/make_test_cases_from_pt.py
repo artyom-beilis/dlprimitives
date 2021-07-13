@@ -262,6 +262,94 @@ def make_global_pooling():
                 case["use_cpu_reference"]=True
             cases.append(case)
     return report
+
+def make_batchnorm():
+    report = {
+        "operator" : "BatchNorm2D",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for features,affine,extra,cpu_as_ref in \
+                  [ (5,True,{},False),
+                    (5,False,{},False),
+                    (7,True,{},False),
+                    (7,False,{},False),
+                    (30,True,dict(momentum=0.7,eps=0.01),False),
+                    (300,True,{},True),
+                    ]:
+        op = torch.nn.BatchNorm2d(features,eps=extra.get("eps",1e-5),momentum=extra.get('momentum',0.1),affine=affine)
+        params = [op.running_mean,op.running_var] + list(op.parameters())
+        if affine:
+            with torch.no_grad():
+                params[2][:]=torch.randn(features)[:]
+                params[3][:]=torch.randn(features)[:]
+        cases=[]
+        test = {
+            "init" : "small_frac",
+            "train" : True,
+            "options" : {
+                "features": features,
+                "affine" : affine
+            },
+            "setup_tensors" : [ { "shape" : [64,features,256,256] } ],
+            "output_tensors": [ { "shape" : [64,features,256,256] } ],
+            "param_specs":  [ { "shape" : list(p.shape), "trainable" : i >= 2  } for i,p in enumerate(params) ],
+            "cases": cases
+        }
+        test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
+        test['options'].update(extra)
+        pred_param=True
+        tests.append(test)
+        set_a = [  (True, [2,features,1,1]),
+                   (True, [2,features,1,1]),
+                   (True, [2,features,1,1]),
+                   (False,[2,features,1,1]),
+                   (False,[2,features,1,1]),
+                   (True, [2,features,4,4]),
+                   (True, [2,features,4,4]),
+                   (True, [2,features,4,4]),
+                   (False,[2,features,4,4]),
+                   (False,[2,features,4,4]),
+                   (True,[5,features,5,7]),
+                   (True,[5,features,5,7]),
+                   (False,[5,features,5,7]),
+                   (False,[5,features,5,7]) ] 
+        set_b = [ (True,(17,features,35,24)),
+                  (True,(17,features,35,24)),
+                  (False,(17,features,35,24)),
+                  (True,(32,features,64,64)),
+                  (True,(32,features,64,64)),
+                  (False,(32,features,64,64)),
+                  (True,(32,features,64,64))]
+        for train,s in (set_b if cpu_as_ref else set_a):
+            if train:
+                op.train()
+            else:
+                op.eval()
+            if not cpu_as_ref:
+                tin = torch.randn(s)
+                tin.requires_grad = True
+                tout = op(tin)
+                dtout = torch.randn(tout.shape)
+                tout.backward(dtout,retain_graph=True)
+            case = dict(in_shapes = [ list(s)] ,out_shapes = [list(s)],test_mode = not train,eps=1e-4)
+            if not cpu_as_ref:
+                case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
+                case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                case["params_diffs"] = [ False if p.grad is None else p.grad.reshape((-1,)).tolist() for p in params ]
+                case["double_check"] = False
+                case["parameters_check"] = [ False if p.grad is not None else p.reshape((-1,)).tolist() for p in params ]
+                print("- ",s,features,"predefined")
+            else:
+                case["use_cpu_reference"]=True
+                print("- ",s,features,"cpu as ref")
+            cases.append(case)
+            for p in params:
+                if p.grad is not None:
+                    p.grad*=0
+    return report
     
 def make_inner_product():
     report = {
@@ -455,6 +543,7 @@ if __name__ == "__main__":
         "conv2d_win" : make_conv2d_win,
         "conv2d_dsc" : make_conv2d_dsc,
         "activation" : make_activation,
+        "batchnorm" : make_batchnorm
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))

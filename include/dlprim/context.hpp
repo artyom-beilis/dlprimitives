@@ -261,17 +261,7 @@ public:
     std::vector<cl::Event> *events() const {
         return events_;
     }
-private:
-    ExecutionContext generate_series_context_impl(size_t id,size_t total) const
-    {
-        if(total <= 1)
-            return *this;
-        if(id == 0)
-            return first_context();
-        if(id + 1 >= total)
-            return last_context();
-        return middle_context();
-    }
+
 
     ExecutionContext first_context() const
     {
@@ -293,6 +283,19 @@ private:
             return ExecutionContext();
         return ExecutionContext(queue(),event_);
     }
+
+private:
+    ExecutionContext generate_series_context_impl(size_t id,size_t total) const
+    {
+        if(total <= 1)
+            return *this;
+        if(id == 0)
+            return first_context();
+        if(id + 1 >= total)
+            return last_context();
+        return middle_context();
+    }
+
 
     std::shared_ptr<TimingData> timing_;
     cl::CommandQueue *queue_;

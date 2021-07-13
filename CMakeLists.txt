@@ -66,6 +66,7 @@ set(DLPRIM_SRC
         src/activation.cpp
         src/net.cpp
         src/ops/inner_product.cpp
+        src/ops/batch_normalization.cpp
         src/ops/conv2d.cpp
         src/ops/activation.cpp
         src/ops/softmax.cpp

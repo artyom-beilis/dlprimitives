@@ -54,6 +54,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         [](Context &ctx,json::value const &p) {
             return new Convolution2D(ctx,Convolution2DConfig::from_json(p));
         }
+    },
+    {
+        "BatchNorm2D", 
+        [](Context &ctx,json::value const &p) {
+            return new BatchNorm2D(ctx,BatchNorm2DConfig::from_json(p));
+        }
     }
 };
     

@@ -67,6 +67,11 @@ namespace dlprim {
         uint8_data    = 1 + (3 << 3),
     };
 
+    inline bool is_floating_point_data_type(DataType d)
+    {
+        return (d >> 3) < 2;
+    }
+
     template<typename T>
     struct TypeTraits;
 

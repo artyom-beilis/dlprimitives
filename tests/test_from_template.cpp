@@ -15,7 +15,8 @@ std::vector<dp::TensorSpecs> tensor_specs_from_json(dp::json::value const &v)
         std::vector<int> vsp = spec.get<std::vector<int> >("shape");
         dp::Shape sp=dp::Shape::from_range(vsp.begin(),vsp.end());
         dp::DataType dtype = dp::string_to_data_type(spec.get<std::string>("dtype","float"));
-        r.push_back(dp::TensorSpecs(sp,dtype));
+        bool is_trainable = spec.get<bool>("trainable",true);
+        r.push_back(dp::TensorSpecs(sp,dtype,is_trainable));
     }
     return r;
 }
@@ -268,6 +269,10 @@ int main(int argc,char **argv)
             std::vector<dp::TensorSpecs> param_specs;
             if(!tests[i].find("param_specs").is_undefined()) {
                 param_specs = tensor_specs_from_json(tests[i]["param_specs"]);
+                if(res_param_specs != param_specs) {
+                    for(size_t i=0;i<res_param_specs.size();i++)
+                        std::cerr << res_param_specs.at(i) << " " << param_specs.at(i)  << std::endl;
+                }
                 TEST(res_param_specs == param_specs);
                 params = make_tensors(ctx,param_specs);
                 ref_params = make_tensors(cpu_ctx,param_specs);
@@ -282,6 +287,16 @@ int main(int argc,char **argv)
             dp::json::array const &cases = tests[i]["cases"].array();
             for(size_t i=0;i<cases.size();i++) {
                 bool use_cpu_reference = cases[i].get("use_cpu_reference",false);
+                bool case_train = !cases[i].get("test_mode",!train);
+                if(case_train) {
+                    op->mode(dp::CalculationsMode::train);
+                    ref_op->mode(dp::CalculationsMode::train);
+                }
+                else {
+                    op->mode(dp::CalculationsMode::predict);
+                    ref_op->mode(dp::CalculationsMode::predict);
+                }
+
                 std::cout << "-- test for shape " << cases[i]["in_shapes"] << " fwd" << std::flush;
                 std::vector<dp::Shape> in_shapes = tensor_shapes_from_json(cases[i]["in_shapes"]);
                 std::vector<dp::Shape> out_shapes = tensor_shapes_from_json(cases[i]["out_shapes"]);
@@ -336,7 +351,8 @@ int main(int argc,char **argv)
                         auto c = join_grad(ref_params,param_ref_diffs,0);
                         ref_op->backward(a,b,c,ref_ws_tensor,cpu_e);
                     }
-                    for(int accum = 0;accum<2;accum++) {
+                    int accums = cases[i].get<bool>("double_check",true) ? 2 : 1;
+                    for(int accum = 0;accum<accums;accum++) {
                         if(ctx.is_opencl_context()) {
                             for(dp::Tensor &tensor : out_diffs)
                                 tensor.to_device(e,false);
@@ -348,6 +364,7 @@ int main(int argc,char **argv)
                             op->backward(a,b,c,res_ws_tensor,e);
                         }
                         if(ctx.is_opencl_context()) {
+
                             for(dp::Tensor &tensor : in_diffs)
                                 tensor.to_host(e,false);
                             for(dp::Tensor &tensor : param_diffs)
@@ -355,8 +372,20 @@ int main(int argc,char **argv)
                             if(ctx.is_opencl_context())    
                                 e.queue().finish();
                         }
-                        compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter");
+                        std::vector<int> params_grad,params_nograd;
+                        for(auto p : param_specs) {
+                            params_grad.push_back(p.is_trainable());
+                            params_nograd.push_back(!p.is_trainable());
+                        }
+                        compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter",params_grad);
                         compare_tensors(in_diffs,in_ref_diffs,eps,1.0 + accum * 0.5f,"data",grad);
+                        if(!cases[i].find("parameters_check").is_undefined()) {
+                            for(dp::Tensor &tensor : params)
+                                tensor.to_host(e);
+                            std::vector<dp::Tensor> parameters_check_ref = make_tensors(cpu_ctx,param_specs);
+                            copy_tensors(parameters_check_ref,cases[i]["parameters_check"]);
+                            compare_tensors(params,parameters_check_ref,eps,1.0,"params",params_nograd);
+                        }
                     }
                 }
                 std::cout << std::endl;
