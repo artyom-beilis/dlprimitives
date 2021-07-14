@@ -432,6 +432,10 @@ namespace core {
         constexpr static int ds_patch_cols = 2;
     };
 
+    constexpr int DepthwiseSeparableBase::ds_patch_rows;
+    constexpr int DepthwiseSeparableBase::ds_patch_cols;
+
+
     class Conv2DForwardDepthwiseSeparable : public Conv2DForward, public DepthwiseSeparableBase {
     public:
         virtual char const *algo() const
