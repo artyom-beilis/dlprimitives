@@ -11,12 +11,16 @@ int main(int argc,char **argv)
         std::cerr << "Usage flops PLAT:DEV" << std::endl;
         return 1;
     }
-    int N=256*1024;
+    double scale = 1;
+    if(argc >= 3) {
+        scale = atof(argv[2]);
+    }
+    int N=256*int(1024*scale);
     dp::Context ctx(argv[1]);
     auto q = ctx.make_queue();
     std::cout << "Testing on " << ctx.name() << std::endl;
     dp::Tensor t(ctx,dp::Shape(N));
-    int mem_size = 1024*1024*256;
+    long int mem_size = int(1024*scale)*1024l*256;
     dp::Tensor halfG(ctx,dp::Shape(mem_size/4));
     int float16 = ctx.check_device_extension("cl_khr_fp16");
     std::vector<float> peaks(1+float16);
