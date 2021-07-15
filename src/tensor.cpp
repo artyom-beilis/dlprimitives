@@ -25,7 +25,7 @@ namespace dlprim {
 		{
 			free();
             #ifndef DLPRIM_WINDOWS
-			p = aligned_alloc(128,size);
+            posix_memalign(&p,128,size);
             #else
             p = _aligned_malloc(size,128);
             #endif
