@@ -40,6 +40,8 @@ namespace dlprim {
         {
             return shape_.total_size() * size_of_data_type(dtype_);
         }
+
+
         DataType dtype() const
         {
             return dtype_;
@@ -81,6 +83,8 @@ namespace dlprim {
             return offset_; 
         }
         void *host_data();
+        
+        Tensor sub_tensor(size_t offset,Shape const &s,DataType d=float_data,bool trainable = true) const;
 
         template<typename T>
         T *data()
@@ -100,6 +104,7 @@ namespace dlprim {
         int offset_;
         cl::Buffer buffer_;
         size_t capacity_;
+        size_t full_capacity_;
     };
 
     struct TensorAndGradient {
