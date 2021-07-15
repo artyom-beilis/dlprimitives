@@ -120,3 +120,40 @@ void flops_v16(__global float *out)
     out[get_global_id(0)]=dot(x.lo.lo,y.lo.lo) + dot(x.lo.hi,y.lo.hi) + dot(x.hi.lo,y.hi.lo) + dot(x.hi.hi,y.hi.hi);
 
 }
+
+__kernel
+void memspeed_v1(__global int *p)
+{
+    p += get_global_id(0);
+    *p += 1;
+}
+
+__kernel
+void memspeed_v2(__global int2 *p)
+{
+    p += get_global_id(0);
+    *p += (int2)(1);
+}
+
+__kernel
+void memspeed_v4(__global int4 *p)
+{
+    p += get_global_id(0);
+    *p += (int4)(1);
+}
+
+__kernel
+void memspeed_v8(__global int8 *p)
+{
+    p += get_global_id(0);
+    *p += (int8)(1);
+}
+
+__kernel
+void memspeed_v16(__global int16 *p)
+{
+    p += get_global_id(0);
+    *p += (int16)(1);
+}
+
+
