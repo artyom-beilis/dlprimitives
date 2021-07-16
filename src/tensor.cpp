@@ -25,7 +25,11 @@ namespace dlprim {
 		{
 			free();
             #ifndef DLPRIM_WINDOWS
-            posix_memalign(&p,128,size);
+            int r = posix_memalign(&p,128,size);
+            if(r!=0) {
+                free();
+                throw std::bad_alloc();
+            }
             #else
             p = _aligned_malloc(size,128);
             #endif
@@ -46,8 +50,8 @@ namespace dlprim {
 		host_(new Tensor::HostMem()),
         cpu_tensor_(ctx.is_cpu_context()),
         offset_(0),
-        capacity_(s.total_size()),
-        full_capacity_(s.total_size())
+        capacity_(s.total_size()*size_of_data_type(d)),
+        full_capacity_(capacity_)
     {
         size_t size = memory_size();
         DLPRIM_CHECK(size > 0);
