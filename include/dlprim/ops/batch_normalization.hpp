@@ -56,6 +56,7 @@ namespace dlprim {
         std::unique_ptr<Convolution2D> conv_;
         Tensor current_mean_,current_var_;
         Tensor combined_scale_,combined_bias_;
+        size_t conv_ws_size_;
         BatchNorm2DConfig config_;
         DataType dtype_;
     };

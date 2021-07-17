@@ -53,9 +53,9 @@ namespace dlprim {
             conv_.reset(new Convolution2D(ctx_,cfg));
             conv_->mode(this->mode());
             std::vector<TensorSpecs> conv_out,conv_params;
-            size_t conv_ws = 0;
-            conv_->setup(in,conv_out,conv_params,conv_ws);
-            workspace = conv_ws + config_.features * sizeof(float);
+            conv_ws_size_ = 0;
+            conv_->setup(in,conv_out,conv_params,conv_ws_size_);
+            workspace = conv_ws_size_ + 2 * config_.features * sizeof(float);
             if(mode() != CalculationsMode::predict) {
                 current_mean_ = Tensor(ctx_,std_shape,dtype_);
                 current_var_ = Tensor(ctx_,std_shape,dtype_);
@@ -205,8 +205,12 @@ namespace dlprim {
                                     Tensor &workspace,
                                     ExecutionContext const &ctx)
         {
-            Tensor temp_diff(ctx_,Shape(config_.features));
-            Tensor temp_bias(ctx_,Shape(config_.features));
+
+            Tensor conv_ws   = workspace.sub_tensor(0,Shape(conv_ws_size_),uint8_data);
+            size_t offset_1 = conv_ws_size_;
+            size_t offset_2 = conv_ws_size_ + sizeof(float)*config_.features;
+            Tensor temp_diff = workspace.sub_tensor(offset_1,Shape(config_.features));
+            Tensor temp_bias = workspace.sub_tensor(offset_2,Shape(config_.features));
             
             TensorAndGradient s,o;
             
@@ -224,7 +228,7 @@ namespace dlprim {
             auto tmp_inp = input;
             if(mode()==CalculationsMode::train)
                 tmp_inp[0].requires_gradient = false;
-            conv_->backward(tmp_inp,output,cp, workspace,ctx);
+            conv_->backward(tmp_inp,output,cp, conv_ws,ctx);
 
             if(config_.affine && parameters[3].requires_gradient) {
                 if(ctx_.is_cpu_context()) {

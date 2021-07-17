@@ -15,18 +15,18 @@ Please note this is only work in progress - first and preliminary stages.
 
 ## Operators Features Matrix
 
-|Operator               |Features                       | Computation       |
-|-----------------------|-------------------------------|-------------------|
-|Softmax                |                               | Fwd               |
-|SoftmaxWithLoss        |                               | Fwd,Bwd           |
-|Elementwise            | ax+by, max(ax,by), ax\*y      | Fwd,Bwd           |
-|MaxPool2d              |                               | Fwd,Bwd           |
-|AvgPool2d              |                               | Fwd,Bwd           |
-|GlobalMaxPool2d        |                               | Fwd,Bwd           |
-|GlobalAvgPool2d        |                               | Fwd,Bwd           |
-|Inner Product          |                               | Fwd,Bwd           |
-|Conv2d                 |                               | Fwd,Bwd           |
-|Activation             | relu, sigmoid, tanh, relu6    | Fwd,Bwd           |
+|Operator               |Features                               | Computation       |
+|-----------------------|---------------------------------------|-------------------|
+|Softmax                |                                       | Fwd               |
+|SoftmaxWithLoss        |                                       | Fwd,Bwd           |
+|Elementwise            | ax+by, max(ax,by), ax\*y              | Fwd,Bwd           |
+|MaxPool2d              |                                       | Fwd,Bwd           |
+|AvgPool2d              |                                       | Fwd,Bwd           |
+|GlobalMaxPool2d        |                                       | Fwd,Bwd           |
+|GlobalAvgPool2d        |                                       | Fwd,Bwd           |
+|Inner Product          |                                       | Fwd,Bwd           |
+|Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
+|Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
 
 Solvers: SGD, Adam
 
