@@ -22,6 +22,27 @@ void update_sums(int N,
 
 
 __kernel
+void var_gamma_to_a(int N,float eps,
+              __global float const * var, int var_offset,
+              __global float const * gamma, int gamma_offset,
+              __global float *a,int a_offset)
+{
+    int pos = get_global_id(0);
+    if(pos >= N)
+        return;
+    var  += var_offset;
+    gamma += gamma_offset;
+    a += a_offset;
+    float scale = 1.0f / sqrt(var[pos] + eps);
+    if(gamma)
+        scale *= gamma[pos];
+    a[pos] = scale;
+}
+
+
+
+
+__kernel
 void mean_var_to_a_b(int N,float eps,
                      __global float const * mean,int mean_offset,
                      __global float const * var, int var_offset,
@@ -70,7 +91,7 @@ void combine_mean_var_with_gamma_beta(
 }
 
 __kernel
-void compute_backward_factors(int N,int M,
+void compute_backward_factors(int N,int M,float eps,
                               __global float const *mean,int mean_offset,
                               __global float const *var, int var_offset,
                               __global float const *dy_sum, int dy_sum_offset,
@@ -94,7 +115,7 @@ void compute_backward_factors(int N,int M,
     dy_sum  += dy_sum_offset;
 
     float one_by_M = 1.0f / M;
-    float sqrtsig = std::sqrt(var[i] + config_.eps);
+    float sqrtsig = std::sqrt(var[i] + eps);
     float gamma=1.0f;
     if(gamma_in)
         gamma = gamma_in[i];
@@ -121,7 +142,7 @@ void forward(int batches,int channels,int HW,
              __global float const *x,int x_offset,
              __global float *y,      int y_offset,
              __global float const *a,int a_offset,
-             __global float const *b,int b_offset
+             __global float const *b,int b_offset)
 {
     int b  = get_global_id(DIM_B);
     int f  = get_global_id(DIM_F);
@@ -133,9 +154,33 @@ void forward(int batches,int channels,int HW,
 }
 
 __kernel
+void backward_test(int batches,int channels,int HW,
+             __global float *dx,int dx_offset,
+             __global float const *dy,int dy_offset,
+             __global float const *a,int a_offset,
+             float factor)
+{
+    int b  = get_global_id(DIM_B);
+    int f  = get_global_id(DIM_F);
+    int rc = get_global_id(DIM_RC);
+    if(b >= batches || f >= channels || rc >= HW)
+        return;
+    dx+=dx_offset;
+    dy+=dy_offset;
+    a+=a_offset;
+    int pos = (b * channels + f) * HW + rc;
+    float val = dy[pos] * a[f];
+    if(factor == 0)
+        dx[pos] = val;
+    else
+        dx[pos] = dx[pos]*factor + val;
+}
+
+
+__kernel
 void backward_data(int batches,int channels,int HW,
              __global float const *x,  int x_offset,
-             __global float cosst *dy, int dy_offset,
+             __global float const *dy, int dy_offset,
              __global float const *fx, int fx_offset,
              __global float const *fdy,int fdy_offset
              __global float const *b,  int fb_offset,

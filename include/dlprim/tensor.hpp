@@ -74,16 +74,37 @@ namespace dlprim {
         
         cl::Buffer &device_buffer() 
         { 
-            DLPRIM_CHECK(!cpu_tensor_);
             return buffer_;
         }
         size_t device_offset() 
         {
-            DLPRIM_CHECK(!cpu_tensor_);
             return offset_; 
         }
         void *host_data();
         
+        ///
+        /// Create tensor on the memory of existing tensor
+        ///
+        /// \param offset - memory offset in \a d units, i.e. if new tensor has float_data and offset=2 than address offset is 8 bytes
+        /// \param s - shape of new tensor
+        /// \prarm d - new tensor type
+        /// \param trainable - mark as trainable tensor
+        ///
+        Tensor sub_tensor_target_offset(size_t offset,Shape const &s,DataType d=float_data,bool trainable = true) const
+        {
+            size_t bytes = offset * size_of_data_type(d);
+            int this_sizeof = size_of_data_type(dtype());
+            DLPRIM_CHECK(bytes % this_sizeof == 0);
+            return sub_tensor(bytes / this_sizeof,s,d,trainable);
+        }
+        ///
+        /// Create tensor on the memory of existing tensor
+        ///
+        /// \param offset - memory offset in the units of the data type of this tensor, if this tensor has type uint16_data and offset is 16 that the offset is 32 bytes
+        /// \param s - shape of new tensor
+        /// \prarm d - new tensor type
+        /// \param trainable - mark as trainable tensor
+        ///
         Tensor sub_tensor(size_t offset,Shape const &s,DataType d=float_data,bool trainable = true) const;
 
         template<typename T>
@@ -96,6 +117,12 @@ namespace dlprim {
         
         void to_device(ExecutionContext const &c,bool sync=true);
         void to_host(ExecutionContext const &c,bool sync=true);
+
+        void set_arg(cl::Kernel &k,int &pos)
+        {
+            k.setArg(pos++,device_buffer());
+            k.setArg(pos++,int(device_offset()));
+        }
 
     private:
 		struct HostMem;

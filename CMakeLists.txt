@@ -78,6 +78,7 @@ set(DLPRIM_SRC
         src/gemm.cpp
         src/core_ip.cpp
         src/core_conv.cpp
+        src/core_bn.cpp
         ${EXTRA_SRC}
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )

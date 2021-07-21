@@ -165,6 +165,7 @@ void reduce(int channels,
             #else
              x_sum[f] = sum.s0;
             x2_sum[f] = sum.s1;
+            #endif
     }    
 }
 

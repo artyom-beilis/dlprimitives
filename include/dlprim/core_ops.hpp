@@ -271,6 +271,7 @@ namespace core {
         virtual void enqueue_forward_affine(Tensor &x,Tensor &y,
                                             Tensor &gamma,Tensor &beta,
                                             Tensor &mean,Tensor &var,
+                                            float eps,
                                             Tensor &ws,ExecutionContext const &e) = 0;
 
         ///
@@ -294,6 +295,7 @@ namespace core {
                                              Tensor *dx,float fx_factor,
                                              Tensor *dgamma,float dgamma_factor,
                                              Tensor *dbeta,float dbeta_factor,
+                                             float eps,
                                              Tensor &ws,ExecutionContext const &e) = 0;
 
         ///
@@ -310,6 +312,7 @@ namespace core {
                                              Tensor &x,Tensor &dy,
                                              Tensor &mean,Tensor &var,
                                              Tensor &dx,float dx_factor,
+                                             float eps,
                                              Tensor &ws,ExecutionContext const &e) = 0;
 
         static std::unique_ptr<BatchNorm2DFwdBwd> create(Context &ctx,Shape const &s,DataType dt=float_data);
