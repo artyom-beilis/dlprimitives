@@ -11,7 +11,6 @@ namespace dlprim {
         static BatchNorm2DConfig from_json(json::value const &v);
     };
 
-    class Convolution2D;
 
     class BatchNorm2D : public Operator {
     public:
@@ -49,11 +48,18 @@ namespace dlprim {
 
 
     private:
+	    void forward_cpu(std::vector<Tensor> &input,
+                             std::vector<Tensor> &output,
+                             std::vector<Tensor> &parameters,
+                             Tensor &workspace);
         void cpu_backward_data(Tensor &x,Tensor &dx,Tensor &dy,float *mean,float *var,float *dy_sum,float *dyx_sum,float *gamma_in);
-        void get_batch_stats(Tensor &x,Tensor &mean,Tensor &var,ExecutionContext const &e);
-        void update_sums(int M,Tensor &cm,Tensor &cv,Tensor &sm,Tensor &sv,ExecutionContext const &e);
-        void compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt,ExecutionContext const &e);
-        std::unique_ptr<Convolution2D> conv_;
+        void cpu_forward_data(Tensor &x,Tensor &y,Tensor &scale,Tensor &offset);
+        void get_batch_stats(Tensor &x,Tensor &mean,Tensor &var);
+        void update_sums(int M,Tensor &cm,Tensor &cv,Tensor &sm,Tensor &sv);
+        void compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt);
+        template<bool CalcDX>
+        void cpu_backward(Tensor &xt,Tensor *dxt,Tensor &dyt,Tensor &scale,Tensor &dscale,Tensor &dbias,float dx_factor);
+        
         Tensor current_mean_,current_var_;
         Tensor combined_scale_,combined_bias_;
         size_t conv_ws_size_;

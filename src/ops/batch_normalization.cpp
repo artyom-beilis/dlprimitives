@@ -1,5 +1,4 @@
 #include <dlprim/ops/batch_normalization.hpp>
-#include <dlprim/ops/conv2d.hpp>
 #include <dlprim/json.hpp>
 #include <cmath>
 #include <my_cblas.hpp>
@@ -47,15 +46,8 @@ namespace dlprim {
                 parameters.push_back(TensorSpecs(std_shape,dtype_));
                 parameters.push_back(TensorSpecs(std_shape,dtype_));
             }
-            Convolution2DConfig cfg;
-            cfg.channels_in = cfg.channels_out = cfg.groups = config_.features;
-            cfg.bias=true;
-            conv_.reset(new Convolution2D(ctx_,cfg));
-            conv_->mode(this->mode());
-            std::vector<TensorSpecs> conv_out,conv_params;
             conv_ws_size_ = 0;
-            conv_->setup(in,conv_out,conv_params,conv_ws_size_);
-            workspace = conv_ws_size_ + 2 * config_.features * sizeof(float);
+            workspace = 2 * config_.features * sizeof(float);
             if(mode() != CalculationsMode::predict) {
                 current_mean_ = Tensor(ctx_,std_shape,dtype_);
                 current_var_ = Tensor(ctx_,std_shape,dtype_);
@@ -66,108 +58,123 @@ namespace dlprim {
         void BatchNorm2D::mode(CalculationsMode m)
         {
             Operator::mode(m);
-            if(conv_)
-                conv_->mode(m);
         }
         
         void BatchNorm2D::reshape(std::vector<Shape> const &in,
                              std::vector<Shape> &out)
         {
-            conv_->reshape(in,out);
+            out = in;
         }
-		void BatchNorm2D::forward(std::vector<Tensor> &input,
+		
+        
+        void BatchNorm2D::forward(std::vector<Tensor> &input,
                                   std::vector<Tensor> &output,
                                   std::vector<Tensor> &parameters,
                                   Tensor &workspace,
                                   ExecutionContext const &e)
         {
+            if(ctx_.is_cpu_context())
+                forward_cpu(input,output,parameters,workspace);
+            else {
+                DLPRIM_CHECK(!"Not impl");
+                //forward_gpu(input,output,parameters,workspace,e);
+            }
+        }
+
+        void BatchNorm2D::forward_cpu(std::vector<Tensor> &input,
+                                  std::vector<Tensor> &output,
+                                  std::vector<Tensor> &parameters,
+                                  Tensor &workspace)
+        {
             DLPRIM_CHECK(parameters.size() == 2u * (1 + config_.affine));
             if(mode() == CalculationsMode::train && !config_.use_global_stats) {
-                get_batch_stats(input[0],current_mean_,current_var_,e.first_context());
-                update_sums(input[0].shape().total_size() / config_.features, current_mean_,current_var_,parameters[0],parameters[1],e.middle_context());
+                get_batch_stats(input[0],current_mean_,current_var_);
+                update_sums(input[0].shape().total_size() / config_.features, current_mean_,current_var_,parameters[0],parameters[1]);
                 if(config_.affine)
-                    compute_conv_parameters(current_mean_,current_var_,&parameters.at(2),&parameters.at(3),e.middle_context());
+                    compute_conv_parameters(current_mean_,current_var_,&parameters.at(2),&parameters.at(3));
                 else
-                    compute_conv_parameters(current_mean_,current_var_,nullptr,nullptr,e.middle_context());
+                    compute_conv_parameters(current_mean_,current_var_,nullptr,nullptr);
             }
             else {
                 if(config_.affine)
-                    compute_conv_parameters(parameters.at(0),parameters.at(1),&parameters.at(2),&parameters.at(3),e.first_context());
+                    compute_conv_parameters(parameters.at(0),parameters.at(1),&parameters.at(2),&parameters.at(3));
                 else
-                    compute_conv_parameters(parameters.at(0),parameters.at(1),nullptr,nullptr,e.first_context());
+                    compute_conv_parameters(parameters.at(0),parameters.at(1),nullptr,nullptr);
             }
-            std::vector<Tensor> tmp{ combined_scale_, combined_bias_ };
-            conv_->forward(input,output,tmp,workspace,e.last_context());
+            cpu_forward_data(input[0],output[0],combined_scale_,combined_bias_);
         }
 
-        void BatchNorm2D::compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt,ExecutionContext const &e)
+        void BatchNorm2D::cpu_forward_data(Tensor &x,Tensor &y,Tensor &scale,Tensor &offset)
         {
-            if(ctx_.is_cpu_context()) {
-                float *scale = combined_scale_.data<float>();
-                float *bias  = combined_bias_.data<float>();
-                float *m = mean.data<float>();
-                float *v = var.data<float>();
-                float *a = at ? at->data<float>() : nullptr;
-                float *b = bt ? bt->data<float>() : nullptr;
-                for(int i=0;i<config_.features;i++) {
-                    float alpha = 1.0f / std::sqrt(v[i] + config_.eps);
-                    float beta  = - m[i] * alpha;
-                    if(a && b) {
-                        alpha *= a[i];
-                        beta = a[i]*beta + b[i];
-                    }
-                    scale[i] = alpha;
-                    bias[i] = beta;
-                }
-            }
-            else {
-                DLPRIM_CHECK(!"Not implemented");
-            }
-        }
-
-        void BatchNorm2D::update_sums(int M,Tensor &cm,Tensor &cv,Tensor &sm,Tensor &sv,ExecutionContext const &e)
-        {
-            if(ctx_.is_cpu_context()) {
-                cblas_sscal(config_.features,(1.0f - config_.momentum),sm.data<float>(),1);
-                cblas_saxpy(config_.features,config_.momentum,cm.data<float>(),1,sm.data<float>(),1);
-                cblas_sscal(config_.features,(1.0f - config_.momentum),sv.data<float>(),1);
-                float variance_factor = config_.momentum * M / (M - 1);
-                cblas_saxpy(config_.features,variance_factor,cv.data<float>(),1,sv.data<float>(),1);
-            }
-            else {
-                DLPRIM_CHECK(!"Not implemented");
-            }
-        }
-
-        void BatchNorm2D::get_batch_stats(Tensor &x,Tensor &mean,Tensor &var,ExecutionContext const &/*e*/)
-        {
-            if(ctx_.is_cpu_context()) {
-                float *m = mean.data<float>();
-                float *v = var.data<float>();
-                float *img = x.data<float>();
-                size_t rc_size = x.shape()[2]*x.shape()[3];
-                int M = x.shape()[0]*rc_size;
-                float factor = 1.0f / M;
+            float *xp = x.data<float>();
+            float *yp = y.data<float>();
+            float *a  = scale.data<float>();
+            float *b  = offset.data<float>();
+            int batches=x.shape()[0];
+            int rc = x.shape()[2]*x.shape()[3];
+            for(int bt=0;bt<batches;bt++) {
                 for(int f=0;f<config_.features;f++) {
-                    m[f] = 0;
-                    v[f] = 0;
-                    float s=0,s2=0;
-                    for(unsigned b=0;b<x.shape()[0];b++) {
-                        float *ptr = img + (b*config_.features + f)*rc_size;
-                        for(unsigned rc=0;rc < rc_size;rc++) {
-                            float val = *ptr++;
-                            s+= val;
-                            s2 += val*val;
-                        }
-                    }
-                    s*=factor;
-                    s2*=factor;
-                    m[f] = s;
-                    v[f] = s2 - s*s;
+                    float A=a[f];
+                    float B=b[f];
+                    for(int i=0;i<rc;i++)
+                        *yp++ = A* *xp++ + B;
                 }
             }
-            else {
-                DLPRIM_CHECK(!"Not implemented");
+        }
+
+        void BatchNorm2D::compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt)
+        {
+            float *scale = combined_scale_.data<float>();
+            float *bias  = combined_bias_.data<float>();
+            float *m = mean.data<float>();
+            float *v = var.data<float>();
+            float *a = at ? at->data<float>() : nullptr;
+            float *b = bt ? bt->data<float>() : nullptr;
+            for(int i=0;i<config_.features;i++) {
+                float alpha = 1.0f / std::sqrt(v[i] + config_.eps);
+                float beta  = - m[i] * alpha;
+                if(a && b) {
+                    alpha *= a[i];
+                    beta = a[i]*beta + b[i];
+                }
+                scale[i] = alpha;
+                bias[i] = beta;
+            }
+        }
+
+        void BatchNorm2D::update_sums(int M,Tensor &cm,Tensor &cv,Tensor &sm,Tensor &sv)
+        {
+            cblas_sscal(config_.features,(1.0f - config_.momentum),sm.data<float>(),1);
+            cblas_saxpy(config_.features,config_.momentum,cm.data<float>(),1,sm.data<float>(),1);
+            cblas_sscal(config_.features,(1.0f - config_.momentum),sv.data<float>(),1);
+            float variance_factor = config_.momentum * M / (M - 1);
+            cblas_saxpy(config_.features,variance_factor,cv.data<float>(),1,sv.data<float>(),1);
+        }
+
+        void BatchNorm2D::get_batch_stats(Tensor &x,Tensor &mean,Tensor &var)
+        {
+            float *m = mean.data<float>();
+            float *v = var.data<float>();
+            float *img = x.data<float>();
+            size_t rc_size = x.shape()[2]*x.shape()[3];
+            int M = x.shape()[0]*rc_size;
+            float factor = 1.0f / M;
+            for(int f=0;f<config_.features;f++) {
+                m[f] = 0;
+                v[f] = 0;
+                float s=0,s2=0;
+                for(unsigned b=0;b<x.shape()[0];b++) {
+                    float *ptr = img + (b*config_.features + f)*rc_size;
+                    for(unsigned rc=0;rc < rc_size;rc++) {
+                        float val = *ptr++;
+                        s+= val;
+                        s2 += val*val;
+                    }
+                }
+                s*=factor;
+                s2*=factor;
+                m[f] = s;
+                v[f] = s2 - s*s;
             }
         }
 
@@ -199,6 +206,44 @@ namespace dlprim {
             }
         }
 
+        template<bool CalcDX>
+        void BatchNorm2D::cpu_backward(Tensor &xt,Tensor *dxt,Tensor &dyt,Tensor &scale,Tensor &dscale,Tensor &dbias,float dx_factor)
+        {
+            float *da = dscale.data<float>();
+            float *db = dbias.data<float>();
+            float *a=scale.data<float>();
+            float *x =xt.data<float>();
+            float *dx=nullptr;
+            if(CalcDX) {
+                dx = dxt->data<float>();
+                if(dx_factor == 0)
+                    memset(dx,0,dxt->memory_size());
+            }
+            float *dy = dyt.data<float>();
+            int batch = xt.shape()[0];
+            int rc = xt.shape()[2]*xt.shape()[3];
+            memset(da,0,config_.features*sizeof(float));
+            memset(db,0,config_.features*sizeof(float));
+            for(int b=0;b<batch;b++) {
+                for(int f=0;f<config_.features;f++) {
+                    float dy_sum=0,dyx_sum=0;
+                    for(int i=0;i<rc;i++) {
+                        dy_sum += dy[i];
+                        dyx_sum += x[i]*dy[i];
+                        if(CalcDX) {
+                            dx[i] = dx[i]*dx_factor + dy[i]*a[f];
+                        }
+                    }
+                    if(CalcDX)
+                        dx+=rc;
+                    dy+=rc;
+                    x+=rc;
+                    da[f] += dyx_sum;
+                    db[f] += dy_sum;
+                }
+            }
+        }
+
         void BatchNorm2D::backward( std::vector<TensorAndGradient> &input,
                                     std::vector<TensorAndGradient> &output,
                                     std::vector<TensorAndGradient> &parameters,
@@ -211,7 +256,8 @@ namespace dlprim {
             size_t offset_2 = conv_ws_size_ + sizeof(float)*config_.features;
             Tensor temp_diff = workspace.sub_tensor(offset_1,Shape(config_.features));
             Tensor temp_bias = workspace.sub_tensor(offset_2,Shape(config_.features));
-            
+        
+            /*    
             TensorAndGradient s,o;
             
             s.data = combined_scale_;
@@ -225,10 +271,14 @@ namespace dlprim {
             o.diff = temp_bias;
                 
             std::vector<TensorAndGradient> cp{s,o};
-            auto tmp_inp = input;
-            if(mode()==CalculationsMode::train)
-                tmp_inp[0].requires_gradient = false;
-            conv_->backward(tmp_inp,output,cp, conv_ws,ctx);
+            auto tmp_inp = input;*/
+            if(mode()==CalculationsMode::train || !input[0].requires_gradient) {
+                cpu_backward<false>(input[0].data,nullptr,output[0].diff,combined_scale_,temp_diff,temp_bias,0);
+            }
+            else {
+                cpu_backward<true>(input[0].data,&input[0].diff,output[0].diff,combined_scale_,temp_diff,temp_bias,input[0].accumulate_gradient);
+            }
+            //conv_->backward(tmp_inp,output,cp, conv_ws,ctx);
 
             if(config_.affine && parameters[3].requires_gradient) {
                 if(ctx_.is_cpu_context()) {
