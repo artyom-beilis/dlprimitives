@@ -30,7 +30,7 @@
 #define REDUCE_X2_OP_ADD(x,y) ((x) + (y))
 #define REDUCE_X2_OP_MAX(x,y) max((x),(y))
 
-#define my_work_group_reduce_add_x2(val) REDUCE_USING_OP_X2(val,REDUCE_OP_ADD_X2)
-#define my_work_group_reduce_max_x2(val) REDUCE_USING_OP_X2(val,REDUCE_OP_MAX_X2)
+#define my_work_group_reduce_add_x2(val) REDUCE_USING_OP_X2(val,REDUCE_X2_OP_ADD)
+#define my_work_group_reduce_max_x2(val) REDUCE_USING_OP_X2(val,REDUCE_X2_OP_MAX)
 
 #endif

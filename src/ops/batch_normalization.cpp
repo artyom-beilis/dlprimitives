@@ -1,5 +1,6 @@
 #include <dlprim/ops/batch_normalization.hpp>
 #include <dlprim/json.hpp>
+#include <dlprim/core_ops.hpp>
 #include <cmath>
 #include <my_cblas.hpp>
 #include <iostream>
@@ -46,14 +47,20 @@ namespace dlprim {
                 parameters.push_back(TensorSpecs(std_shape,dtype_));
                 parameters.push_back(TensorSpecs(std_shape,dtype_));
             }
-            conv_ws_size_ = 0;
-            workspace = 2 * config_.features * sizeof(float);
             if(mode() != CalculationsMode::predict) {
                 current_mean_ = Tensor(ctx_,std_shape,dtype_);
                 current_var_ = Tensor(ctx_,std_shape,dtype_);
             }
-            combined_scale_ = Tensor(ctx_,Shape(config_.features,1,1,1),dtype_);
-            combined_bias_ = Tensor(ctx_,std_shape,dtype_);
+            if(ctx_.is_cpu_context()) {
+                workspace = 2 * config_.features * sizeof(float);
+                combined_scale_ = Tensor(ctx_,Shape(config_.features,1,1,1),dtype_);
+                combined_bias_ = Tensor(ctx_,std_shape,dtype_);
+            }
+            else {
+                bn_gpu_ = std::move(core::BatchNorm2DFwdBwd::create(ctx_,in[0].shape(),dtype_));
+                workspace = bn_gpu_->workspace();
+            }
+            setup_shape_ = in[0].shape();
         }
         void BatchNorm2D::mode(CalculationsMode m)
         {
@@ -64,20 +71,65 @@ namespace dlprim {
                              std::vector<Shape> &out)
         {
             out = in;
+            if(in[0][0] > setup_shape_[0] || in[0][2] != setup_shape_[2] || in[0][3]!=setup_shape_[3]) {
+                setup_shape_ = in[0];
+                if(ctx_.is_opencl_context()) {
+                    bn_gpu_.reset();
+                    bn_gpu_ = std::move(core::BatchNorm2DFwdBwd::create(ctx_,in[0],dtype_));
+                }
+            }
         }
 		
         
         void BatchNorm2D::forward(std::vector<Tensor> &input,
                                   std::vector<Tensor> &output,
                                   std::vector<Tensor> &parameters,
-                                  Tensor &workspace,
+                                  Tensor &ws,
                                   ExecutionContext const &e)
         {
-            if(ctx_.is_cpu_context())
-                forward_cpu(input,output,parameters,workspace);
+            if(ctx_.is_cpu_context()) {
+                forward_cpu(input,output,parameters,ws);
+            }
             else {
-                DLPRIM_CHECK(!"Not impl");
-                //forward_gpu(input,output,parameters,workspace,e);
+                Tensor mean,var;
+                ExecutionContext elast;
+                if(mode() == CalculationsMode::train && !config_.use_global_stats) {
+                    int M = input[0].shape().total_size() / config_.features;
+                    bn_gpu_->enqueue_calculate_batch_stats(
+                            input[0],
+                            current_mean_,current_var_,
+                            ws,e.generate_series_context(0,3));
+
+                    bn_gpu_->enqueue_update_running_stats(
+                            config_.momentum,(1.0f-config_.momentum),
+                            current_mean_,parameters[0],
+                            (config_.momentum * M) / (M-1),(1.0f-config_.momentum),
+                            current_var_,parameters[1],
+                            ws,e.generate_series_context(1,3));
+                    mean = current_mean_;
+                    var = current_var_;
+                    elast = e.generate_series_context(2,3);
+                }
+                else  {
+                    mean = parameters.at(0);
+                    var  = parameters.at(1);
+                    elast = e;
+                }
+                if(config_.affine) {
+                    bn_gpu_->enqueue_forward_affine(
+                            input[0],output[0],
+                            parameters.at(2),parameters.at(3),
+                            mean,var,
+                            config_.eps,
+                            ws,e.generate_series_context(2,3));
+                }
+                else {
+                    bn_gpu_->enqueue_forward_direct(
+                            input[0],output[0],
+                            mean,var,
+                            config_.eps,
+                            ws,e.generate_series_context(2,3));
+                }
             }
         }
 
@@ -247,93 +299,106 @@ namespace dlprim {
         void BatchNorm2D::backward( std::vector<TensorAndGradient> &input,
                                     std::vector<TensorAndGradient> &output,
                                     std::vector<TensorAndGradient> &parameters,
-                                    Tensor &workspace,
-                                    ExecutionContext const &ctx)
+                                    Tensor &ws,
+                                    ExecutionContext const &e)
+        {
+            if(ctx_.is_cpu_context()) {
+                backward_cpu(input,output,parameters,ws);
+            }
+            else {
+                bool training = mode()==CalculationsMode::train;
+                Tensor mean = training ? current_mean_ : parameters[0].data;
+                Tensor var  = training ? current_var_  : parameters[1].data;
+                if(config_.affine) {
+                    bn_gpu_->enqueue_backward_affine(
+                            training,
+                            input[0].data,output[0].diff,
+                            mean,var,
+                            parameters.at(2).data,parameters.at(3).data,
+                            (input[0].requires_gradient ? &input[0].diff : nullptr),
+                            input[0].accumulate_gradient,
+                            (parameters[2].requires_gradient ? &parameters[2].diff : nullptr),
+                            parameters[2].accumulate_gradient,
+                            (parameters[3].requires_gradient ? &parameters[3].diff : nullptr),
+                            parameters[3].accumulate_gradient,
+                            config_.eps,
+                            ws,e);
+                }
+                else {
+                    if(!input[0].requires_gradient)
+                        return;
+                    bn_gpu_->enqueue_backward_direct(
+                            training,
+                            input[0].data,output[0].diff,
+                            mean,var,
+                            input[0].diff,
+                            input[0].accumulate_gradient,
+                            config_.eps,
+                            ws,e);
+                }
+            }
+        }
+        void BatchNorm2D::backward_cpu(
+                                    std::vector<TensorAndGradient> &input,
+                                    std::vector<TensorAndGradient> &output,
+                                    std::vector<TensorAndGradient> &parameters,
+                                    Tensor &workspace)
         {
 
-            Tensor conv_ws   = workspace.sub_tensor(0,Shape(conv_ws_size_),uint8_data);
-            size_t offset_1 = conv_ws_size_;
-            size_t offset_2 = conv_ws_size_ + sizeof(float)*config_.features;
-            Tensor temp_diff = workspace.sub_tensor(offset_1,Shape(config_.features));
-            Tensor temp_bias = workspace.sub_tensor(offset_2,Shape(config_.features));
+            Tensor temp_diff = workspace.sub_tensor(0,Shape(config_.features));
+            Tensor temp_bias = workspace.sub_tensor_target_offset(config_.features,Shape(config_.features));
         
-            /*    
-            TensorAndGradient s,o;
-            
-            s.data = combined_scale_;
-            s.diff = temp_diff;
-            s.accumulate_gradient = 0.0;
-            s.requires_gradient = true;
-
-            o.data = combined_bias_;
-            o.requires_gradient = true;
-            o.accumulate_gradient = 0.0;
-            o.diff = temp_bias;
-                
-            std::vector<TensorAndGradient> cp{s,o};
-            auto tmp_inp = input;*/
             if(mode()==CalculationsMode::train || !input[0].requires_gradient) {
                 cpu_backward<false>(input[0].data,nullptr,output[0].diff,combined_scale_,temp_diff,temp_bias,0);
             }
             else {
                 cpu_backward<true>(input[0].data,&input[0].diff,output[0].diff,combined_scale_,temp_diff,temp_bias,input[0].accumulate_gradient);
             }
-            //conv_->backward(tmp_inp,output,cp, conv_ws,ctx);
 
             if(config_.affine && parameters[3].requires_gradient) {
-                if(ctx_.is_cpu_context()) {
-                    if(parameters[3].accumulate_gradient == 0) {
-                        memcpy(parameters[3].diff.data<float>(),temp_bias.data<float>(),sizeof(float)*config_.features);
-                    }
-                    else {
-                       cblas_sscal(config_.features,parameters[3].accumulate_gradient,parameters[3].diff.data<float>(),1);
-                       cblas_saxpy(config_.features,1.0f,temp_bias.data<float>(),1,parameters[3].diff.data<float>(),1);
-                    }
+                if(parameters[3].accumulate_gradient == 0) {
+                    memcpy(parameters[3].diff.data<float>(),temp_bias.data<float>(),sizeof(float)*config_.features);
                 }
                 else {
-                    DLPRIM_CHECK(!"Not Implemented");
+                   cblas_sscal(config_.features,parameters[3].accumulate_gradient,parameters[3].diff.data<float>(),1);
+                   cblas_saxpy(config_.features,1.0f,temp_bias.data<float>(),1,parameters[3].diff.data<float>(),1);
                 }
             }
 
-            if(ctx_.is_cpu_context()){
-                float *dy_sum = temp_bias.data<float>();
-                float *variance = nullptr;
-                float *mean = nullptr;
-                if(config_.use_global_stats || mode() == CalculationsMode::predict) {
-                    variance = parameters[1].data.data<float>();
-                    mean = parameters[0].data.data<float>();
-                }
-                else {
-                    variance = current_var_.data<float>();
-                    mean = current_mean_.data<float>();
-                }
-                float *dyx_sum = temp_diff.data<float>();
-                if(config_.affine && parameters[2].requires_gradient) {
-                    float *da = parameters[2].diff.data<float>();
-                    float factor = parameters[2].accumulate_gradient;
-                    for(int i=0;i<config_.features;i++) {
-                        float val = (dyx_sum[i] - mean[i]*dy_sum[i]) / std::sqrt(variance[i] + config_.eps); 
-                        if(factor == 0)
-                            da[i] = val;
-                        else
-                            da[i] = da[i]*factor + val;
-                    }
-                }
-                if(input[0].requires_gradient && mode()==CalculationsMode::train) {
-                    float *dx = input[0].diff.data<float>();
-                    if(input[0].accumulate_gradient == 0)
-                        memset(dx,0,input[0].diff.memory_size());
-                    else
-                        cblas_sscal(input[0].diff.shape().total_size(),input[0].accumulate_gradient,dx,1);
-                    float *gamma = nullptr;
-                    if(config_.affine)
-                        gamma = parameters[2].data.data<float>();
-                    cpu_backward_data(input[0].data,input[0].diff,output[0].diff,
-                        mean,variance,dy_sum,dyx_sum,gamma);
-                }
+            float *dy_sum = temp_bias.data<float>();
+            float *variance = nullptr;
+            float *mean = nullptr;
+            if(config_.use_global_stats || mode() == CalculationsMode::predict) {
+                variance = parameters[1].data.data<float>();
+                mean = parameters[0].data.data<float>();
             }
             else {
-                DLPRIM_CHECK(!"Not implemented");
+                variance = current_var_.data<float>();
+                mean = current_mean_.data<float>();
+            }
+            float *dyx_sum = temp_diff.data<float>();
+            if(config_.affine && parameters[2].requires_gradient) {
+                float *da = parameters[2].diff.data<float>();
+                float factor = parameters[2].accumulate_gradient;
+                for(int i=0;i<config_.features;i++) {
+                    float val = (dyx_sum[i] - mean[i]*dy_sum[i]) / std::sqrt(variance[i] + config_.eps); 
+                    if(factor == 0)
+                        da[i] = val;
+                    else
+                        da[i] = da[i]*factor + val;
+                }
+            }
+            if(input[0].requires_gradient && mode()==CalculationsMode::train) {
+                float *dx = input[0].diff.data<float>();
+                if(input[0].accumulate_gradient == 0)
+                    memset(dx,0,input[0].diff.memory_size());
+                else
+                    cblas_sscal(input[0].diff.shape().total_size(),input[0].accumulate_gradient,dx,1);
+                float *gamma = nullptr;
+                if(config_.affine)
+                    gamma = parameters[2].data.data<float>();
+                cpu_backward_data(input[0].data,input[0].diff,output[0].diff,
+                    mean,variance,dy_sum,dyx_sum,gamma);
             }
         }
 

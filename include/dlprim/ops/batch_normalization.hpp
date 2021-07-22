@@ -2,6 +2,8 @@
 #include <dlprim/operator.hpp>
 namespace dlprim {	
     namespace json { class value; }
+    namespace core { class BatchNorm2DFwdBwd; }
+
     struct BatchNorm2DConfig {
         int features = -1;
         float eps = 1e-5f;
@@ -48,6 +50,10 @@ namespace dlprim {
 
 
     private:
+        void backward_cpu(std::vector<TensorAndGradient> &input,
+                          std::vector<TensorAndGradient> &output,
+                          std::vector<TensorAndGradient> &parameters,
+                          Tensor &workspace);
 	    void forward_cpu(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
                              std::vector<Tensor> &parameters,
@@ -62,8 +68,10 @@ namespace dlprim {
         
         Tensor current_mean_,current_var_;
         Tensor combined_scale_,combined_bias_;
-        size_t conv_ws_size_;
         BatchNorm2DConfig config_;
         DataType dtype_;
+        Shape setup_shape_;
+
+        std::unique_ptr<core::BatchNorm2DFwdBwd> bn_gpu_;
     };
 } // 

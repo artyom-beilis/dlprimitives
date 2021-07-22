@@ -51,11 +51,13 @@ namespace core {
             cl::Program const &utils = gpu::Cache::instance().get_program(ctx,"bn_utils");
 
             sums_ = cl::Kernel(fwd_sums,"compute");
-            if(second_reduce_ > 1)
+            if(second_reduce_ > 1) {
                 sums_reduce_ = cl::Kernel(fwd_sums,"reduce");
+            }
             dyx_sums_ = cl::Kernel(bwd_sums,"compute");
-            if(second_reduce_)
+            if(second_reduce_ > 1) {
                 dyx_sums_reduce_ = cl::Kernel(bwd_sums,"reduce");
+            }
 
             
             update_sums_ = cl::Kernel(utils,"update_sums");
@@ -99,29 +101,24 @@ namespace core {
             }
             else {
                 Tensor x_sum = ws.sub_tensor(0,Shape(second_reduce_,features_),dt_);
-                Tensor x2_sum = ws.sub_tensor(second_reduce_ * features_ * size_of_data_type(dt_)/size_of_data_type(ws.dtype()),
+                Tensor x2_sum = ws.sub_tensor_target_offset(second_reduce_ * features_,
                                               Shape(second_reduce_,features_),dt_);
-                sums_.setArg(p++,x_sum.device_buffer());
-                sums_.setArg(p++,int(x_sum.device_offset()));
-                sums_.setArg(p++,x2_sum.device_buffer());
-                sums_.setArg(p++,int(x2_sum.device_offset()));
+                x_sum.set_arg(sums_,p);
+                x2_sum.set_arg(sums_,p);
                 p=0;
-                sums_reduce_.setArg(p++,x_sum.device_buffer());
-                sums_reduce_.setArg(p++,int(x_sum.device_offset()));
-                sums_reduce_.setArg(p++,x2_sum.device_buffer());
-                sums_reduce_.setArg(p++,int(x2_sum.device_offset()));
-                sums_reduce_.setArg(p++,mean.device_buffer());
-                sums_reduce_.setArg(p++,int(mean.device_offset()));
-                sums_reduce_.setArg(p++,var.device_buffer());
-                sums_reduce_.setArg(p++,int(var.device_offset()));
+                sums_reduce_.setArg(p++,features_);
+                x_sum.set_arg(sums_reduce_,p);
+                x2_sum.set_arg(sums_reduce_,p);
+                mean.set_arg(sums_reduce_,p);
+                var.set_arg(sums_reduce_,p);
                 sums_reduce_.setArg(p++,1.0f/(batch*hw));
 
                 auto e1 = e.generate_series_context(0,2);
                 auto e2 = e.generate_series_context(1,2);
                 e.queue().enqueueNDRangeKernel( sums_,
                                                 cl::NullRange,
-                                                cl::NDRange(wg_,features_),
-                                                cl::NDRange(wg_*second_reduce_,1),
+                                                cl::NDRange(wg_*second_reduce_,features_),
+                                                cl::NDRange(wg_,1),
                                                 e1.events(),e1.event("calc_mean_var"));
 
                 e.queue().enqueueNDRangeKernel( sums_reduce_,
@@ -139,14 +136,11 @@ namespace core {
                                                   Tensor &ws,ExecutionContext const &e)
         {
             int p=0;
-            update_sums_.setArg(p++,batch_mean.device_buffer());
-            update_sums_.setArg(p++,int(batch_mean.device_offset()));
-            update_sums_.setArg(p++,batch_var.device_buffer());
-            update_sums_.setArg(p++,int(batch_var.device_offset()));
-            update_sums_.setArg(p++,running_mean.device_buffer());
-            update_sums_.setArg(p++,int(running_mean.device_offset()));
-            update_sums_.setArg(p++,running_var.device_buffer());
-            update_sums_.setArg(p++,int(running_var.device_offset()));
+            update_sums_.setArg(p++,features_);
+            batch_mean.set_arg(update_sums_,p);
+            batch_var.set_arg(update_sums_,p);
+            running_mean.set_arg(update_sums_,p);
+            running_var.set_arg(update_sums_,p);
             update_sums_.setArg(p++,batch_mean_factor);
             update_sums_.setArg(p++,running_mean_factor);
             update_sums_.setArg(p++,batch_var_factor);
@@ -180,9 +174,10 @@ namespace core {
         void split_ws_to_a_b_rest(Tensor &ws,Tensor &a,Tensor &b,Tensor &rest)
         {
             split_ws_to_a_b(ws,a,b);
-            size_t diff = size_of_data_type(dt_) * 2 / size_of_data_type(ws.dtype());
-            size_t res_size = ws.shape().total_size() - diff;
-            rest = ws.sub_tensor(diff,Shape(res_size),ws.dtype());
+
+            size_t msize = ws.shape().total_size() * size_of_data_type(ws.dtype());
+            size_t items = msize / size_of_data_type(dt_);
+            rest = ws.sub_tensor_target_offset(features_ * 2,Shape(items - features_ * 2),dt_);
         }
         void split_ws_to_a_b(Tensor &ws,Tensor &a,Tensor &b)
         {
@@ -193,6 +188,7 @@ namespace core {
                                             Tensor &mean,Tensor &var,float eps,
                                             Tensor &ws,ExecutionContext const &e)
         {
+            DLPRIM_CHECK(ws.memory_size() >= ws_);
             Tensor a,b;
             split_ws_to_a_b(ws,a,b);
 
@@ -224,6 +220,7 @@ namespace core {
                                             float eps,
                                             Tensor &ws,ExecutionContext const &e)
         {
+            DLPRIM_CHECK(ws.memory_size() >= ws_);
             Tensor a,b;
             split_ws_to_a_b(ws,a,b);
 
@@ -270,6 +267,7 @@ namespace core {
         {
             if(!dx && !dgamma && !dbeta)
                 return;
+            DLPRIM_CHECK(ws.memory_size() >= ws_);
             Tensor dyx_sum,dy_sum,new_ws;
             split_ws_to_a_b_rest(ws,dyx_sum,dy_sum,new_ws);
             int N = 1 + int(dgamma || dbeta) + (dx != nullptr);
@@ -282,7 +280,7 @@ namespace core {
             if(dx) {
                 auto e2 = e.generate_series_context(id++,N);
                 if(training_mode) {
-                    backward_data_train(*dx,dy,mean,var,dy_sum,dyx_sum,gamma,new_ws,eps,dx_factor,e2);
+                    backward_data_train(x,*dx,dy,mean,var,dy_sum,dyx_sum,gamma,new_ws,eps,dx_factor,e2);
                 }
                 else {
                     backward_data_test(*dx,dy,var,gamma,new_ws,eps,dx_factor,e2);
@@ -314,11 +312,12 @@ namespace core {
             }
             else {
                 Tensor s1 = ws.sub_tensor(0,Shape(second_reduce_,features_),dt_);
-                Tensor s2 = ws.sub_tensor_target_offset(features_,
+                Tensor s2 = ws.sub_tensor_target_offset(features_ * second_reduce_,
                                               Shape(second_reduce_,features_),dt_);
                 s1.set_arg(dyx_sums_,p);
                 s2.set_arg(dyx_sums_,p);
                 p=0;
+                dyx_sums_reduce_.setArg(p++,features_);
                 s1.set_arg(dyx_sums_reduce_,p);
                 s2.set_arg(dyx_sums_reduce_,p);
                 dyx_sum.set_arg(dyx_sums_reduce_,p);
@@ -328,8 +327,8 @@ namespace core {
                 auto e2 = e.generate_series_context(1,2);
                 e.queue().enqueueNDRangeKernel( dyx_sums_,
                                                 cl::NullRange,
-                                                cl::NDRange(wg_,features_),
-                                                cl::NDRange(wg_*second_reduce_,1),
+                                                cl::NDRange(wg_*second_reduce_,features_),
+                                                cl::NDRange(wg_,1),
                                                 e1.events(),e1.event("calc_dyx_x"));
 
                 e.queue().enqueueNDRangeKernel( dyx_sums_reduce_,
@@ -371,7 +370,7 @@ namespace core {
                                            e2.events(),e2.event("backward_data"));
         }
 
-        void backward_data_train(Tensor &dx,Tensor &dy,
+        void backward_data_train(Tensor &x,Tensor &dx,Tensor &dy,
                                  Tensor &mean,Tensor &var,
                                  Tensor &dy_sum,Tensor &dyx_sum,
                                  Tensor &gamma,Tensor &ws,
@@ -406,7 +405,7 @@ namespace core {
             backward_data_.setArg(p++,batches);
             backward_data_.setArg(p++,features_);
             backward_data_.setArg(p++,hw);
-            dx.set_arg(backward_data_,p);
+            x.set_arg(backward_data_,p);
             dy.set_arg(backward_data_,p);
             x_factor.set_arg(backward_data_,p);
             dy_factor.set_arg(backward_data_,p);
@@ -423,7 +422,7 @@ namespace core {
                              float dg_fact,float db_fact,float eps,ExecutionContext const &e)
         {
             int p=0;
-            backward_filter_.setArg(p,features_);
+            backward_filter_.setArg(p++,features_);
             mean.set_arg(backward_filter_,p);
             var.set_arg(backward_filter_,p);
             dy_sum.set_arg(backward_filter_,p);
@@ -454,12 +453,13 @@ namespace core {
                                              float eps,
                                              Tensor &ws,ExecutionContext const &e)
         {
+            DLPRIM_CHECK(ws.memory_size() >= ws_);
             Tensor dyx_sum,dy_sum,new_ws;
             split_ws_to_a_b_rest(ws,dyx_sum,dy_sum,new_ws);
             calc_sums(x,dy,new_ws,dyx_sum,dy_sum,e.generate_series_context(0,2));
             auto e2 = e.generate_series_context(1,2);
             if(training_mode) {
-                backward_data_train(dx,dy,mean,var,dy_sum,dyx_sum,null_,new_ws,eps,dx_factor,e2);
+                backward_data_train(x,dx,dy,mean,var,dy_sum,dyx_sum,null_,new_ws,eps,dx_factor,e2);
             }
             else {
                 backward_data_test(dx,dy,var,null_,new_ws,eps,dx_factor,e2);
@@ -467,7 +467,7 @@ namespace core {
         }
     private:
         int features_;
-        int ws_;
+        size_t ws_;
         int wg_;
         int second_reduce_;
         DataType dt_;

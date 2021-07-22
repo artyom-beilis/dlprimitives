@@ -16,7 +16,7 @@ void compute(
           __global float const *x,int x_offset,
 #if BACKWARD == 1
           __global float const *dy,int dy_offset,
-          __global float *dxy_sum,int dxy_sum_offset,
+          __global float *dyx_sum,int dyx_sum_offset,
           __global float *dy_sum,int dy_sum_offset
 #else
     #if SECOND_REDUCE_SIZE == 1
@@ -37,7 +37,7 @@ void compute(
 #if BACKWARD == 1
     dy   += dy_offset;
     dy_sum += dy_sum_offset;
-    dxy_sum += dxy_sum_offset;
+    dyx_sum += dyx_sum_offset;
 #else
   #if SECOND_REDUCE_SIZE == 1
     x_mean += x_mean_offset;
@@ -50,7 +50,7 @@ void compute(
     
     x  += feature * HW;
 #if BACKWARD == 1
-    dy += feature * HW
+    dy += feature * HW;
 #endif    
 
     int items = batch * HW;
@@ -90,7 +90,7 @@ void compute(
 
     float2 sums=(float2)(sum1,sum2);
 
-    my_work_group_reduce_add(sums);
+    my_work_group_reduce_add_x2(sums);
     sum1 = sums.s0;
     sum2 = sums.s1;
 
@@ -101,8 +101,8 @@ void compute(
             int pos = feature + channels * get_group_id(0);
         #endif
         #if BACKWARD == 1
-            dxy_sum[pos] = sum1;
-            dy_sum[pos] = sum2;
+            dyx_sum[pos] = sum1;
+             dy_sum[pos] = sum2;
         #else
             #if SECOND_REDUCE_SIZE == 1
             float mean_val  = sum1 / (batch * HW);
@@ -124,7 +124,7 @@ void reduce(int channels,
             __global float const * restrict s1,int s1_offset,
             __global float const * restrict s2,int s2_offset,
 #if BACKWARD == 1
-            __global float *dxy_sum,int dxy_sum_offset,
+            __global float *dyx_sum,int dyx_sum_offset,
             __global float *dy_sum,int dy_sum_offset
 #else
             __global float *x_mean,int x_mean_offset,
@@ -136,7 +136,7 @@ void reduce(int channels,
     s1 += s1_offset;
     s2 += s2_offset;
 #if BACKWARD == 1
-    dxy_sum += dxy_sum_offset;
+    dyx_sum += dyx_sum_offset;
     dy_sum  += dy_sum_offset;
 #else
     x_mean += x_mean_offset;
@@ -154,18 +154,18 @@ void reduce(int channels,
     sum.s0 = s1[read_pos];
     sum.s1 = s2[read_pos];
     
-    my_work_group_reduce_add(sum);
+    my_work_group_reduce_add_x2(sum);
 
     if(get_local_id(0) == 0) {
-            #if SECOND_REDUCE_SIZE == 1
-            float mean_val  = s.s0 * one_div_M;
-            float mean2_val = s.s1 * one_div_M;
-            x_mean[f] = mean_val;
-             x_var[f] = mean2_val - mean_val*mean_val;
-            #else
-             x_sum[f] = sum.s0;
-            x2_sum[f] = sum.s1;
-            #endif
+        #if BACKWARD == 0
+        float mean_val  = sum.s0 * one_div_M;
+        float mean2_val = sum.s1 * one_div_M;
+        x_mean[f] = mean_val;
+         x_var[f] = mean2_val - mean_val*mean_val;
+        #else
+        dyx_sum[f] = sum.s0;
+         dy_sum[f] = sum.s1;
+        #endif
     }    
 }
 
