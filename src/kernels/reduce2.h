@@ -2,12 +2,6 @@
 #define my_get_local_wg_id() ((get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0))
 #endif
 
-#if __OPENCL_VERSION__ >= 200
-#define REDUCE_PREPARE_X2(WG_SIZE,dtype) do {} while(0)
-#define my_work_group_reduce_add_x2(val) do { val = work_group_reduce_add(val); } while(0)
-#define my_work_group_reduce_max_x2(val) do { val = work_group_reduce_max(val); } while(0)
-#else
-
 #define REDUCE_PREPARE_X2(WG_SIZE,dtype) __local dtype my_reduce_x2[2][WG_SIZE];
 #define REDUCE_USING_OP_X2(myval,reduce_op) \
     do { \
@@ -33,4 +27,3 @@
 #define my_work_group_reduce_add_x2(val) REDUCE_USING_OP_X2(val,REDUCE_X2_OP_ADD)
 #define my_work_group_reduce_max_x2(val) REDUCE_USING_OP_X2(val,REDUCE_X2_OP_MAX)
 
-#endif

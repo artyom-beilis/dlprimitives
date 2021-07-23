@@ -55,9 +55,14 @@ def benchmark_model(model,batch,device,warm,iters,train):
         print("Time bwd batch  %1.3f ms" %(total_bw / total_batches *1e3))
     print("Time per batch %1.3f ms" %(total_time / total_batches *1e3))
 
-def export_model(model,batch,path,opset,ir):
+def export_model(model,batch,path,opset,ir,train):
     inp = torch.randn(batch,3,224,224)
-    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset)
+    model.eval()
+    if train:
+        extra =dict( training=torch.onnx.TrainingMode.TRAINING,do_constant_folding=False)
+    else:
+        extra = {}
+    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset,**extra)
     import onnx
     #from onnx import version_converter
     model = onnx.load_model(path)
@@ -76,6 +81,7 @@ def predict_on_images(model,images,device,config):
     std = config['std']
     classes = config['class_names']
     csv = []
+    model.eval()
     for i,path in enumerate(images):
         img = PIL.Image.open(path)
         npimg = np.array(img).astype(np.float32) * (1.0 / 255)
@@ -111,15 +117,23 @@ def get_config():
 
 
 def main(args):
-    m = getattr(torchvision.models,args.model)(pretrained = not args.train)
-
+    m = getattr(torchvision.models,args.model)(pretrained = True)
+    #print("Mean",m.bn1.running_mean.tolist()[:4])
+    #print("Var",m.bn1.running_var.tolist()[:4])
+    #print("W",m.bn1.weight.tolist()[:4])
+    #print("B",m.bn1.bias.tolist()[:4])
     if args.export:
-        export_model(m,args.batch,args.export,args.onnx_opset,args.onnx_ir)
+        export_model(m,args.batch,args.export,args.onnx_opset,args.onnx_ir,args.train)
     m.to(args.device)
-    if args.benchmark:
-        benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train)
     if args.images:
-        predict_on_images(m,args.images,args.device,get_config())
+        with torch.no_grad():
+            predict_on_images(m,args.images,args.device,get_config())
+    if args.benchmark:
+        if args.train:
+            benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train)
+        else:
+            with torch.no_grad():
+                benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train)
 
 if __name__ == '__main__': 
     p = argparse.ArgumentParser()
@@ -128,7 +142,7 @@ if __name__ == '__main__':
     p.add_argument('--export')
     p.add_argument('--benchmark',action='store_true')
     p.add_argument('--train',action='store_true')
-    p.add_argument('--onnx-opset',default=7,type=int)
+    p.add_argument('--onnx-opset',default=12,type=int)
     p.add_argument('--onnx-ir',default=3,type=int)
     p.add_argument('--batch',default=16,type=int)
     p.add_argument('--warm',default=5,type=int)

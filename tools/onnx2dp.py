@@ -15,7 +15,10 @@ def get_inputs(model):
         shape = list(i.dims)
         print("Loading tensor %s/%s" % (name,shape))
         if i.data_type!= 1:
-            raise Exception("Only floats are supported")
+            print(i)
+            print("Only floats are supported, given %d" % i.data_type)
+            #raise Exception("Only floats are supported, given %d" % i.data_type)
+            continue
         if i.float_data:
             value = np.array(list(i.float_data))
         elif i.raw_data:
@@ -58,7 +61,7 @@ def get_pads(attrs):
     if 'pads' in attrs:
         pads = attrs['pads']
         assert len(pads) == 4
-        assert pads[0] == pads[2] and pads[1] == pads[3]
+        #assert pads[0] == pads[2] and pads[1] == pads[3]
         return list(pads[0:2])
     else:
         return [0,0]
@@ -112,6 +115,20 @@ def get_operators(model,inputs,params):
                       )
                     )
             operators.append(op)
+        elif n.op_type == 'BatchNormalization':
+            eps = attrs["epsilon"]
+            momentum = 1.0 - attrs['momentum']
+            op = dict(name = n.name,
+                      type = 'BatchNorm2D',
+                      inputs = [n.input[0]],
+                      outputs = [n.output[0]],
+                      params = list(n.input[3:5] + n.input[1:3]),
+                      options = dict(
+                        eps = eps,
+                        momentum = momentum
+                      )
+                    )
+            operators.append(op)
         elif n.op_type in actdic:
             opt_name = actdic[n.op_type]
             if opt_name == 'Clip' and (attrs.get('min')!=0  or attr.get('max')!=6):
@@ -123,12 +140,22 @@ def get_operators(model,inputs,params):
                 operators[-1]['options']['activation'] = opt_name
                 operators[-1]['outputs'][0] = n.output[0]
             else:
-                raise Exception("Need previous operator to add %s " % opt_name)
+                if operators[-1]['outputs'][0] == n.input[0]:
+                    operators[-1]['outputs'][0] = n.output[0]
+                    inp = n.output[0]
+                else:
+                    inp = n.input[0]
+                op = dict(name = n.name,
+                          type='Activation',
+                          inputs = [inp],
+                          outputs = list(n.output),
+                          options = dict(activation=opt_name))
+                operators.append(op)
         elif n.op_type in ('Flatten','Dropout','Reshape'):
             assert operators[-1]['outputs'][0] == n.input[0]
             operators[-1]['outputs'][0] = n.output[0]
         elif n.op_type == 'Softmax':
-            assert attrs['axis'] == 1
+            assert attrs.get('axis',-1) in (1,-1)
             op = dict(name = n.name,
                       type = 'SoftMax',
                       inputs = [n.input[0]],

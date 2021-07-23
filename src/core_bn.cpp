@@ -150,6 +150,11 @@ namespace core {
                                            e.events(),e.event("update_sums"));
         }
 
+        void enqueue3D(cl::Kernel &k,int batches,int rc,ExecutionContext const &e,char const *name)
+        {
+            e.queue().enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(rc,features_,batches),cl::NullRange,e.events(),e.event(name));
+        }
+
         ///
         /// Peform forward computation as y = (x-mean) / sqrt(var + eps)
         ///
@@ -168,7 +173,7 @@ namespace core {
             y.set_arg(forward_,p);
             a.set_arg(forward_,p);
             b.set_arg(forward_,p);
-            e.queue().enqueueNDRangeKernel(forward_,cl::NullRange,cl::NDRange(batches,features_,rc),cl::NullRange,e.events(),e.event("forward"));
+            enqueue3D(forward_,batches,rc,e,"forward");
         }
 
         void split_ws_to_a_b_rest(Tensor &ws,Tensor &a,Tensor &b,Tensor &rest)
@@ -365,9 +370,7 @@ namespace core {
             dy.set_arg(backward_test_,p);
             dy_factor.set_arg(backward_test_,p);
             backward_test_.setArg(p++,dx_factor);
-            e.queue().enqueueNDRangeKernel(backward_test_,
-                                           cl::NullRange,cl::NDRange(batches,features_,hw),cl::NullRange,
-                                           e2.events(),e2.event("backward_data"));
+            enqueue3D(backward_test_,batches,hw,e2,"backward_data");
         }
 
         void backward_data_train(Tensor &x,Tensor &dx,Tensor &dy,
@@ -412,9 +415,7 @@ namespace core {
             b_offset.set_arg(backward_data_,p);
             dx.set_arg(backward_data_,p);
             backward_data_.setArg(p++,scale);
-            e.queue().enqueueNDRangeKernel(backward_data_,
-                                           cl::NullRange,cl::NDRange(batches,features_,hw),
-                                           cl::NullRange,e2.events(),e2.event("backward_data"));
+            enqueue3D(backward_data_,batches,hw,e2,"backward_data");
         }
 
         void backward_filter(Tensor &mean,Tensor &var,Tensor &dyx_sum,Tensor &dy_sum,

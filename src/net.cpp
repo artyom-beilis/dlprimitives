@@ -62,13 +62,6 @@ namespace dlprim {
                 datatype.setOrder( H5T_ORDER_LE );
                 H5::DataSet dataset = f.createDataSet( name , datatype, dsp );
                 if(tensor.dtype() == float_data) {
-                    if(name == "fc1") {
-                        std::ofstream tmp("fc1_save.csv");
-                        for(int i=0;i<10;i++) {
-                            tmp << tensor.data<float>()[i] << ",";
-                        }
-                        tmp << std::endl;
-                    }
                     dataset.write(tensor.data<float>(),H5::PredType::NATIVE_FLOAT);
                 }
                 else {
@@ -112,13 +105,6 @@ namespace dlprim {
                 }
                 if(tensor.dtype() == float_data) {
                     dataset.read(tensor.data<float>(),H5::PredType::NATIVE_FLOAT);
-                    if(name == "fc1") {
-                        std::ofstream tmp("fc1_load.csv");
-                        for(int i=0;i<10;i++) {
-                            tmp << tensor.data<float>()[i] << ",";
-                        }
-                        tmp << std::endl;
-                    }
                 }
                 else {
                     throw ValidationError("FIXME load float16 from hdf5");
