@@ -219,8 +219,8 @@ int main(int argc,char **argv)
         if(enable_backward) {
             std::cout << "FWD time per batch:  " << (fw_time / total_batches * 1e3) << " ms" << std::endl;
             std::cout << "BWD time per batch:  " << (bw_time / total_batches * 1e3) << " ms" << std::endl;
-            std::cout << "TOT time per batch:  " << (total_time / total_batches * 1e3) << " ms" << std::endl;
         }
+        std::cout << "TOT time per batch:  " << (total_time / total_batches * 1e3) << " ms" << std::endl;
     }
     catch(cl::Error const &e) {
         std::cerr << "OpenCL error:" << e.what() << " " << e.err() << std::endl;
