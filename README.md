@@ -13,7 +13,24 @@ multiple GPU architectures. Another goal is to provide tools for inference of pr
 
 Please note this is only work in progress - first and preliminary stages.
 
-## Operators Features Matrix
+## Performance Comparison
+
+Comparison of DLPrimitives vs PyTorch with cudnn/rocm and vs existing OpenCL implementation - plaidml and caffe/opencl.
+It is based on average difference over 5 networks: alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
+
+|             GPU|Batch|Train, Cuda/HIP|Test, Cuda/HIP|Train, Plaidml/Caffe-OCL|Test,  Plaidml/Caffe-OCL|
+|----------------|-----|---------------|--------------|---------------|--------------|
+|  Nvidia GTX 960|   16|            51%|        60.73%|           171%|       167.33%|
+|  Nvidia GTX 960|    8|            59%|        72.03%|           187%|       155.25%|
+| Nvidia GTX 1080|   16|            42%|        41.34%|           207%|       137.52%|
+|Nvidia RTX 2060S|   16|            49%|        57.53%|           211%|       149.48%|
+|      AMD Rx 560|   16|            53%|        56.82%|           153%|       115.63%|
+|      AMD Rx 560|    8|            55%|        54.19%|           172%|       122.64%|
+|    Intel HD 530|    8|               |              |           109%|        66.12%|
+
+
+
+## Features Matrix
 
 |Operator               |Features                               | Computation       |
 |-----------------------|---------------------------------------|-------------------|
@@ -38,11 +55,12 @@ Solvers: SGD, Adam
 | AlexNet       | torchvision.models    | Inference     |
 | VGG16         | torchvision.models    | Inference     |
 | ResNet50      | torchvision.models    | Inference     |
+| ResNet18      | torchvision.models    | Inference     |
 | MobileNet v2  | torchvision.models    | Inference     |
 
 The networks were exported from pytorch to ONNX and imported for DLPrimitives.
-Results compared with sample images. Note currently only inference tested,
-BN layers are merged into conv layers by torch optimizer.
+Results compared with sample images. Note currently only inference validated,
+backpropogation is convered by per-layer regression.
 
 ## Tested GPUs
 
@@ -53,6 +71,7 @@ BN layers are merged into conv layers by torch optimizer.
 |GTX 960    | NVidia    |                               |
 |GTX 1080   | NVidia    |                               |
 |RTX 2060S  | NVidia    |                               |
+|MaliG52 MC2| ARM       | performance not optimised yet |
 
 Devices Tested on Windows: AMD RX 560, NVidia GTX 960.
 
