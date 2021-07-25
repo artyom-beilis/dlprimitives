@@ -2,7 +2,7 @@
 
 ### Train
 
-|           gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||          gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|-------|-------------|-------|----|
 |       PyTorch|rx560|     16|  74.763| 167.852| 539.06|      1056.31|133.747|    |
 |Keras/Plaidml |rx560|     16| 700.167| 944.828|      -|            -|882.795|    |
@@ -11,7 +11,7 @@
 |     vs opencl|     |       |     98%|    140%|       |         178%|   195%|153%|
 |     vs native|     |       |     63%|     53%|    62%|          58%|    30%| 53%|
 
-|           gpu|Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|    |
+||          gpu|Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|--------|-------------|-------|----|
 |       PyTorch|rx560|      8|  48.218|  86.292| 288.387|      556.417| 76.692|    |
 |Keras/Plaidml |rx560|      8| 602.172| 517.257|1493.288|            -|500.769|    |
@@ -23,7 +23,7 @@
 
 ### Test
 
-|           gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||          gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|-------|-------------|-------|-------|
 |       PyTorch|rx560|     16|  18.774|   39.48|159.765|      224.491| 45.517|       |
 |Keras/Plaidml |rx560|     16|  53.715| 114.061|      -|            -|  50.63|       |
@@ -32,7 +32,7 @@
 |     vs opencl|     |       |    114%|    149%|       |         142%|    57%|115.63%|
 |     vs native|     |       |     53%|     52%|    78%|          49%|    51%| 56.82%|
 
-|           gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||          gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|-------|-------------|-------|-------|
 |       PyTorch|rx560|      8|  11.687|  19.955| 85.969|      120.146| 22.316|       |
 |Keras/Plaidml |rx560|      8|   30.76|  59.429|167.008|            -| 29.689|       |

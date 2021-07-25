@@ -2,7 +2,7 @@
 
 ### Train
 
-|           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|-------|------------|-------|----|
 |       PyTorch|Gtx 960|     16|  41.496| 109.986| 350.57|     510.312| 154.39|    |
 |Keras/Plaidml |Gtx 960|     16| 220.158| 506.364|      -|           -|570.401|    |
@@ -11,7 +11,7 @@
 |     vs opencl|       |       |    141%|    208%|       |            |   166%|171%|
 |     vs native|       |       |     49%|     56%|    58%|         48%|    45%| 51%|
 
-|           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|-------|------------|-------|----|
 |       PyTorch|Gtx 960|      8|  33.346|  67.673|196.468|     347.423| 82.467|    |
 |Keras/Plaidml |Gtx 960|      8| 148.257| 264.462|736.946|           -|296.477|    |
@@ -23,7 +23,7 @@
 
 ### Test
 
-|           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|-------|------------|-------|-------|
 |       PyTorch|Gtx 960|     16|  11.622|  34.905|110.619|     165.524| 42.399|       |
 |Keras/Plaidml |Gtx 960|     16|   42.45|  91.004|      -|           -| 44.615|       |
@@ -32,7 +32,7 @@
 |     vs opencl|       |       |    184%|    178%|       |        255%|    53%|167.33%|
 |     vs native|       |       |     51%|     68%|    68%|         67%|    50%| 60.73%|
 
-|           gpu|  Batch|alexnet|resnet18|resnet50| vgg16|mobilenet\_v2|Average|       |
+||           gpu|  Batch|alexnet|resnet18|resnet50| vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|------|------------|-------|-------|
 |       PyTorch|Gtx 960|      8|   8.975|  22.426| 60.15|     122.928| 22.007|       |
 |Keras/Plaidml |Gtx 960|      8|  23.366|  48.312|102.89|           -| 25.916|       |

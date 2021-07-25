@@ -1,10 +1,10 @@
 ## Summary of Benchmarks
 
-Compare DLPrmitives to Native Pytorch (cuda+cudnn or hip+miopen) and best existing OpenCL
-solution - Caffe OpenCL or Kerals with PlaidML. Testing done over 5 networks:
+Summary of performance comparison of DLPrmitives to Native Pytorch (cuda+cudnn or hip+miopen) and best of existing OpenCL
+solution - Caffe OpenCL or Kerals with PlaidML. Measured prtformane difference average over 5 networks:
 alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
 
-|             GPU|Batch|Train vs Native|Test vs Native|Train vs OpenCL|Test vs OpenCL|
+|             GPU|Batch|Train, Cuda/HIP|Test, Cuda/HIP|Train, Plaidml/Caffe-OCL|Test,  Plaidml/Caffe-OCL|
 |----------------|-----|---------------|--------------|---------------|--------------|
 |  Nvidia GTX 960|   16|            51%|        60.73%|           171%|       167.33%|
 |  Nvidia GTX 960|    8|            59%|        72.03%|           187%|       155.25%|
@@ -94,7 +94,7 @@ Tool and useful instruments
 
 ### Train
 
-|           gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||          gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|-------|-------------|-------|----|
 |       PyTorch|rx560|     16|  74.763| 167.852| 539.06|      1056.31|133.747|    |
 |Keras/Plaidml |rx560|     16| 700.167| 944.828|      -|            -|882.795|    |
@@ -103,7 +103,7 @@ Tool and useful instruments
 |     vs opencl|     |       |     98%|    140%|       |         178%|   195%|153%|
 |     vs native|     |       |     63%|     53%|    62%|          58%|    30%| 53%|
 
-|           gpu|Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|    |
+||          gpu|Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|--------|-------------|-------|----|
 |       PyTorch|rx560|      8|  48.218|  86.292| 288.387|      556.417| 76.692|    |
 |Keras/Plaidml |rx560|      8| 602.172| 517.257|1493.288|            -|500.769|    |
@@ -115,7 +115,7 @@ Tool and useful instruments
 
 ### Test
 
-|           gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||          gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|-------|-------------|-------|-------|
 |       PyTorch|rx560|     16|  18.774|   39.48|159.765|      224.491| 45.517|       |
 |Keras/Plaidml |rx560|     16|  53.715| 114.061|      -|            -|  50.63|       |
@@ -124,7 +124,7 @@ Tool and useful instruments
 |     vs opencl|     |       |    114%|    149%|       |         142%|    57%|115.63%|
 |     vs native|     |       |     53%|     52%|    78%|          49%|    51%| 56.82%|
 
-|           gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||          gpu|Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-----|-------|--------|--------|-------|-------------|-------|-------|
 |       PyTorch|rx560|      8|  11.687|  19.955| 85.969|      120.146| 22.316|       |
 |Keras/Plaidml |rx560|      8|   30.76|  59.429|167.008|            -| 29.689|       |
@@ -137,7 +137,7 @@ Tool and useful instruments
 
 ### Train
 
-|           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|-------|------------|-------|----|
 |       PyTorch|Gtx 960|     16|  41.496| 109.986| 350.57|     510.312| 154.39|    |
 |Keras/Plaidml |Gtx 960|     16| 220.158| 506.364|      -|           -|570.401|    |
@@ -146,7 +146,7 @@ Tool and useful instruments
 |     vs opencl|       |       |    141%|    208%|       |            |   166%|171%|
 |     vs native|       |       |     49%|     56%|    58%|         48%|    45%| 51%|
 
-|           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|-------|------------|-------|----|
 |       PyTorch|Gtx 960|      8|  33.346|  67.673|196.468|     347.423| 82.467|    |
 |Keras/Plaidml |Gtx 960|      8| 148.257| 264.462|736.946|           -|296.477|    |
@@ -158,7 +158,7 @@ Tool and useful instruments
 
 ### Test
 
-|           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||           gpu|  Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|-------|------------|-------|-------|
 |       PyTorch|Gtx 960|     16|  11.622|  34.905|110.619|     165.524| 42.399|       |
 |Keras/Plaidml |Gtx 960|     16|   42.45|  91.004|      -|           -| 44.615|       |
@@ -167,7 +167,7 @@ Tool and useful instruments
 |     vs opencl|       |       |    184%|    178%|       |        255%|    53%|167.33%|
 |     vs native|       |       |     51%|     68%|    68%|         67%|    50%| 60.73%|
 
-|           gpu|  Batch|alexnet|resnet18|resnet50| vgg16|mobilenet\_v2|Average|       |
+||           gpu|  Batch|alexnet|resnet18|resnet50| vgg16|mobilenet\_v2|Average|
 |--------------|-------|-------|--------|--------|------|------------|-------|-------|
 |       PyTorch|Gtx 960|      8|   8.975|  22.426| 60.15|     122.928| 22.007|       |
 |Keras/Plaidml |Gtx 960|      8|  23.366|  48.312|102.89|           -| 25.916|       |
@@ -179,7 +179,7 @@ Tool and useful instruments
 
 ### Train
 
-|           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|--------|-------|--------|--------|-------|-------------|-------|----|
 |       PyTorch|GTX 1080|     16|  15.763|  38.359|125.902|      183.008| 59.379|    |
 |Keras/Plaidml |GTX 1080|     16|  92.172| 235.163|702.904|      972.166|330.331|    |
@@ -191,7 +191,7 @@ Tool and useful instruments
 ### Test
 
 
-|           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|--------|-------|--------|--------|-------|-------------|-------|-------|
 |       PyTorch|GTX 1080|     16|   4.915|  11.734| 37.329|       61.542| 15.849|       |
 |Keras/Plaidml |GTX 1080|     16|  19.157|  36.124| 74.961|      186.724|  22.21|       |
@@ -204,7 +204,7 @@ Tool and useful instruments
 
 ### Train
 
-|           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|---------|-------|--------|--------|-------|------------|-------|----|
 |       PyTorch|RTX 2060S|     16|  11.078|  30.969|100.094|     148.916| 37.829|    |
 |Keras/Plaidml |RTX 2060S|     16|  68.945|  199.84|541.685|     926.916|243.272|    |
@@ -216,7 +216,7 @@ Tool and useful instruments
 
 ### Test
 
-|           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|---------|-------|--------|--------|-------|------------|-------|-------|
 |       PyTorch|RTX 2060S|     16|   3.668|   9.772| 30.698|      45.483| 10.234|       |
 |Keras/Plaidml |RTX 2060S|     16|  21.884|  38.825| 73.711|     200.792| 21.007|       |
@@ -229,7 +229,7 @@ Tool and useful instruments
 
 ### Train
 
-|           gpu|       Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|        |    |
+||           gpu|       Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|
 |--------------|------------|-------|--------|--------|--------|-------------|--------|----|
 |Keras/Plaidml |Intel HD 530|      8|4804.843|  961.62|3009.687|    18789.277|2367.907|    |
 |  Caffe/OpenCL|Intel HD 530|      8| 878.947| 2277.14| 5657.17|        15522| 5002.81|    |
@@ -241,7 +241,7 @@ Tool and useful instruments
 ### Test
 
 
-|           gpu|       Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|       |       |
+||           gpu|       Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|
 |--------------|------------|-------|--------|--------|-------|-------------|-------|-------|
 |Keras/Plaidml |Intel HD 530|      8|  63.433| 116.864|254.115|     2258.903| 199.77|       |
 |  Caffe/OpenCL|Intel HD 530|      8| 388.199| 914.962|2106.76|      5781.26|966.915|       |

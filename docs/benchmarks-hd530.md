@@ -2,7 +2,7 @@
 
 ### Train
 
-|           gpu|       Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|        |    |
+||           gpu|       Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|
 |--------------|------------|-------|--------|--------|--------|-------------|--------|----|
 |Keras/Plaidml |Intel HD 530|      8|4804.843|  961.62|3009.687|    18789.277|2367.907|    |
 |  Caffe/OpenCL|Intel HD 530|      8| 878.947| 2277.14| 5657.17|        15522| 5002.81|    |
@@ -14,7 +14,7 @@
 ### Test
 
 
-|           gpu|       Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|       |       |
+||           gpu|       Batch|alexnet|resnet18|resnet50|   vgg16|mobilenet\_v2|Average|
 |--------------|------------|-------|--------|--------|-------|-------------|-------|-------|
 |Keras/Plaidml |Intel HD 530|      8|  63.433| 116.864|254.115|     2258.903| 199.77|       |
 |  Caffe/OpenCL|Intel HD 530|      8| 388.199| 914.962|2106.76|      5781.26|966.915|       |

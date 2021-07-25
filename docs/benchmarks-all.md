@@ -1,10 +1,10 @@
 ## Summary of Benchmarks
 
-Compare DLPrmitives to Native Pytorch (cuda+cudnn or hip+miopen) and best existing OpenCL
-solution - Caffe OpenCL or Kerals with PlaidML. Testing done over 5 networks:
+Summary of performance comparison of DLPrmitives to Native Pytorch (cuda+cudnn or hip+miopen) and best of existing OpenCL
+solution - Caffe OpenCL or Kerals with PlaidML. Measured prtformane difference average over 5 networks:
 alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
 
-|             GPU|Batch|Train vs Native|Test vs Native|Train vs OpenCL|Test vs OpenCL|
+|             GPU|Batch|Train, Cuda/HIP|Test, Cuda/HIP|Train, Plaidml/Caffe-OCL|Test,  Plaidml/Caffe-OCL|
 |----------------|-----|---------------|--------------|---------------|--------------|
 |  Nvidia GTX 960|   16|            51%|        60.73%|           171%|       167.33%|
 |  Nvidia GTX 960|    8|            59%|        72.03%|           187%|       155.25%|

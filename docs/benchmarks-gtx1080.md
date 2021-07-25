@@ -2,7 +2,7 @@
 
 ### Train
 
-|           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|--------|-------|--------|--------|-------|-------------|-------|----|
 |       PyTorch|GTX 1080|     16|  15.763|  38.359|125.902|      183.008| 59.379|    |
 |Keras/Plaidml |GTX 1080|     16|  92.172| 235.163|702.904|      972.166|330.331|    |
@@ -14,7 +14,7 @@
 ### Test
 
 
-|           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||           gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|--------|-------|--------|--------|-------|-------------|-------|-------|
 |       PyTorch|GTX 1080|     16|   4.915|  11.734| 37.329|       61.542| 15.849|       |
 |Keras/Plaidml |GTX 1080|     16|  19.157|  36.124| 74.961|      186.724|  22.21|       |

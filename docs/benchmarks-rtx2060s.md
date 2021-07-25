@@ -2,7 +2,7 @@
 
 ### Train
 
-|           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|    |
+||           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|---------|-------|--------|--------|-------|------------|-------|----|
 |       PyTorch|RTX 2060S|     16|  11.078|  30.969|100.094|     148.916| 37.829|    |
 |Keras/Plaidml |RTX 2060S|     16|  68.945|  199.84|541.685|     926.916|243.272|    |
@@ -14,7 +14,7 @@
 
 ### Test
 
-|           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|       |
+||           gpu|    Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|Average|
 |--------------|---------|-------|--------|--------|-------|------------|-------|-------|
 |       PyTorch|RTX 2060S|     16|   3.668|   9.772| 30.698|      45.483| 10.234|       |
 |Keras/Plaidml |RTX 2060S|     16|  21.884|  38.825| 73.711|     200.792| 21.007|       |
