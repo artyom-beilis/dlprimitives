@@ -25,6 +25,7 @@ Please note this is only work in progress - first and preliminary stages.
 |GlobalMaxPool2d        |                                       | Fwd,Bwd           |
 |GlobalAvgPool2d        |                                       | Fwd,Bwd           |
 |Inner Product          |                                       | Fwd,Bwd           |
+|BatchNorm2D            |                                       | Fwd,Bwd           | 
 |Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
 |Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
 
