@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
+enable_testing()
+
 if(NOT WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall")
 endif()
@@ -24,6 +26,7 @@ else()
 endif()
 
 option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
+SET(TEST_DEV "0:0" CACHE STRING "OpenCL platform:device, default 0:0")
 
 if(NOT USE_INTERNAL_BLAS)
     find_path(CBLAS_PATH cblas.h)
@@ -114,3 +117,11 @@ target_link_libraries(benchmark dlprim)
 target_link_libraries(image_predict dlprim)
 target_link_libraries(test_json dlprim)
 target_link_libraries(flops dlprim)
+
+file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
+
+foreach(TEMPLATE ${TEST_TEMPLATES}) 
+    get_filename_component(TEST_NAME ${TEMPLATE} NAME_WE)
+    add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
+endforeach()
+
