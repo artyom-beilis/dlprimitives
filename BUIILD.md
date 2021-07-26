@@ -32,8 +32,8 @@ or
 Running benchmakrs on opencl platform:device 0:0
 
     # Inference
-    ./benchmark 0:0 ../docs/nets/resnet18-b16.json
+    ./benchmark 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
     # Treain
-    ./benchmark -b 0:0 ../docs/nets/resnet18-b16.json
+    ./benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
 
 
