@@ -17,7 +17,9 @@
 #	define DLPRIM_API
 #endif
 
-
+///
+/// Mane namespace
+///
 namespace dlprim {
     namespace json { class value; }
 

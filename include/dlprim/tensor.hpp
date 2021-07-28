@@ -72,6 +72,9 @@ namespace dlprim {
         return out;
     }
 
+    ///
+    /// Central Data Contrainer - Tensor
+    ///
     class Tensor : public TensorSpecs {
     public:
        
