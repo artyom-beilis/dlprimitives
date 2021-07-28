@@ -92,7 +92,8 @@ namespace dlprim {
     }
 
     void InnerProduct::reshape(std::vector<Shape> const &in,
-                               std::vector<Shape> &out)
+                               std::vector<Shape> &out,
+                               size_t &ws)
     {
         DLPRIM_CHECK(in.size() == 1);
         DLPRIM_CHECK(in[0].size() >= 2);
@@ -100,6 +101,17 @@ namespace dlprim {
         out.assign({Shape(in[0][0],config_.outputs)});
         if(mode_ != CalculationsMode::predict && config_.bias) {
             bwd_bias_.reset(new BWBias(ctx_,out[0],dtype_));
+        }
+        ws = 0;
+        if(bwd_bias_) {
+            ws = std::max(ws,bwd_bias_->workspace());
+        }
+        if(activation_) {
+            std::vector<Shape> same;
+            size_t act_ws = 0;
+            activation_->reshape(out,same,act_ws);
+            DLPRIM_CHECK(out == same);
+            ws = std::max(act_ws,ws);
         }
     }
 

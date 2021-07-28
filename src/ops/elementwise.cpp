@@ -56,11 +56,12 @@ void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpe
     kernel_bwd_ = cl::Kernel(prog,"eltwise_bwd");
 }
 
-void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
+void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==2);
     DLPRIM_CHECK(in[0] == in[1]);
     out.assign({in[0]});
+    ws = 0;
 }
 
 void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &,Tensor &,ExecutionContext const &e)

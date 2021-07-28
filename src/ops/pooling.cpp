@@ -86,11 +86,12 @@ Shape Pooling2D::calc_shape(Shape ins)
     return Shape(ins[0],ins[1],oh,ow);
 }
 
-void Pooling2D::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
+void Pooling2D::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
     Shape ins = in[0];
     out.assign({calc_shape(ins)});
+    ws = 0;
 }
 
 template<typename Dtype>
@@ -456,10 +457,11 @@ void GlobalPooling::setup_kernel(int sm_range)
 }
 
 
-void GlobalPooling::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
+void GlobalPooling::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
     DLPRIM_CHECK(in[0].size() == 4);
+    ws = 0;
     out.assign({Shape(in[0][0],in[0][1],1,1)});
     if(ctx_.is_cpu_context())
         return;

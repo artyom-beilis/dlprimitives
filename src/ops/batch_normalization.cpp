@@ -68,7 +68,7 @@ namespace dlprim {
         }
         
         void BatchNorm2D::reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out)
+                             std::vector<Shape> &out,size_t &ws)
         {
             out = in;
             if(in[0][0] > setup_shape_[0] || in[0][2] != setup_shape_[2] || in[0][3]!=setup_shape_[3]) {
@@ -77,6 +77,12 @@ namespace dlprim {
                     bn_gpu_.reset();
                     bn_gpu_ = std::move(core::BatchNorm2DFwdBwd::create(ctx_,in[0],dtype_));
                 }
+            }
+            if(bn_gpu_) {
+                ws = bn_gpu_->workspace();
+            }
+            else {
+                ws = 2 * config_.features * sizeof(float);
             }
         }
 		

@@ -249,8 +249,12 @@ namespace dlprim {
         size_t ws = 0;
         for(auto &c : connections_)
             ws = std::max(c.ws_size,ws);
-        if(ws > 0)
-            workspace_ = Tensor(ctx_,Shape(ws),uint8_data);
+        if(ws > 0) {
+            if(workspace_.memory_size() < ws) {
+                workspace_ = Tensor(); // clear first
+                workspace_ = Tensor(ctx_,Shape(ws),uint8_data);
+            }
+        }
         else
             workspace_ = Tensor();
     }
@@ -339,7 +343,7 @@ namespace dlprim {
             out.clear();
             for(Tensor &s : conn.input_tensors)
                 in.push_back(s.shape());
-            conn.op->reshape(in,out);
+            conn.op->reshape(in,out,conn.ws_size);
             for(unsigned i=0;i<out.size();i++) {
                 conn.output_tensors[i].reshape(out[i]);
                 if(train) {
@@ -347,6 +351,7 @@ namespace dlprim {
                 }
             }
         }
+        setup_ws();
     }
 
     void Net::clear_memory()

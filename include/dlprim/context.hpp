@@ -120,6 +120,12 @@ private:
     std::string ext_;
 };
 
+
+///
+/// Class used for benchmarking of the model
+///
+/// Detailed description TBD
+///
 class TimingData {
 public:
     bool cpu_only=false;
@@ -193,23 +199,66 @@ private:
     std::vector<std::shared_ptr<Data> > events_;
 };
 
-
+///
+/// This class is used to pass cl::Events that the kernel should wait for and/or signal event completion
+///
+/// It is also used to pass cl::CommandQueue over API
+///
+/// Use it as following:
+///
+/// \code
+/// void do_stuff(...,ExecutionContext const &e)
+/// {
+///  ...
+//// e.queue().enqueueNDRangeKernel(kernel,nd1,nd2,nd3,
+///                                   e.events(), // <- events to wait, nullptr of none
+///                                   e.event("do_stuff")); //<- event to signal,
+///                                                         // if profiling is used will be recorderd
+///                                                         // under this name
+/// }
+/// \endcode
+///
+///
+/// If you need to run several kernels use generate_series_context(#,total)
+///
+/// For example:
+///
+/// \code
+///   run_data_preparation(e.generate_series_context(0,3)); // waits for events if needed
+///   run_processing(e.generate_series_context(1,3)); // no events waited,signaled
+///   run_reduce(e.generate_series_context(2,3)); // signals completion event if needed
+/// \endcode
 class ExecutionContext {
 public:
+    /// default constructor - can be used for CPU context
     ExecutionContext() :
         queue_(nullptr),event_(nullptr), events_(nullptr) {}
+
+    ///
+    /// Create context from cl::CommandQueue, note no events will be waited/signaled
+    ///
     ExecutionContext(cl::CommandQueue &q) :
         queue_(&q),event_(nullptr),events_(nullptr)
     {
     }
+    ///
+    /// Create a context with a request to signal completion event
+    ///
     ExecutionContext(cl::CommandQueue &q,cl::Event *event) :
         queue_(&q),event_(event),events_(nullptr)
     {
     }
+
+    ///
+    /// Create a context with a request to wait for events
+    ///
     ExecutionContext(cl::CommandQueue &q,std::vector<cl::Event> *events) :
         queue_(&q),event_(nullptr),events_(events)
     {
     }
+    ///
+    /// Create a context with a request to signal completion event and wait for events
+    ///
     ExecutionContext(cl::CommandQueue &q,std::vector<cl::Event> *events,cl::Event *event) :
         queue_(&q),event_(event),events_(events)
     {
@@ -223,11 +272,21 @@ public:
         return !!timing_;
     }
 
+    ///
+    /// Add benchmarking/traceing object data
+    ///
     void enable_timing(std::shared_ptr<TimingData> p)
     {
         timing_ = p;
     }
 
+    ///
+    /// Create contexts for multiple enqueues. 
+    ///
+    /// The idea is simple if we have events to signal and wait for and multiple
+    /// kernels to execute, the first execution id == 0 should provide list of events
+    /// to wait if id == total - 1, give event to signal
+    ///
     ExecutionContext generate_series_context(size_t id,size_t total) const
     {
         ExecutionContext ctx = generate_series_context_impl(id,total);
@@ -235,22 +294,37 @@ public:
         return ctx;
     }
 
+    ///
+    /// Profiling scope enter called by ExecGuard::ExecGuard()
+    ///
     void enter(char const *name) const
     {
         if(timing_)
             timing_->enter(name);
     }
+    ///
+    /// Profiling scope leave, called by ExecGuard::~ExecGuard()
+    ///
     void leave() const
     {
         if(timing_)
             timing_->leave();
     }
-
+    
+    ///
+    /// Get the command queue. Never call it in non-OpenCL context
+    ///
     cl::CommandQueue &queue() const
     {
         DLPRIM_CHECK(queue_ != nullptr);
         return *queue_;
     }
+
+    ///
+    /// Get event to signal. Note: name is used for profiling. Such that profiling
+    /// is enabled profiling conters will be written the TimingData with the name of the
+    /// kernel you call. Optional id allows to distinguish between multiple similar calls
+    ///
     cl::Event *event(char const *name = "unknown", int id = -1) const
     {
         if(timing_ && !timing_->cpu_only) {
@@ -258,11 +332,17 @@ public:
         }
         return event_;
     }
+    ///
+    /// Get events to wait for
+    ///
     std::vector<cl::Event> *events() const {
         return events_;
     }
 
 
+    ///
+    /// Create context that waits for event if needed - use only if you know that more kernels are followed
+    ///
     ExecutionContext first_context() const
     {
         if(queue_ == nullptr)
@@ -270,13 +350,18 @@ public:
         return ExecutionContext(queue(),events_);
     }
 
+    ///
+    /// Create context does not wait or signals use only if you know that more kernels run before and after 
+    ///
     ExecutionContext middle_context() const
     {
         if(queue_ == nullptr)
             return ExecutionContext();
         return ExecutionContext(queue());
     }
-
+    ///
+    /// Create context that signals for completion event if needed - use only if you know that more kernels run before
+    ///
     ExecutionContext last_context() const
     {
         if(queue_ == nullptr)

@@ -107,33 +107,38 @@ namespace dlprim {
                 activation_ = std::move(Activation::get_bwd_op(ctx_,config_.activation,in[0]));
         }
 
-        if(ctx_.is_cpu_context()) {
-            ws_size_ = workspace = output_shape[2] * output_shape[3] 
-            * size_of_data_type(dtype_) * get_im2col_width();
-            return;
-        }
         in_h_ = in[0].shape()[2];
         in_w_ = in[0].shape()[3];
         out_h_ = output_shape[2];
         out_w_ = output_shape[3];
         bs_ = in[0].shape()[0];
 
-        core::Conv2DSettings cfg(config_,in_shape,dtype_);
 
-        setup_algo(in_shape);
-
-        ws_size_ = 0;
-        if(bwd_bias_)
-            ws_size_ = bwd_bias_->workspace();
-
-        ws_size_ = std::max(ws_size_,conv_->workspace());
-
-        if(mode_ == CalculationsMode::train) {
-            ws_size_ = std::max(ws_size_,conv_bwd_data_->workspace());
-            ws_size_ = std::max(ws_size_,conv_bwd_filter_->workspace());
+        if(ctx_.is_opencl_context()) {
+            setup_algo(in_shape);
         }
-
+        
+        ws_size_ = calc_workspace(in_shape);
         workspace = ws_size_;
+    }
+    size_t Convolution2D::calc_workspace(Shape const &in)
+    {
+        size_t ws = 0;
+        if(ctx_.is_cpu_context()) {
+            Shape output_shape = get_output_shape(in);
+            ws = output_shape[2] * output_shape[3] * size_of_data_type(dtype_) * get_im2col_width();
+        }
+        else {
+            if(conv_)
+                ws = std::max(ws,conv_->workspace());
+            if(conv_bwd_data_)
+                ws = std::max(ws,conv_bwd_data_->workspace());
+            if(conv_bwd_filter_)
+                ws = std::max(ws,conv_bwd_filter_->workspace());
+            if(bwd_bias_)
+                ws = std::max(ws,bwd_bias_->workspace());
+        }
+        return ws;
     }
     void Convolution2D::setup_algo(Shape const &in)
     {
@@ -161,13 +166,16 @@ namespace dlprim {
     }
 
     void Convolution2D::reshape(std::vector<Shape> const &in,
-                               std::vector<Shape> &out)
+                               std::vector<Shape> &out,
+                               size_t &ws)
     {
         DLPRIM_CHECK(in.size() == 1);
         out.assign({get_output_shape(in[0])});
         if(activation_) {
             std::vector<Shape> tmp;
-            activation_->reshape(out,tmp);
+            size_t ws_act =0;
+            activation_->reshape(out,tmp,ws_act);
+            DLPRIM_CHECK(ws_act == 0);
         }
         if(bwd_bias_) {
             bwd_bias_.reset(new BWBias(ctx_,out[0],dtype_));
@@ -182,6 +190,8 @@ namespace dlprim {
             out_h_ = out[0][2];
             out_w_ = out[0][3];
         }
+
+        ws = calc_workspace(in[0]);
     }
     void Convolution2D::forward(std::vector<Tensor> &in,std::vector<Tensor> &out,std::vector<Tensor> &parameters,Tensor &ws,
             ExecutionContext const &ectx)

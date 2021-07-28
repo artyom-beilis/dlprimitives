@@ -5,6 +5,9 @@
 
 namespace dlprim {
 
+    ///
+    /// Tensor shape
+    ///
     class Shape {
     public:
         Shape() : shape_{},size_(0) {}
@@ -13,6 +16,9 @@ namespace dlprim {
         Shape(size_t b,size_t c,size_t h): shape_({b,c,h}),size_(3) {}
         Shape(size_t b,size_t c,size_t h,size_t w): shape_({b,c,h,w}),size_(4) {}
        
+        ///
+        /// Initialize from pair of iterators
+        ///
         template<typename It>
         static Shape from_range(It begin, It end)
         {
@@ -39,6 +45,9 @@ namespace dlprim {
             return !(*this == other);
         }
 
+        ///
+        /// Total number of elements in shape without the first one - batch
+        ///
         size_t size_no_batch() const
         {
             if(size_ <= 0)
@@ -49,6 +58,9 @@ namespace dlprim {
             }
             return r;
         }
+        ///
+        /// Total number of elements - product of all items
+        ///
         size_t total_size() const
         {
             if(size_ == 0)
@@ -59,10 +71,16 @@ namespace dlprim {
             }
             return r;
         }
+        ///
+        /// dimetions count of the shape
+        ///
         int size() const
         {
             return size_;
         }
+        ///
+        /// specific dimension
+        ///
         size_t operator[](int i) const
         {
             return shape_[i];

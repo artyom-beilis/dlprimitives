@@ -111,23 +111,25 @@ void SoftmaxWithLoss::setup_kernel(int sm_range)
     scal_.reset(new Scal(ctx_,dtype_));
 }
 
-void Softmax::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
+void Softmax::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
     DLPRIM_CHECK(in[0].size() == 2);
     out = in;
+    ws = 0;
     if(ctx_.is_cpu_context())
         return;
     setup_kernel(in[0][1]);
 }
 
 
-void SoftmaxWithLoss::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
+void SoftmaxWithLoss::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==2);
     DLPRIM_CHECK(in[0].size() == 2);
     DLPRIM_CHECK(in[1].total_size() == in[0][0]);
     out = {Shape(1)};
+    ws = 0;
     if(ctx_.is_cpu_context())
         return;
     setup_kernel(in[0][1]);

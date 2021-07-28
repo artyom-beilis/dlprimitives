@@ -21,24 +21,37 @@
 namespace dlprim {
     namespace json { class value; }
 
+    ///
+    /// Base dlprim excetion
+    ///
     class Error : public std::runtime_error {
     public:
         Error(std::string const &v) : std::runtime_error(v) {}
     };
 
+    ///
+    /// Thrown if some stuff is not implemented yet
+    ///
     class NotImplementedError : public Error {
     public:
         NotImplementedError(std::string const &v) : Error(v) {}
     };
 
+    ///
+    /// Thrown in case of invalid parameters
+    ///
     class ValidationError : public Error {
     public:
         ValidationError(std::string const &v) : Error(v) {}
     };
 
+    ///
+    /// Thrown if OpenCL kernel compilation failed.
+    ///
     class BuildError : public Error {
     public:
         BuildError(std::string const &msg,std::string const &log) : Error(msg), log_(log) {}
+        /// get full build log
         std::string const &log() const 
         {
             return log_;
@@ -50,6 +63,7 @@ namespace dlprim {
     #define DLPRIM_CHECK(x) \
     do { if(!(x)) throw ValidationError(std::string("Failed " #x " at " __FILE__ ":") + std::to_string(__LINE__) ); } while(0)
 
+    /// type definition
     enum DataType {
         double_data   = 4 + (0 << 3),
         int64_data    = 4 + (2 << 3),
@@ -68,6 +82,7 @@ namespace dlprim {
         uint8_data    = 1 + (3 << 3),
     };
 
+    /// returns true of data is double, float, half or bfloat16 type
     inline bool is_floating_point_data_type(DataType d)
     {
         return (d >> 3) < 2;
@@ -123,12 +138,20 @@ namespace dlprim {
         return 1 << ((d & 0x7) - 1);
     }
 
+    /// Maximal number of dimensions in tensor
     static constexpr int max_tensor_dim = 4;
+
+    /// internal flag
 	constexpr int forward_data = 1;
+    /// internal flag
 	constexpr int backward_data = 2;
+    /// internal flag
 	constexpr int backward_param = 3;
 
-	enum class StandardActivations : int {
+	///
+    /// Parameterless Activations that can be embedded to general kernels like inner product or convolution
+    ///
+    enum class StandardActivations : int {
 		identity = 0,
 		relu = 1,
         tanh = 2,
@@ -140,17 +163,27 @@ namespace dlprim {
     char const *activation_to_name(StandardActivations act);
 
 
+    ///
+    /// Operation mode of layers - inference of training
+    ///
     enum class CalculationsMode {
         train,
         predict
     };
     
+
+    /// 
+    /// internal GEMM mode
+    ///
     enum class GemmOpMode {
         forward = 1,
         backward_filter = 2,
         backward_data = 3
     };
 	
+    ///
+    /// Convolution settings
+    ///
     struct Convolution2DConfigBase {
 		int channels_in = -1;
 		int channels_out = -1;

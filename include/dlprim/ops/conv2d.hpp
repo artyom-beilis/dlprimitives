@@ -35,7 +35,8 @@ namespace dlprim {
                            size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out);
+                             std::vector<Shape> &out,
+                             size_t &ws);
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
@@ -52,6 +53,8 @@ namespace dlprim {
 
         Shape get_output_shape(Shape const &in);
 	protected:
+
+        size_t calc_workspace(Shape const &in);
         void setup_algo(Shape const &in);
         int get_im2col_width();
         void forward_gpu(Tensor &in,Tensor &out,Tensor &M,Tensor *bias,ExecutionContext const &ctx);

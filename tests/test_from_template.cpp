@@ -301,9 +301,19 @@ int main(int argc,char **argv)
                 std::vector<dp::Shape> in_shapes = tensor_shapes_from_json(cases[i]["in_shapes"]);
                 std::vector<dp::Shape> out_shapes = tensor_shapes_from_json(cases[i]["out_shapes"]);
                 std::vector<dp::Shape> res_shape;
-                op->reshape(in_shapes,res_shape);
+                size_t ws_size = 0;
+                op->reshape(in_shapes,res_shape,ws_size);
+                if(ws_size > res_ws) {
+                    res_ws = ws_size;
+                    res_ws_tensor = dp::Tensor(ctx,dp::Shape(res_ws),dp::uint8_data);
+                }
                 TEST(out_shapes == res_shape);
-                ref_op->reshape(in_shapes,res_shape);
+                ws_size = 0;
+                ref_op->reshape(in_shapes,res_shape,ws_size);
+                if(ws_size > ref_ws) {
+                    ref_ws = ws_size;
+                    ref_ws_tensor = dp::Tensor(cpu_ctx,dp::Shape(ref_ws),dp::uint8_data);
+                }
                 TEST(out_shapes == res_shape);
                 std::vector<dp::Tensor> in_tensors = make_tensors(ctx,in_shapes,input_specs);
                 std::vector<dp::Tensor> out_tensors = make_tensors(ctx,out_shapes,output_specs);

@@ -124,4 +124,4 @@ foreach(TEMPLATE ${TEST_TEMPLATES})
     get_filename_component(TEST_NAME ${TEMPLATE} NAME_WE)
     add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
 endforeach()
-
+add_test(test_json test_json)

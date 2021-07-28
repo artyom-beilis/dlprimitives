@@ -45,8 +45,8 @@ namespace dlprim {
        capacity_(0),full_capacity_(0)
     {
     }
-    Tensor::Tensor(Context &ctx,Shape const &s,DataType d):
-        TensorSpecs(s,d),
+    Tensor::Tensor(Context &ctx,Shape const &s,DataType d,bool is_train):
+        TensorSpecs(s,d,is_train),
 		host_(new Tensor::HostMem()),
         cpu_tensor_(ctx.is_cpu_context()),
         offset_(0),

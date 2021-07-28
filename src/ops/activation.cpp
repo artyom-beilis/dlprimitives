@@ -43,10 +43,11 @@ void Activation::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpec
     bwd_kernel_ = cl::Kernel(prog,"activation_diff");
 }
 
-void Activation::reshape(std::vector<Shape> const &in,std::vector<Shape> &out)
+void Activation::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
     out.assign({in[0]});
+    ws=0;
 }
 
 void Activation::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &,Tensor &,ExecutionContext const &e)
@@ -113,10 +114,8 @@ void Activation::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     int p=0;
     int size = in.shape().total_size();
     kernel_.setArg(p++,size);
-    kernel_.setArg(p++,in.device_buffer());
-    kernel_.setArg(p++,int(in.device_offset()));
-    kernel_.setArg(p++,out.device_buffer());
-    kernel_.setArg(p++,int(out.device_offset()));
+    in.set_arg(kernel_,p);
+    out.set_arg(kernel_,p);
     
     cl::NDRange wg(256);
     cl::NDRange gr=gpu::round_range(size,wg);
@@ -129,12 +128,9 @@ void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,float beta,Executi
     int p=0;
     int size = y.shape().total_size();
     bwd_kernel_.setArg(p++,size);
-    bwd_kernel_.setArg(p++,y.device_buffer());
-    bwd_kernel_.setArg(p++,int(y.device_offset()));
-    bwd_kernel_.setArg(p++,dy.device_buffer());
-    bwd_kernel_.setArg(p++,int(dy.device_offset()));
-    bwd_kernel_.setArg(p++,dx.device_buffer());
-    bwd_kernel_.setArg(p++,int(dx.device_offset()));
+    y.set_arg(bwd_kernel_,p);
+    dy.set_arg(bwd_kernel_,p);
+    dx.set_arg(bwd_kernel_,p);
     bwd_kernel_.setArg(p++,beta);
     
     cl::NDRange wg(256);

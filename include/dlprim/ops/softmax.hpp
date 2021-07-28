@@ -37,7 +37,8 @@ namespace dlprim {
                            size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out);
+                             std::vector<Shape> &out,
+                             size_t &ws);
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
@@ -71,7 +72,8 @@ namespace dlprim {
                            size_t &workspace);
 
         virtual void reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out);
+                             std::vector<Shape> &out,
+                             size_t &ws);
 
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,

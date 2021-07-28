@@ -6,8 +6,15 @@
 namespace dlprim {
     namespace json { class value; }
 
+
+    ///
+    /// Base class for backward/forward propogation calculations for internal network
+    ///
     class Operator {
     public:
+        ///
+        /// Create operator for specific context (device/platform)
+        ///
         Operator(Context const &ctx) : 
             ctx_(ctx),
             mode_(CalculationsMode::predict)
@@ -17,7 +24,8 @@ namespace dlprim {
         virtual ~Operator() 
         {
         }
-
+        
+        /// name of the operator type
         virtual char const *operator_type() const = 0;
         
         ///
@@ -32,30 +40,85 @@ namespace dlprim {
             mode_ = mode;
         }
 
+        /// get current mode
         virtual CalculationsMode mode()
         {
             return mode_;
         }
 
+        ///
+        /// operator non-copyable/moveable
+        ///
+        /// manage it with smart pointers
+        ///
         Operator(Operator const &) = delete;
         void operator=(Operator const &) = delete;
         Operator(Operator &&) = delete;
         void operator=(Operator &&) = delete;
 
-		virtual void setup(std::vector<TensorSpecs> const &in,
+        ///
+        /// Convigure operator
+        ///
+        /// \param in - a list of expected input tensors
+        /// \param out - a list of output tensots - that opertor calculates in fwd propogation
+        /// \param parameters - a list of parameters need for computation. If parameter should not participate in gradient
+        ///   desend it should be marked as not trainable
+        /// \param workspace size needed for computations in bytes - not preserved between different calls
+        ///
+        virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
                            std::vector<TensorSpecs> &parameters,
                            size_t &workspace) = 0;
 
+        ///
+        /// Reshape layer according to new input size
+        ///
+        /// \param in - new input tensor sizes
+        /// \param out - new output tesor sizes
+        /// \param workspace - new workspace size needed
+        ///
         virtual void reshape(std::vector<Shape> const &in,
-                             std::vector<Shape> &out) = 0;
+                             std::vector<Shape> &out,
+                             size_t &workspace) = 0;
 
+        ///
+        /// Enqueue forward propogation computations 
+        ///
+        /// \param input - input tesnosrs (X)
+        /// \param output - output tesnors (Y)
+        /// \param parameters - parameters for computation
+        /// \param workspace - workspace as required
+        /// \param ctx - execution context
+        ///
 		virtual void forward(std::vector<Tensor> &input,
                              std::vector<Tensor> &output,
                              std::vector<Tensor> &parameters,
                              Tensor &workspace,
                              ExecutionContext const &ctx) = 0;
 		
+        ///
+        /// Enqueue backward propogation computations
+        ///
+        /// \param input - inputs and their gradients marked for computatins
+        /// \param output - outputs and their gradients
+        /// \param parameters - parameters parameters and their gradients
+        /// \param workspace - workspace as required
+        /// \param ctx - execution context
+        ///
+        /// Note: actual inputs are
+        /// 
+        ///  - inputs[index].data
+        ///  - outputs[index].data
+        ///  - outputs[index].diff
+        ///  - parameters[index].data
+        ///
+        /// And it computes in backpropogation
+        /// 
+        ///  - inputs[index].diff
+        ///  - parameters[index].diff
+        ///
+        /// If computation is not needed TensorAndGradient::requires_gradient need to be set to false
+        ///
         virtual void backward(std::vector<TensorAndGradient> & /*input*/,
                               std::vector<TensorAndGradient> & /*output*/,
                               std::vector<TensorAndGradient> & /*parameters*/,
@@ -66,10 +129,13 @@ namespace dlprim {
         }
 
     protected:
-        Context ctx_;
-        CalculationsMode mode_;
+        Context ctx_; ///< OpenCL/CPU Context to work with
+        CalculationsMode mode_; ///< computaions mode
     };
-    
+   
+    ///
+    /// Factory - generate operator by its name (type) with parameters needed
+    /// 
     std::unique_ptr<Operator> create_by_name(Context &ctx,
                                              std::string const &name,
                                              json::value const &parameters);
