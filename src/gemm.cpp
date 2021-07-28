@@ -127,7 +127,7 @@ namespace gpu {
             }
         }
 
-        void scale(size_t size,float s,cl::Buffer &x,size_t x_offset,ExecutionContext const &ec)
+        void scale(size_t size,float s,cl::Buffer &x,cl_ulong x_offset,ExecutionContext const &ec)
         {
             int wg = 64;
             if(size >= 1024)
@@ -136,7 +136,7 @@ namespace gpu {
             scal_.setArg(p++,int(size));
             scal_.setArg(p++,s);
             scal_.setArg(p++,x);
-            scal_.setArg(p++,int(x_offset));
+            scal_.setArg(p++,x_offset);
             cl::NDRange l(wg);
             cl::NDRange g=gpu::round_range(size,l);
             ec.queue().enqueueNDRangeKernel(scal_,cl::NullRange,g,l,ec.events(),ec.event("gemm_beta_scale"));
@@ -193,16 +193,16 @@ namespace gpu {
         }
         virtual void gemm(int M,int N,int K,
                           cl::Buffer &a,
-                          int offset_a,
+                          cl_ulong offset_a,
                           int lda,
                           cl::Buffer &b,
-                          int offset_b,
+                          cl_ulong offset_b,
                           int ldb,
                           cl::Buffer &c,
-                          int offset_c,
+                          cl_ulong offset_c,
                           int ldc,
                           cl::Buffer *bias,
-                          int bias_offset,
+                          cl_ulong bias_offset,
                           float beta,
                           int size_of_c,
                           ExecutionContext const &ein)
@@ -337,16 +337,16 @@ namespace gpu {
         }
         virtual void gemm(int M,int N,int K,
                           cl::Buffer &a,
-                          int offset_a,
+                          cl_ulong offset_a,
                           int lda,
                           cl::Buffer &b,
-                          int offset_b,
+                          cl_ulong offset_b,
                           int ldb,
                           cl::Buffer &c,
-                          int offset_c,
+                          cl_ulong offset_c,
                           int ldc,
                           cl::Buffer *bias,
-                          int bias_offset,
+                          cl_ulong bias_offset,
                           float beta,
                           int size_of_c,
                           ExecutionContext const &ein)

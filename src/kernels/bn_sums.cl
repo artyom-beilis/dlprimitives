@@ -13,18 +13,18 @@ __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void compute(
           int batch,int channels,int HW,
-          __global float const *x,int x_offset,
+          __global float const *x,ulong x_offset,
 #if BACKWARD == 1
-          __global float const *dy,int dy_offset,
-          __global float *dyx_sum,int dyx_sum_offset,
-          __global float *dy_sum,int dy_sum_offset
+          __global float const *dy,ulong dy_offset,
+          __global float *dyx_sum,ulong dyx_sum_offset,
+          __global float *dy_sum,ulong dy_sum_offset
 #else
     #if SECOND_REDUCE_SIZE == 1
-          __global float *x_mean,int x_mean_offset,
-          __global float *x_var, int x_var_offset
+          __global float *x_mean,ulong x_mean_offset,
+          __global float *x_var, ulong x_var_offset
     #else
-          __global float *x_sum, int x_sum_offset,
-          __global float *x2_sum,int x2_sum_offset
+          __global float *x_sum, ulong x_sum_offset,
+          __global float *x2_sum,ulong x2_sum_offset
     #endif          
 #endif                
           )
@@ -121,14 +121,14 @@ void compute(
 __kernel
 __attribute__((reqd_work_group_size(SECOND_REDUCE_SIZE,1,1)))
 void reduce(int channels,
-            __global float const * restrict s1,int s1_offset,
-            __global float const * restrict s2,int s2_offset,
+            __global float const * restrict s1,ulong s1_offset,
+            __global float const * restrict s2,ulong s2_offset,
 #if BACKWARD == 1
-            __global float *dyx_sum,int dyx_sum_offset,
-            __global float *dy_sum,int dy_sum_offset
+            __global float *dyx_sum,ulong dyx_sum_offset,
+            __global float *dy_sum,ulong dy_sum_offset
 #else
-            __global float *x_mean,int x_mean_offset,
-            __global float *x_var, int x_var_offset,
+            __global float *x_mean,ulong x_mean_offset,
+            __global float *x_var, ulong x_var_offset,
             float one_div_M
 #endif
       )      

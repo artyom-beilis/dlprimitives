@@ -112,7 +112,7 @@ namespace dlprim {
         /// Get offset - you should always bind both buffer and offset since there is no pointer arithmetics 
         /// at host in OpenCL and same memory may be used for several tensors
         ///
-        size_t device_offset() 
+        cl_ulong device_offset() 
         {
             return offset_; 
         }
@@ -181,7 +181,7 @@ namespace dlprim {
         void set_arg(cl::Kernel &k,int &pos)
         {
             k.setArg(pos++,device_buffer());
-            k.setArg(pos++,int(device_offset()));
+            k.setArg(pos++,device_offset());
         }
 
     private:

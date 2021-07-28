@@ -9,9 +9,9 @@ __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void conv_bw_filter(
           int batch,int height,int width,
-          __global float const *input,int input_offset,
-          __global float *kern,int kernel_offset,
-          __global float const *output,int output_offset
+          __global float const *input,ulong input_offset,
+          __global float *kern,ulong kernel_offset,
+          __global float const *output,ulong output_offset
 #if SECOND_REDUCE_SIZE == 1
           ,float factor
 #endif          
@@ -87,7 +87,7 @@ void conv_bw_filter(
 #if SECOND_REDUCE_SIZE > 1
 __kernel
 __attribute__((reqd_work_group_size(SECOND_REDUCE_SIZE,1,1)))
-void reduce(__global float const * restrict partial_values,int partial_values_offset,__global float * restrict sums,int sums_offset,float factor)
+void reduce(__global float const * restrict partial_values,ulong partial_values_offset,__global float * restrict sums,ulong sums_offset,float factor)
 {
     sums += sums_offset;
     partial_values += partial_values_offset;

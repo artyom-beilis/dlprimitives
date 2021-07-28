@@ -23,14 +23,14 @@
 __kernel 
 __attribute__((reqd_work_group_size(1,WG_SIZE,1)))
 void softmax(int batch,int channels,
-             __global dtype *in,int data_offset,
+             __global dtype *in,ulong  data_offset,
 #if CALC_LOSS==2
-             __global dtype *in_diff,int in_diff_offset,
+             __global dtype *in_diff,ulong  in_diff_offset,
 #endif
 #if CALC_LOSS>=1
-             __global itype *label,int label_offset,             
+             __global itype *label,ulong  label_offset,             
 #endif
-             __global dtype *out,int out_offset
+             __global dtype *out,ulong  out_offset
 #if CALC_LOSS==2
             ,dtype factor
 #endif            

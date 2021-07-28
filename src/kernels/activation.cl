@@ -1,7 +1,7 @@
 #include "defs.h"
 
 __kernel
-void activation(int size,__global dtype *a,int a_offset, __global dtype *c,int c_offset)
+void activation(int size,__global dtype *a,ulong a_offset, __global dtype *c,ulong c_offset)
 {
     int pos = get_global_id(0);
     if(pos >= size)
@@ -13,7 +13,7 @@ void activation(int size,__global dtype *a,int a_offset, __global dtype *c,int c
 
 
 __kernel
-void activation_diff(int size,__global dtype *y,int y_offset, __global dtype *dy,int dy_offset,__global dtype *dx,int dx_offset,dtype beta)
+void activation_diff(int size,__global dtype *y,ulong y_offset, __global dtype *dy,ulong dy_offset,__global dtype *dx,ulong dx_offset,dtype beta)
 {
     int pos = get_global_id(0);
     if(pos >= size)

@@ -216,9 +216,9 @@ inline void store_local(__local float *l_val,int strd,float16 v)
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3_bwd_filter(int B, int N,int C,
-                          __global float const * restrict image,int image_offset,
-                          __global float * restrict kernels,int kernels_offset,
-                          __global float const *restrict result,int result_offset,
+                          __global float const * restrict image,ulong image_offset,
+                          __global float * restrict kernels,ulong kernels_offset,
+                          __global float const *restrict result,ulong result_offset,
                           float beta
                           )
 {

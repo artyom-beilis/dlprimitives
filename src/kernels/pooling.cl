@@ -68,10 +68,10 @@
 __kernel
 __attribute__((reqd_work_group_size(1,WG_SIZE,WG_SIZE)))
 void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
-             __global const dtype *src,int src_offset,
-             __global dtype *tgt,int tgt_offset
+             __global const dtype *src,ulong src_offset,
+             __global dtype *tgt,ulong tgt_offset
 #if INDEX_MAX_SRC == 1
-             ,__global itype *indx,int indx_offset
+             ,__global itype *indx,ulong indx_offset
 #endif                                       
              
              )
@@ -153,9 +153,9 @@ void save_dx(__global dtype *ptr,dtype value)
 __kernel
 __attribute__((reqd_work_group_size(1,WG_SIZE,WG_SIZE)))
 void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
-             __global dtype *src,int src_offset,
-             __global const dtype *tgt,int tgt_offset,
-             __global const itype *indx,int indx_offset)
+             __global dtype *src,ulong src_offset,
+             __global const dtype *tgt,ulong tgt_offset,
+             __global const itype *indx,ulong indx_offset)
 {
     int bc = get_global_id(0);
     int or = get_global_id(1);
@@ -182,9 +182,9 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
 __kernel
 __attribute__((reqd_work_group_size(1,WG_SIZE,WG_SIZE)))
 void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
-             __global const dtype *src,int src_offset,
-             __global const dtype *tgt,int tgt_offset,
-             __global dtype *dx,int dx_offset)
+             __global const dtype *src,ulong src_offset,
+             __global const dtype *tgt,ulong tgt_offset,
+             __global dtype *dx,ulong dx_offset)
 {
     int bc = get_global_id(0);
     int or = get_global_id(1);
@@ -242,8 +242,8 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
 __kernel
 __attribute__((reqd_work_group_size(1,WG_SIZE,WG_SIZE)))
 void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
-             __global const dtype *tgt,int tgt_offset,
-             __global dtype *dx,int dx_offset)
+             __global const dtype *tgt,ulong tgt_offset,
+             __global dtype *dx,ulong dx_offset)
 {
     int bc = get_global_id(0);
     int or = get_global_id(1);

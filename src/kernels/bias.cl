@@ -1,8 +1,8 @@
 #include "defs.h"
 __kernel 
 void ip_bias(int batch,int N,
-        __global dtype *data,int data_offset,
-        __global const dtype *bias,int bias_offset)
+        __global dtype *data,ulong data_offset,
+        __global const dtype *bias,ulong bias_offset)
 {
     data+=data_offset;
     bias+=bias_offset;
@@ -19,7 +19,7 @@ void ip_bias(int batch,int N,
 
 
 __kernel 
-void activation_inplace(int tensor_size,__global dtype *data,int data_offset)
+void activation_inplace(int tensor_size,__global dtype *data,ulong data_offset)
 {
     data+=data_offset;
     if(get_global_id(0) >= tensor_size)

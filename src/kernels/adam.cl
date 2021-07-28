@@ -1,9 +1,9 @@
 __kernel
 void adam(int size,float beta1,float beta2,float inv_b1,float inv_b2,float lr,float weight_decay,float eps,
-          __global float *p,int p_offset,
-          __global float *g,int g_offset,
-          __global float *m,int m_offset,
-          __global float *v,int v_offset)
+          __global float *p,ulong p_offset,
+          __global float *g,ulong g_offset,
+          __global float *m,ulong m_offset,
+          __global float *v,ulong v_offset)
 {
     int i = get_global_id(0);
     if(i >= size)

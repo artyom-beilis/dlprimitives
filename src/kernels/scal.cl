@@ -1,5 +1,5 @@
 __kernel
-void sscal(int size,float scale,__global float *p,int p_off)
+void sscal(int size,float scale,__global float *p,ulong p_off)
 {
     int pos = get_global_id(0);
     if(pos >= size)

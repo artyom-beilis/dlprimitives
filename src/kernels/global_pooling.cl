@@ -17,7 +17,7 @@
 
 __kernel 
 __attribute__((reqd_work_group_size(1,WG_SIZE,1)))
-void global_pooling(int items,int over,float scale,__global dtype *in,int data_offset,__global dtype *out,int out_offset)
+void global_pooling(int items,int over,float scale,__global dtype *in,ulong  data_offset,__global dtype *out,ulong  out_offset)
 {
     in += data_offset;
     out += out_offset;
@@ -66,9 +66,9 @@ __kernel
 __attribute__((reqd_work_group_size(1,WG_SIZE,1)))
 void global_pooling_bwd(int items,int over,float scale,
                         #if POOL_MODE == 0
-                        __global const dtype *x, int x_offset,
+                        __global const dtype *x, ulong  x_offset,
                         #endif
-                        __global dtype *dx,int dx_offset,__global const dtype *out,int out_offset,
+                        __global dtype *dx,ulong  dx_offset,__global const dtype *out,ulong  out_offset,
                         dtype factor)
 {
     #if POOL_MODE == 0

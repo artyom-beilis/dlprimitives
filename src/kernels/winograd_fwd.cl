@@ -153,9 +153,9 @@ float4 tile4x4_after_wingorad_to_2x2(float16 tile)
 
 __kernel void winconv_calc_gkgt_3x3(int N,int C,
                                     __global const float * restrict gk3,
-                                    int gk3_offset,
+                                    ulong gk3_offset,
                                     __global float16 *k4,
-                                    int k4_offset)
+                                    ulong k4_offset)
 {
     gk3 += gk3_offset;
     k4 += k4_offset / 16;
@@ -215,12 +215,12 @@ inline void store_local(__local float *l_val,int strd,float16 v)
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3(int B, int N,int C,int H,int W,
-                  __global float const * restrict image,int image_offset,
-                  __global float16 const * restrict kernels,int kernels_offset,
+                  __global float const * restrict image,ulong image_offset,
+                  __global float16 const * restrict kernels,ulong kernels_offset,
 #if BIAS == 1                  
-                  __global float const * restrict bias,int bias_offset,
+                  __global float const * restrict bias,ulong bias_offset,
 #endif                  
-                  __global float *restrict result,int result_offset)
+                  __global float *restrict result,ulong result_offset)
 {
     image += image_offset;
     kernels += kernels_offset / 16;

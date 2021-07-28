@@ -1,6 +1,6 @@
 #include "defs.h"
 __kernel
-void axpby(int size,dtype a,__global const dtype *x,int x_off,dtype b,__global const dtype *y,int y_off,__global dtype *z,int z_off )
+void axpby(int size,dtype a,__global const dtype *x,ulong x_off,dtype b,__global const dtype *y,ulong y_off,__global dtype *z,ulong z_off )
 {
     int pos = get_global_id(0);
     if(pos >= size)

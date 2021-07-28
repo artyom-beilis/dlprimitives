@@ -7,8 +7,8 @@ void im2col(int batch,
             int src_cols,
             int rows,
             int cols,
-            __global dtype const *img,int img_offset,
-            __global dtype *mat,int mat_offset)
+            __global dtype const *img,ulong  img_offset,
+            __global dtype *mat,ulong  mat_offset)
 {
     img += img_offset;
     mat += mat_offset;

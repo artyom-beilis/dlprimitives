@@ -15,7 +15,7 @@
 #endif
 
 __kernel
-void eltwise(int size,__global const dtype *a,int a_offset, __global const dtype *b,int b_offset,__global dtype *c,int c_offset,dtype c1,dtype c2)
+void eltwise(int size,__global const dtype *a,ulong  a_offset, __global const dtype *b,ulong  b_offset,__global dtype *c,ulong  c_offset,dtype c1,dtype c2)
 {
     int pos = get_global_id(0);
     if(pos >= size)
@@ -30,12 +30,12 @@ void eltwise(int size,__global const dtype *a,int a_offset, __global const dtype
 __kernel
 void eltwise_bwd(  int size,
                    int da_db_select,
-                    __global const dtype *a,int a_offset,
-                    __global dtype *da,int da_offset,
-                    __global const dtype *b,int b_offset,
-                    __global dtype *db,int db_offset,
-                    __global const dtype *c, int c_offset,
-                    __global const dtype *dc,int dc_offset,
+                    __global const dtype *a,ulong  a_offset,
+                    __global dtype *da,ulong  da_offset,
+                    __global const dtype *b,ulong  b_offset,
+                    __global dtype *db,ulong  db_offset,
+                    __global const dtype *c, ulong  c_offset,
+                    __global const dtype *dc,ulong  dc_offset,
                     dtype c1,dtype c2,
                     dtype factor_a,dtype factor_b)
 {

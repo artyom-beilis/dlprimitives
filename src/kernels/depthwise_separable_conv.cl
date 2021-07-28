@@ -8,12 +8,12 @@
 
 __kernel
 void conv(int batch,int height,int width,
-          __global const float *input,int input_offset,
-          __global const float *kern,int kernel_offset,
+          __global const float *input,ulong input_offset,
+          __global const float *kern,ulong kernel_offset,
 #if BIAS != 0
-          __global const float *bias,int bias_offset,
+          __global const float *bias,ulong bias_offset,
 #endif          
-          __global float *output,int output_offset)
+          __global float *output,ulong output_offset)
 {
     input += input_offset;
     output += output_offset;
@@ -89,9 +89,9 @@ void conv(int batch,int height,int width,
 
 __kernel
 void backward_data_conv(int batch,int height,int width,
-          __global float *input,int input_offset,
-          __global const float *kern,int kernel_offset,
-          __global float const *output,int output_offset)
+          __global float *input,ulong input_offset,
+          __global const float *kern,ulong kernel_offset,
+          __global float const *output,ulong output_offset)
 {
     input += input_offset;
     output += output_offset;

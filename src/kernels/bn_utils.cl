@@ -1,9 +1,9 @@
 __kernel
 void update_sums(int N,
-                 __global float const * restrict cur_mean,int cur_mean_offset,
-                 __global float const * restrict cur_var ,int cur_var_offset,
-                 __global float * restrict run_mean,int run_mean_offset,
-                 __global float * restrict run_var ,int run_var_offset,
+                 __global float const * restrict cur_mean,ulong  cur_mean_offset,
+                 __global float const * restrict cur_var ,ulong  cur_var_offset,
+                 __global float * restrict run_mean,ulong  run_mean_offset,
+                 __global float * restrict run_var ,ulong  run_var_offset,
                  float cur_mean_factor,float run_mean_factor,
                  float cur_var_factor, float run_var_factor)
 {
@@ -23,9 +23,9 @@ void update_sums(int N,
 
 __kernel
 void var_gamma_to_a(int N,float eps,
-              __global float const * var, int var_offset,
-              __global float const * gamma, int gamma_offset,
-              __global float *a,int a_offset)
+              __global float const * var, ulong  var_offset,
+              __global float const * gamma, ulong  gamma_offset,
+              __global float *a,ulong  a_offset)
 {
     int pos = get_global_id(0);
     if(pos >= N)
@@ -44,10 +44,10 @@ void var_gamma_to_a(int N,float eps,
 
 __kernel
 void mean_var_to_a_b(int N,float eps,
-                     __global float const * mean,int mean_offset,
-                     __global float const * var, int var_offset,
-                     __global float *a,int a_offset,
-                     __global float *b,int b_offset)
+                     __global float const * mean,ulong  mean_offset,
+                     __global float const * var, ulong  var_offset,
+                     __global float *a,ulong  a_offset,
+                     __global float *b,ulong  b_offset)
 {
     int pos = get_global_id(0);
     if(pos >= N)
@@ -65,12 +65,12 @@ void mean_var_to_a_b(int N,float eps,
 __kernel
 void combine_mean_var_with_gamma_beta(
                      int N,float eps,
-                     __global float const * mean,int mean_offset,
-                     __global float const * var, int var_offset,
-                     __global float const * gamma,int gamma_offset,
-                     __global float const * beta,int beta_offset,
-                     __global float *a,int a_offset,
-                     __global float *b,int b_offset)
+                     __global float const * mean,ulong  mean_offset,
+                     __global float const * var, ulong  var_offset,
+                     __global float const * gamma,ulong  gamma_offset,
+                     __global float const * beta,ulong  beta_offset,
+                     __global float *a,ulong  a_offset,
+                     __global float *b,ulong  b_offset)
 {
     int pos = get_global_id(0);
     if(pos >= N)
@@ -92,14 +92,14 @@ void combine_mean_var_with_gamma_beta(
 
 __kernel
 void compute_backward_factors(int N,int M,float eps,
-                              __global float const *mean,int mean_offset,
-                              __global float const *var, int var_offset,
-                              __global float const *dy_sum, int dy_sum_offset,
-                              __global float const *dyx_sum,int dyx_sum_offset,
-                              __global float const *gamma_in,int gamma_in_offset,
-                              __global float *x_factor,int x_factor_offset,
-                              __global float *dy_factor,int dy_factor_offset,
-                              __global float *offset,int offset_offset)
+                              __global float const *mean,ulong  mean_offset,
+                              __global float const *var, ulong  var_offset,
+                              __global float const *dy_sum, ulong  dy_sum_offset,
+                              __global float const *dyx_sum,ulong  dyx_sum_offset,
+                              __global float const *gamma_in,ulong  gamma_in_offset,
+                              __global float *x_factor,ulong  x_factor_offset,
+                              __global float *dy_factor,ulong  dy_factor_offset,
+                              __global float *offset,ulong  offset_offset)
 {
     int i = get_global_id(0);
     if(i >= N)
@@ -139,10 +139,10 @@ void compute_backward_factors(int N,int M,float eps,
 
 __kernel
 void forward(int batches,int channels,int HW,
-             __global float const *x,int x_offset,
-             __global float *y,      int y_offset,
-             __global float const *A,int A_offset,
-             __global float const *B,int B_offset)
+             __global float const *x,ulong  x_offset,
+             __global float *y,      ulong  y_offset,
+             __global float const *A,ulong A_offset,
+             __global float const *B,ulong B_offset)
 {
     int b  = get_global_id(DIM_B);
     int f  = get_global_id(DIM_F);
@@ -155,9 +155,9 @@ void forward(int batches,int channels,int HW,
 
 __kernel
 void backward_test(int batches,int channels,int HW,
-             __global float *dx,int dx_offset,
-             __global float const *dy,int dy_offset,
-             __global float const *a,int a_offset,
+             __global float *dx,ulong  dx_offset,
+             __global float const *dy,ulong  dy_offset,
+             __global float const *a,ulong  a_offset,
              float factor)
 {
     int b  = get_global_id(DIM_B);
@@ -179,12 +179,12 @@ void backward_test(int batches,int channels,int HW,
 
 __kernel
 void backward_data(int batches,int channels,int HW,
-             __global float const *x,  int x_offset,
-             __global float const *dy, int dy_offset,
-             __global float const *fx, int fx_offset,
-             __global float const *fdy,int fdy_offset,
-             __global float const *b,  int b_offset,
-             __global float *dx,       int dx_offset,
+             __global float const *x,  ulong  x_offset,
+             __global float const *dy, ulong  dy_offset,
+             __global float const *fx, ulong  fx_offset,
+             __global float const *fdy,ulong  fdy_offset,
+             __global float const *b,  ulong  b_offset,
+             __global float *dx,       ulong  dx_offset,
              float factor)
 {
     int batch  = get_global_id(DIM_B);
@@ -202,12 +202,12 @@ void backward_data(int batches,int channels,int HW,
 
 __kernel
 void backward_filter(int N,
-                    __global float const *mean,int mean_offset,
-                    __global float const *var, int var_offset,
-                    __global float const *dy_sum, int dy_sum_offset,
-                    __global float const *dyx_sum,int dyx_sum_offset,
-                    __global float *dgamma,int dgamma_offset,
-                    __global float *dbeta,int dbeta_offset,
+                    __global float const *mean,ulong  mean_offset,
+                    __global float const *var, ulong  var_offset,
+                    __global float const *dy_sum, ulong  dy_sum_offset,
+                    __global float const *dyx_sum,ulong  dyx_sum_offset,
+                    __global float *dgamma,ulong  dgamma_offset,
+                    __global float *dbeta,ulong  dbeta_offset,
                     float eps,
                     float factor_gamma,
                     float factor_beta)

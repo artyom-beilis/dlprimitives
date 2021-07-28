@@ -285,12 +285,12 @@ __attribute__((reqd_work_group_size(BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N, 1)))
 __attribute__((reqd_work_group_size(1,BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N)))
 #endif
 void    sgemm(    int M,int N,int K,
-        __global const float * restrict A,int offset_A,int lda,
-        __global const float * restrict B,int offset_B,int ldb,
-        __global float * restrict C,int offset_C,int ldc,
+        __global const float * restrict A,ulong offset_A,int lda,
+        __global const float * restrict B,ulong offset_B,int ldb,
+        __global float * restrict C,ulong offset_C,int ldc,
         float beta_factor
 #if BIAS != 0
-        , __global const float * restrict bias,int offset_bias
+        , __global const float * restrict bias,ulong offset_bias
 #endif
         )
 {
