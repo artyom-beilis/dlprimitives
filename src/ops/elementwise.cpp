@@ -245,20 +245,14 @@ void Elementwise::backward_gpu( Tensor &a,Tensor &da,
     kernel_bwd_.setArg(p++,size);
     kernel_bwd_.setArg(p++,sel);
 
-    kernel_bwd_.setArg(p++,a.device_buffer());
-    kernel_bwd_.setArg(p++,int(a.device_offset()));
-    kernel_bwd_.setArg(p++,da.device_buffer());
-    kernel_bwd_.setArg(p++,int(da.device_offset()));
+    a.set_arg(kernel_bwd_,p);
+    da.set_arg(kernel_bwd_,p);
+    
+    b.set_arg(kernel_bwd_,p);
+    db.set_arg(kernel_bwd_,p);
 
-    kernel_bwd_.setArg(p++,b.device_buffer());
-    kernel_bwd_.setArg(p++,int(b.device_offset()));
-    kernel_bwd_.setArg(p++,db.device_buffer());
-    kernel_bwd_.setArg(p++,int(db.device_offset()));
-
-    kernel_bwd_.setArg(p++,c.device_buffer());
-    kernel_bwd_.setArg(p++,int(c.device_offset()));
-    kernel_bwd_.setArg(p++,dc.device_buffer());
-    kernel_bwd_.setArg(p++,int(dc.device_offset()));
+    c.set_arg(kernel_bwd_,p);
+    dc.set_arg(kernel_bwd_,p);
 
     kernel_bwd_.setArg(p++,config_.coeff[0]);
     kernel_bwd_.setArg(p++,config_.coeff[1]);
@@ -316,12 +310,9 @@ void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext con
     int p=0;
     int size = a.shape().total_size();
     kernel_.setArg(p++,size);
-    kernel_.setArg(p++,a.device_buffer());
-    kernel_.setArg(p++,int(a.device_offset()));
-    kernel_.setArg(p++,b.device_buffer());
-    kernel_.setArg(p++,int(b.device_offset()));
-    kernel_.setArg(p++,c.device_buffer());
-    kernel_.setArg(p++,int(c.device_offset()));
+    a.set_arg(kernel_,p);
+    b.set_arg(kernel_,p);
+    c.set_arg(kernel_,p);
     kernel_.setArg(p++,config_.coeff[0]);
     kernel_.setArg(p++,config_.coeff[1]);
     

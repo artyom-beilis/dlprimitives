@@ -272,13 +272,10 @@ void Pooling2D::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,Execut
     bwd_kernel_.setArg(p++,out_h);
     bwd_kernel_.setArg(p++,out_w);
     if(config_.mode == Pooling2DConfig::max) {
-        bwd_kernel_.setArg(p++,x.device_buffer());
-        bwd_kernel_.setArg(p++,int(x.device_offset()));
+        x.set_arg(bwd_kernel_,p);
     }
-    bwd_kernel_.setArg(p++,dy.device_buffer());
-    bwd_kernel_.setArg(p++,int(dy.device_offset()));
-    bwd_kernel_.setArg(p++,dx.device_buffer());
-    bwd_kernel_.setArg(p++,int(dx.device_offset()));
+    dy.set_arg(bwd_kernel_,p);
+    dx.set_arg(bwd_kernel_,p);
 
     cl::NDRange wg(1,wg_size_,wg_size_);
     cl::NDRange gr = gpu::round_range(bc,out_h,out_w,wg);
@@ -350,11 +347,8 @@ void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     kernel_.setArg(p++,in_w);
     kernel_.setArg(p++,out_h);
     kernel_.setArg(p++,out_w);
-    kernel_.setArg(p++,in.device_buffer());
-    kernel_.setArg(p++,int(in.device_offset()));
-    kernel_.setArg(p++,out.device_buffer());
-    kernel_.setArg(p++,int(out.device_offset()));
-
+    in.set_arg(kernel_,p);
+    out.set_arg(kernel_,p);
      
     cl::NDRange wg(1,wg_size_,wg_size_);
     cl::NDRange gr = gpu::round_range(bc,out_h,out_w,wg);
@@ -543,13 +537,10 @@ void GlobalPooling::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,Ex
     kernel_bwd_.setArg(p++,sm_range_);
     kernel_bwd_.setArg(p++,float(1.0f / (in_shape[2]*in_shape[3])));
     if(cfg_.mode == PoolingBase::max) {
-        kernel_bwd_.setArg(p++,x.device_buffer());
-        kernel_bwd_.setArg(p++,int(x.device_offset()));
+        x.set_arg(kernel_bwd_,p);
     }
-    kernel_bwd_.setArg(p++,dx.device_buffer());
-    kernel_bwd_.setArg(p++,int(dx.device_offset()));
-    kernel_bwd_.setArg(p++,dy.device_buffer());
-    kernel_bwd_.setArg(p++,int(dy.device_offset()));
+    dx.set_arg(kernel_bwd_,p);
+    dy.set_arg(kernel_bwd_,p);
     kernel_bwd_.setArg(p++,factor);
     
     cl::NDRange gr(in_shape[0]*in_shape[1],nd_range_);
@@ -563,13 +554,12 @@ void GlobalPooling::forward_gpu(Tensor &input, Tensor &output, ExecutionContext 
     Shape in_shape = input.shape();
     int over = in_shape[2] * in_shape[3];
     DLPRIM_CHECK(over == sm_range_);
-    kernel_.setArg(0,int(in_shape[0]*in_shape[1]));
-    kernel_.setArg(1,sm_range_);
-    kernel_.setArg(2,float(1.0f / (in_shape[2]*in_shape[3])));
-    kernel_.setArg(3,input.device_buffer());
-    kernel_.setArg(4,int(input.device_offset()));
-    kernel_.setArg(5,output.device_buffer());
-    kernel_.setArg(6,int(output.device_offset()));
+    int p=0;
+    kernel_.setArg(p++,int(in_shape[0]*in_shape[1]));
+    kernel_.setArg(p++,sm_range_);
+    kernel_.setArg(p++,float(1.0f / (in_shape[2]*in_shape[3])));
+    input.set_arg(kernel_,p);
+    output.set_arg(kernel_,p);
     
     cl::NDRange gr(in_shape[0]*in_shape[1],nd_range_);
     cl::NDRange wg(1,wg_size_);

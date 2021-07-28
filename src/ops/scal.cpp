@@ -32,8 +32,7 @@ namespace dlprim {
                 wg = 64;
             k_.setArg(p++,int(size));
             k_.setArg(p++,s);
-            k_.setArg(p++,t.device_buffer());
-            k_.setArg(p++,int(t.device_offset()));
+            t.set_arg(k_,p);
             cl::NDRange l(wg);
             cl::NDRange g=gpu::round_range(size,l);
             ec.queue().enqueueNDRangeKernel(k_,cl::NullRange,g,l,ec.events(),ec.event("sscal"));

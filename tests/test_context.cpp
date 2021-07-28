@@ -27,9 +27,9 @@ int main(int argc,char **argv)
         cl::Program const &prg = dp::gpu::Cache::instance().get_program(ctx,"bias","ACTIVATION",int(dp::StandardActivations::relu));
         //cl::Program const &prg = dp::gpu::Cache::build_program(ctx,"bias","ACTIVATION",int(dp::StandardActivations::relu));
         cl::Kernel k(prg,"activation_inplace");
-        k.setArg(0,int(a.shape().total_size()));
-        k.setArg(1,a.device_buffer());
-        k.setArg(2,int(a.device_offset()));
+        int pos=0;
+        k.setArg(pos++,int(a.shape().total_size()));
+        a.set_arg(k,pos);
         q.enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(a.shape().total_size()),cl::NullRange,nullptr,nullptr);
         a.to_host(q,false);
         q.finish();

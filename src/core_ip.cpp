@@ -134,7 +134,8 @@ namespace core {
             batch_(shape[0]),
             features_(shape[1]),
             rows_columns_(shape.size_no_batch() / shape[1]),
-            two_stage_reduction_(false)
+            two_stage_reduction_(false),
+            dt_(dt)
         {
             DLPRIM_CHECK(dt == float_data);
             int total_size = batch_ * rows_columns_;
@@ -190,15 +191,14 @@ namespace core {
             DLPRIM_CHECK(features_ == int(dw.shape()[0]));
             int total_size = dy.shape()[0] * rows_columns_;
             if(two_stage_reduction_) {
+                Tensor float_ws = ws.workspace_as_type(dt_);
                 cl::NDRange l(wg_,1);
                 cl::NDRange g=gpu::round_range(wg_ * size2_,features_,l);
                 int p=0;
                 kernel_.setArg(p++,features_);
                 kernel_.setArg(p++,total_size);
-                kernel_.setArg(p++,dy.device_buffer());
-                kernel_.setArg(p++,int(dy.device_offset()));
-                kernel_.setArg(p++,ws.device_buffer());
-                kernel_.setArg(p++,int(ws.device_offset()));
+                dy.set_arg(kernel_,p);
+                float_ws.set_arg(kernel_,p);
                 kernel_.setArg(p++,size2_);
                 kernel_.setArg(p++,0.0f);
                 auto ec1 = e.generate_series_context(0,2);
@@ -207,10 +207,8 @@ namespace core {
                 p=0;
                 kernel2_.setArg(p++,features_);
                 kernel2_.setArg(p++,size2_);
-                kernel2_.setArg(p++,ws.device_buffer());
-                kernel2_.setArg(p++,int(ws.device_offset()));
-                kernel2_.setArg(p++,dw.device_buffer());
-                kernel2_.setArg(p++,int(dw.device_offset()));
+                float_ws.set_arg(kernel2_,p);
+                dw.set_arg(kernel2_,p); 
                 kernel2_.setArg(p++,1);
                 kernel2_.setArg(p++,beta);
                 e.queue().enqueueNDRangeKernel(kernel2_,cl::NullRange,cl::NDRange(wg2_,features_),cl::NDRange(wg2_,1),ec2.events(),ec2.event("bwd_bias_b"));
@@ -223,10 +221,8 @@ namespace core {
                 int p=0;
                 kernel_.setArg(p++,features_);
                 kernel_.setArg(p++,total_size);
-                kernel_.setArg(p++,dy.device_buffer());
-                kernel_.setArg(p++,int(dy.device_offset()));
-                kernel_.setArg(p++,dw.device_buffer());
-                kernel_.setArg(p++,int(dw.device_offset()));
+                dy.set_arg(kernel_,p);
+                dw.set_arg(kernel_,p);
                 kernel_.setArg(p++,1);
                 kernel_.setArg(p++,beta);
                 e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,g,l,e.events(),e.event("bwd_bias"));
@@ -247,6 +243,7 @@ namespace core {
 
         cl::Kernel kernel_;
         cl::Kernel kernel2_;
+        DataType dt_;
     };
     std::unique_ptr<BiasBackwardFilter> BiasBackwardFilter::create(Context &ctx,Shape const &sp,DataType dt)
     {

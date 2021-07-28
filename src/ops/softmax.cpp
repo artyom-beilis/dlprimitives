@@ -218,12 +218,9 @@ void SoftmaxWithLoss::forward_gpu_loss(Tensor &input,Tensor &label, Tensor &outp
     int p=0;
     kernel_.setArg(p++,int(in_shape[0]));
     kernel_.setArg(p++,sm_range_);
-    kernel_.setArg(p++,input.device_buffer());
-    kernel_.setArg(p++,int(input.device_offset()));
-    kernel_.setArg(p++,label.device_buffer());
-    kernel_.setArg(p++,int(label.device_offset()));
-    kernel_.setArg(p++,output.device_buffer());
-    kernel_.setArg(p++,int(output.device_offset()));
+    input.set_arg(kernel_,p);
+    label.set_arg(kernel_,p);
+    output.set_arg(kernel_,p);
 
     scal_->scale(0,output,ctx.generate_series_context(0,2));
     
@@ -240,14 +237,10 @@ void SoftmaxWithLoss::backward_gpu_loss(Tensor &input,Tensor &diff, Tensor &labe
     int p=0;
     kernel_bwd_.setArg(p++,int(in_shape[0]));
     kernel_bwd_.setArg(p++,sm_range_);
-    kernel_bwd_.setArg(p++,input.device_buffer());
-    kernel_bwd_.setArg(p++,int(input.device_offset()));
-    kernel_bwd_.setArg(p++,diff.device_buffer());
-    kernel_bwd_.setArg(p++,int(diff.device_offset()));
-    kernel_bwd_.setArg(p++,label.device_buffer());
-    kernel_bwd_.setArg(p++,int(label.device_offset()));
-    kernel_bwd_.setArg(p++,output.device_buffer());
-    kernel_bwd_.setArg(p++,int(output.device_offset()));
+    input.set_arg(kernel_bwd_,p);
+    diff.set_arg(kernel_bwd_,p);
+    label.set_arg(kernel_bwd_,p);
+    output.set_arg(kernel_bwd_,p);
     kernel_bwd_.setArg(p++,factor);
 
     cl::NDRange gr(in_shape[0],nd_range_);
@@ -259,12 +252,11 @@ void Softmax::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const 
 {
     Shape in_shape = input.shape();
     DLPRIM_CHECK(int(in_shape[1]) == sm_range_);
-    kernel_.setArg(0,int(in_shape[0]));
-    kernel_.setArg(1,sm_range_);
-    kernel_.setArg(2,input.device_buffer());
-    kernel_.setArg(3,int(input.device_offset()));
-    kernel_.setArg(4,output.device_buffer());
-    kernel_.setArg(5,int(output.device_offset()));
+    int p = 0;
+    kernel_.setArg(p++,int(in_shape[0]));
+    kernel_.setArg(p++,sm_range_);
+    input.set_arg(kernel_,p);
+    output.set_arg(kernel_,p);
     
     cl::NDRange gr(in_shape[0],nd_range_);
     cl::NDRange wg(1,wg_size_);

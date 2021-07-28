@@ -43,13 +43,10 @@ void AXPBY::apply(float a,Tensor &x,float b,Tensor &y,Tensor &z,ExecutionContext
         int p=0;
         kernel_.setArg(p++,int(total));
         kernel_.setArg(p++,a);
-        kernel_.setArg(p++,x.device_buffer());
-        kernel_.setArg(p++,int(x.device_offset()));
+        x.set_arg(kernel_,p);
         kernel_.setArg(p++,b);
-        kernel_.setArg(p++,y.device_buffer());
-        kernel_.setArg(p++,int(y.device_offset()));
-        kernel_.setArg(p++,z.device_buffer());
-        kernel_.setArg(p++,int(z.device_offset()));
+        y.set_arg(kernel_,p);
+        z.set_arg(kernel_,p);
         e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,g,l,e.events(),e.event("axpby"));
     }
 }

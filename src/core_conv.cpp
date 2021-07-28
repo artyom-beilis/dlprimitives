@@ -215,12 +215,12 @@ namespace core {
             int w = in.shape()[3];
 
             int p=0;
+
+            Tensor float_ws = ws.workspace_as_type(float_data);
             conv_kernel_.setArg(p++,config_.channels_out);
             conv_kernel_.setArg(p++,config_.channels_in);
-            conv_kernel_.setArg(p++,W.device_buffer());
-            conv_kernel_.setArg(p++,int(W.device_offset()));
-            conv_kernel_.setArg(p++,ws.device_buffer());
-            conv_kernel_.setArg(p++,int(ws.device_offset()));
+            W.set_arg(conv_kernel_,p);
+            float_ws.set_arg(conv_kernel_,p);
 
             p=0;
             conv_.setArg(p++,B);
@@ -229,16 +229,13 @@ namespace core {
             conv_.setArg(p++,h);
             conv_.setArg(p++,w);
 
-            conv_.setArg(p++,in.device_buffer());
-            conv_.setArg(p++,int(in.device_offset()));
-            conv_.setArg(p++,ws.device_buffer());
-            conv_.setArg(p++,int(ws.device_offset()));
+            in.set_arg(conv_,p);
+            float_ws.set_arg(conv_,p);
             if(bias) {
-                conv_.setArg(p++,bias->device_buffer());
-                conv_.setArg(p++,int(bias->device_offset()));
+                bias->set_arg(conv_,p);
             }
-            conv_.setArg(p++,out.device_buffer());
-            conv_.setArg(p++,int(out.device_offset()));
+            out.set_arg(conv_,p);
+
             auto ec1 = ec.generate_series_context(0,2);
             auto ec2 = ec.generate_series_context(1,2);
 
@@ -282,8 +279,7 @@ namespace core {
             wg = 64;
         k_.setArg(p++,int(size));
         k_.setArg(p++,s);
-        k_.setArg(p++,t.device_buffer());
-        k_.setArg(p++,int(t.device_offset()));
+        t.set_arg(k_,p);
         cl::NDRange l(wg);
         cl::NDRange g=gpu::round_range(size,l);
         ec.queue().enqueueNDRangeKernel(k_,cl::NullRange,g,l,ec.events(),ec.event("sscal"));
@@ -307,7 +303,7 @@ namespace core {
             conv_kernel_bwd_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
             bw_conv_data_ = cl::Kernel(prog,"winconv_3x3_bwd_data");
         }
-        virtual void enqueue(Tensor &dx,Tensor &K,Tensor &dy,Tensor &ws,float factor,ExecutionContext const &ec)
+        virtual void enqueue(Tensor &dx,Tensor &K,Tensor &dy,Tensor &ws_bytes,float factor,ExecutionContext const &ec)
         {
             auto ec1 = ec.generate_series_context(0,3);
             auto ec2 = ec.generate_series_context(1,3);
@@ -320,13 +316,13 @@ namespace core {
             int w = dx.shape()[3];
 
             int p=0;
+            Tensor ws = ws_bytes.workspace_as_type(float_data);
+
             conv_kernel_bwd_.setArg(p++,config_.channels_out);
             conv_kernel_bwd_.setArg(p++,config_.channels_in);
-            conv_kernel_bwd_.setArg(p++,K.device_buffer());
-            conv_kernel_bwd_.setArg(p++,int(K.device_offset()));
-            conv_kernel_bwd_.setArg(p++,ws.device_buffer());
-            conv_kernel_bwd_.setArg(p++,int(ws.device_offset()));
-
+            K.set_arg(conv_kernel_bwd_,p);
+            ws.set_arg(conv_kernel_bwd_,p);
+            
             p=0;
             bw_conv_data_.setArg(p++,B);
             bw_conv_data_.setArg(p++,N);
@@ -334,12 +330,9 @@ namespace core {
             bw_conv_data_.setArg(p++,h);
             bw_conv_data_.setArg(p++,w);
 
-            bw_conv_data_.setArg(p++,dx.device_buffer());
-            bw_conv_data_.setArg(p++,int(dx.device_offset()));
-            bw_conv_data_.setArg(p++,ws.device_buffer());
-            bw_conv_data_.setArg(p++,int(ws.device_offset()));
-            bw_conv_data_.setArg(p++,dy.device_buffer());
-            bw_conv_data_.setArg(p++,int(dy.device_offset()));
+            dx.set_arg(bw_conv_data_,p);
+            ws.set_arg(bw_conv_data_,p);
+            dy.set_arg(bw_conv_data_,p);
             
             s_.enqueue(factor,dx,ec1);
 
@@ -386,12 +379,9 @@ namespace core {
             bw_conv_filter_.setArg(p++,B);
             bw_conv_filter_.setArg(p++,N);
             bw_conv_filter_.setArg(p++,C);
-            bw_conv_filter_.setArg(p++,x.device_buffer());
-            bw_conv_filter_.setArg(p++,int(x.device_offset()));
-            bw_conv_filter_.setArg(p++,dK.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dK.device_offset()));
-            bw_conv_filter_.setArg(p++,dy.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dy.device_offset()));
+            x.set_arg(bw_conv_filter_,p);
+            dK.set_arg(bw_conv_filter_,p);
+            dy.set_arg(bw_conv_filter_,p);
             bw_conv_filter_.setArg(p++,factor);
             
             cl::NDRange wg(256,1);
@@ -451,16 +441,12 @@ namespace core {
             conv_.setArg(p++,batch);
             conv_.setArg(p++,height);
             conv_.setArg(p++,width);
-            conv_.setArg(p++,in.device_buffer());
-            conv_.setArg(p++,int(in.device_offset()));
-            conv_.setArg(p++,W.device_buffer());
-            conv_.setArg(p++,int(W.device_offset()));
+            in.set_arg(conv_,p);
+            W.set_arg(conv_,p);
             if(bias) {
-                conv_.setArg(p++,bias->device_buffer());
-                conv_.setArg(p++,int(bias->device_offset()));
+                bias->set_arg(conv_,p);
             }
-            conv_.setArg(p++,out.device_buffer());
-            conv_.setArg(p++,int(out.device_offset()));
+            out.set_arg(conv_,p);
             
             int gW = (width+1)/2;
             int gH = (height+1)/2;
@@ -511,12 +497,9 @@ namespace core {
             bw_conv_data_.setArg(p++,batch);
             bw_conv_data_.setArg(p++,height);
             bw_conv_data_.setArg(p++,width);
-            bw_conv_data_.setArg(p++,dx.device_buffer());
-            bw_conv_data_.setArg(p++,int(dx.device_offset()));
-            bw_conv_data_.setArg(p++,K.device_buffer());
-            bw_conv_data_.setArg(p++,int(K.device_offset()));
-            bw_conv_data_.setArg(p++,dy.device_buffer());
-            bw_conv_data_.setArg(p++,int(dy.device_offset()));
+            dx.set_arg(bw_conv_data_,p);
+            K.set_arg(bw_conv_data_,p);
+            dy.set_arg(bw_conv_data_,p);
             
             int gW = (width+1)/2;
             int gH = (height+1)/2;
@@ -597,28 +580,25 @@ namespace core {
             if(second_reduce_ > 1)
                 reduce_ = cl::Kernel(prog,"reduce");
         }
-        virtual void enqueue(Tensor &x,Tensor &dK,Tensor &dy,Tensor &ws,float factor,ExecutionContext const &ec) 
+        virtual void enqueue(Tensor &x,Tensor &dK,Tensor &dy,Tensor &ws_bytes,float factor,ExecutionContext const &ec) 
         {
             int kitems = dK.shape().total_size();
             int batch = x.shape()[0];
             int height = x.shape()[2];
             int width = x.shape()[3];
             int p=0;
+            Tensor ws = ws_bytes.workspace_as_type(float_data);
             bw_conv_filter_.setArg(p++,batch);
             bw_conv_filter_.setArg(p++,height);
             bw_conv_filter_.setArg(p++,width);
-            bw_conv_filter_.setArg(p++,x.device_buffer());
-            bw_conv_filter_.setArg(p++,int(x.device_offset()));
+            x.set_arg(bw_conv_filter_,p);
             if(second_reduce_ == 1) {
-               bw_conv_filter_.setArg(p++,dK.device_buffer());
-               bw_conv_filter_.setArg(p++,int(dK.device_offset()));
+                dK.set_arg(bw_conv_filter_,p);
             }
             else {
-               bw_conv_filter_.setArg(p++,ws.device_buffer());
-               bw_conv_filter_.setArg(p++,int(ws.device_offset())/4);
+                ws.set_arg(bw_conv_filter_,p);
             }
-            bw_conv_filter_.setArg(p++,dy.device_buffer());
-            bw_conv_filter_.setArg(p++,int(dy.device_offset()));
+            dy.set_arg(bw_conv_filter_,p);
             if(second_reduce_ == 1)
                bw_conv_filter_.setArg(p++,factor);
             
@@ -634,10 +614,8 @@ namespace core {
                 ec.queue().enqueueNDRangeKernel(bw_conv_filter_,cl::NullRange,gr,wg,ec1.events(),ec1.event("sep_conv_bw_filter"));
                 p=0;
                 int reduce_items = dK.shape().total_size();
-                reduce_.setArg(p++,ws.device_buffer());
-                reduce_.setArg(p++,int(ws.device_offset()) / 4);
-                reduce_.setArg(p++,dK.device_buffer());
-                reduce_.setArg(p++,int(dK.device_offset()));
+                ws.set_arg(reduce_,p);
+                dK.set_arg(reduce_,p);
                 reduce_.setArg(p++,factor);
                 ec.queue().enqueueNDRangeKernel(reduce_,
                             cl::NullRange,

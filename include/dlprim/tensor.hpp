@@ -120,6 +120,16 @@ namespace dlprim {
         /// Get a pointer to CPU memory - uses lazy allocation on demand
         ///
         void *host_data();
+
+
+        ///
+        /// Create tensor over all avalible size for data typr d
+        ///
+        Tensor workspace_as_type(DataType d=float_data) const
+        {
+            size_t size = memory_size() / size_of_data_type(d);
+            return sub_tensor(0,Shape(size),d);
+        }
         
         ///
         /// Create tensor on the memory of existing tensor
