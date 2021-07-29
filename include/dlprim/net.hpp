@@ -2,6 +2,7 @@
 #include <dlprim/operator.hpp>
 #include <map>
 #include <vector>
+#include <list>
 
 namespace dlprim {
     class Net {
@@ -23,6 +24,22 @@ namespace dlprim {
 
         void load_parameters_from_hdf5(std::string const &fname,bool allow_missing=false);
         void save_parameters_to_hdf5(std::string const &fname);
+
+        ///
+        /// True if all intermediate results are kept
+        /// 
+        bool keep_intermediate_tensors() const
+        {
+            return keep_intermediate_tensors_;
+        }
+        ///
+        /// Set if to keed intermediate results for debugging. Default is false - optimise memory use
+        /// and reuse intermediate memory chunks
+        ///
+        void keep_intermediate_tensors(bool keep) 
+        {
+            keep_intermediate_tensors_ = keep;
+        }
 
         void add_operator(  std::unique_ptr<Operator> op,
                             std::string const &name,
@@ -138,6 +155,10 @@ namespace dlprim {
 
         void setup_ws();
         void allocate_tensors();
+        void allocate_optimized_chunks(bool forward_only);
+        void tensor_use_list(std::vector<std::list<std::string> > &start,
+                              std::vector<std::list<std::string> > &stop);
+        void allocate_chunks();
 
 
         Context ctx_;
@@ -155,7 +176,9 @@ namespace dlprim {
         std::map<std::string,Tensor> parameters_diff_;
         std::vector<std::string> inputs_;
         std::vector<std::string> outputs_;
+        std::vector<Tensor> memory_;
 
         CalculationsMode mode_;
+        bool keep_intermediate_tensors_;
     };
 };

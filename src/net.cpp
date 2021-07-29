@@ -2,6 +2,7 @@
 #include <dlprim/json.hpp>
 #include <sstream>
 #include <fstream>
+#include <list>
 #include <algorithm>
 
 #ifndef DISABLE_HDF5
@@ -11,7 +12,8 @@
 namespace dlprim {
     Net::Net(Context &ctx) :
         ctx_(ctx),
-        mode_(CalculationsMode::predict)
+        mode_(CalculationsMode::predict),
+        keep_intermediate_tensors_(false)
     {
     }
 
@@ -259,16 +261,137 @@ namespace dlprim {
             workspace_ = Tensor();
     }
 
-    void Net::allocate_tensors()
+    void Net::tensor_use_list(std::vector<std::list<std::string> > &start,
+                              std::vector<std::list<std::string> > &stop)
+    {
+        std::map<std::string,std::pair<int,int> > used_at;
+        int last = connections_.size()-1;
+        for(auto const &n : inputs_) 
+            used_at[n] = std::make_pair(0,last);
+        for(auto const &n : outputs_) 
+            used_at[n] = std::make_pair(0,last);
+        for(int i=0;i<int(connections_.size());i++) {
+            for(int dir=0;dir<2;dir++) {
+                for(auto const &name : (dir == 0 ? connections_[i].input_names : connections_[i].output_names)) {
+                    if(used_at.find(name) == used_at.end()) {
+                        used_at[name] = std::make_pair(i,i);
+                    }
+                    else {
+                        auto &fl = used_at[name];
+                        fl.first  = std::min(fl.first,i);
+                        fl.second = std::max(fl.second,i);
+                    }
+                }
+            }
+        }
+        start.clear();
+        start.resize(connections_.size());
+        stop.clear();
+        stop.resize(connections_.size());
+        for(auto const &v:used_at) {
+            start[v.second.first].push_back(v.first);
+            stop[v.second.second].push_back(v.first);
+        }
+    }
+
+    void Net::allocate_optimized_chunks(bool forward)
+    {
+        std::vector<std::list<std::string> > alloc_needed;
+        std::vector<std::list<std::string> > free_needed;
+        tensor_use_list(alloc_needed,free_needed);
+        if(!forward)
+            alloc_needed.swap(free_needed);
+
+        std::multimap<size_t,int> pool;
+        std::vector<size_t> chunks;
+        std::map<std::string,int> chunks_mapping;
+        int step_offset,step_scale;
+        if(forward) {
+            step_offset = 0;
+            step_scale = 1;
+        }
+        else {
+            step_offset = connections_.size() - 1;
+            step_scale = -1;
+        }
+        for(unsigned i=0;i<connections_.size();i++) {
+            int index = i * step_scale + step_offset;
+            for(auto const &n : alloc_needed[index]) {
+                size_t mem = tensor_specs_[n].memory_size();
+                if(pool.empty()) {
+                    chunks_mapping[n] = chunks.size();
+                    chunks.push_back(mem);
+                }
+                else {
+                    auto p = pool.lower_bound(mem);
+                    if(p!=pool.end()) {
+                        chunks_mapping[n] = p->second;
+                        pool.erase(p);
+                    }
+                    else {
+                        auto last = pool.rbegin();
+                        chunks_mapping[n] = last->second;
+                        chunks[last->second] = mem; // increase memory
+                        pool.erase(std::prev(pool.end()));
+                    }
+                }
+            }
+            for(auto const &n : free_needed[index]) {
+                int cid = chunks_mapping[n];
+                pool.insert(std::make_pair(chunks[cid],cid));
+            }
+        }
+        memory_.clear();
+        size_t allocated = 0;
+        for(size_t i=0;i<chunks.size();i++) {
+            memory_.push_back(Tensor(ctx_,Shape(chunks[i]),uint8_data));
+            allocated += chunks[i];
+        }
+        tensors_.clear();
+        tensors_diff_.clear();
+        size_t needed = 0;
+        for(auto const &ts : tensor_specs_) {
+            int cid = chunks_mapping[ts.first];
+            auto base_tensor = memory_[cid];
+            Tensor actual_tensor = base_tensor.sub_tensor(0,ts.second.shape(),ts.second.dtype());
+            if(forward) {
+                tensors_[ts.first ] = actual_tensor;
+                needed += ts.second.memory_size();
+            }
+            else {
+                tensors_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
+                allocated += ts.second.memory_size();
+                needed += 2*ts.second.memory_size();
+                tensors_diff_[ts.first ] = actual_tensor;
+            }
+        }
+        const size_t mb = (1024*1024);
+        std::cout << "Allocated " << (allocated + mb-1)/mb << " MB\n";
+        std::cout << "Needed    " << (needed + mb-1)/mb << " MB\n";
+
+    }
+    void Net::allocate_chunks()
     {
         tensors_.clear();
-        parameters_.clear();
+        tensors_diff_.clear();
+        memory_.clear();
         bool train = mode_ == CalculationsMode::train;
         for(auto const &ts : tensor_specs_) {
             tensors_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
             if(train)
                 tensors_diff_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
         }
+    }
+    void Net::allocate_tensors()
+    {
+        tensors_.clear();
+        tensors_diff_.clear();
+        parameters_.clear();
+        bool train = mode_ == CalculationsMode::train;
+        if(keep_intermediate_tensors_)
+            allocate_chunks();
+        else
+            allocate_optimized_chunks(!train); // forward = !train
         for(auto const &ps : parameter_specs_) {
             parameters_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype());
             if(train)
@@ -368,6 +491,7 @@ namespace dlprim {
         tensors_diff_.clear();
         parameters_.clear();
         parameters_diff_.clear();
+        memory_.clear();
     }
 
     void Net::forward(ExecutionContext const &e,bool sync)
