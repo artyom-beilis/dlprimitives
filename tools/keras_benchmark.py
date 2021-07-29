@@ -1,5 +1,5 @@
 import os
-os.environ['KERAS_BACKEND']='plaidml.keras.backend'
+#os.environ['KERAS_BACKEND']='plaidml.keras.backend'
 import time
 import numpy as np
 import sys
@@ -12,11 +12,15 @@ if 'KERAS_BACKEND' in os.environ:
     from keras.models import Sequential
     import keras.layers as layers
     from keras.utils import to_categorical
+    from keras import backend
 else:
     import tensorflow.keras as kr
     from tensorflow.keras.models import Sequential
     import tensorflow.keras.layers as layers
     from tensorflow.keras.utils import to_categorical
+    from tensorflow.keras import backend
+
+backend.set_image_data_format('channels_first')
 
 def make_model_from_dp(js):
     shape = tuple(js['inputs'][0]['shape'][1:])
@@ -102,6 +106,7 @@ def make_model_from_dp(js):
             blobs[out[0]] = layers.Dense(op['outputs'],use_bias=op['bias'],activation=op.get('activation'))(blobs[in_name])
         else:
             raise Exception("Unsupported layer %s/%s" % (tp,json.dumps(op)))
+        print("Output Shape",blobs[out[0]])
     return kr.Model(input_layer,blobs[js['outputs'][0]],name='amodel')
 
 
