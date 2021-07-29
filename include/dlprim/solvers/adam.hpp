@@ -90,14 +90,10 @@ namespace dlprim {
                 adam_.setArg(p++,lr);
                 adam_.setArg(p++,weight_decay);
                 adam_.setArg(p++,eps);
-                adam_.setArg(p++,pr.device_buffer());
-                adam_.setArg(p++,int(pr.device_offset()));
-                adam_.setArg(p++,g.device_buffer());
-                adam_.setArg(p++,int(g.device_offset()));
-                adam_.setArg(p++,m.device_buffer());
-                adam_.setArg(p++,int(m.device_offset()));
-                adam_.setArg(p++,v.device_buffer());
-                adam_.setArg(p++,int(v.device_offset()));
+                pr.set_arg(adam_,p);
+                g.set_arg(adam_,p);
+                m.set_arg(adam_,p);
+                v.set_arg(adam_,p);
                 e.queue().enqueueNDRangeKernel(adam_,cl::NullRange,cl::NDRange(size),cl::NullRange,e.events(),e.event("adam"));
             }
 
