@@ -342,32 +342,23 @@ namespace dlprim {
             }
         }
         memory_.clear();
-        size_t allocated = 0;
         for(size_t i=0;i<chunks.size();i++) {
             memory_.push_back(Tensor(ctx_,Shape(chunks[i]),uint8_data));
-            allocated += chunks[i];
         }
         tensors_.clear();
         tensors_diff_.clear();
-        size_t needed = 0;
         for(auto const &ts : tensor_specs_) {
             int cid = chunks_mapping[ts.first];
             auto base_tensor = memory_[cid];
             Tensor actual_tensor = base_tensor.sub_tensor(0,ts.second.shape(),ts.second.dtype());
             if(forward) {
                 tensors_[ts.first ] = actual_tensor;
-                needed += ts.second.memory_size();
             }
             else {
                 tensors_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
-                allocated += ts.second.memory_size();
-                needed += 2*ts.second.memory_size();
                 tensors_diff_[ts.first ] = actual_tensor;
             }
         }
-        const size_t mb = (1024*1024);
-        std::cout << "Allocated " << (allocated + mb-1)/mb << " MB\n";
-        std::cout << "Needed    " << (needed + mb-1)/mb << " MB\n";
 
     }
     void Net::allocate_chunks()
