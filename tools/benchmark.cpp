@@ -56,7 +56,7 @@ int main(int argc,char **argv)
             argc--;
         }
         if(argc<3) {
-            std::cerr << "Usage [-t] [-iNNN] [-wMMM] device net.json [net.h5]" << std::endl;
+            std::cerr << "Usage [-t] [-iNNN] [-wMMM] device net.json [net.h5/.dlpw]" << std::endl;
             return 1;
         }
         dp::Context ctx(argv[1]);
@@ -71,7 +71,7 @@ int main(int argc,char **argv)
         net.load_from_json_file(net_js);
         net.setup();
         if(!net_h5.empty()) {
-            net.load_parameters_from_hdf5(net_h5);
+            net.load_parameters(net_h5);
         }
         else {
             xavier(net);

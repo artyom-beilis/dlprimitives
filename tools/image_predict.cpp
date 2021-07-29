@@ -141,7 +141,7 @@ int main(int argc,char **argv)
         net.mode(dp::CalculationsMode::predict);
         net.load_from_json_file(net_js);
         net.setup();
-        net.load_parameters_from_hdf5(net_h5);
+        net.load_parameters(net_h5);
         net.copy_parameters_to_device();
         dp::Tensor data = net.input(0),prob = net.output(0);
 

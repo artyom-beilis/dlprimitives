@@ -115,6 +115,8 @@ namespace dlprim {
         /// Get offset - you should always bind both buffer and offset since there is no pointer arithmetics 
         /// at host in OpenCL and same memory may be used for several tensors
         ///
+        /// Always uses 64 bit ulong even of the device 32 bit. 
+        ///
         cl_ulong device_offset() 
         {
             return offset_; 
@@ -126,7 +128,7 @@ namespace dlprim {
 
 
         ///
-        /// Create tensor over all avalible size for data typr d
+        /// Create tensor over all avalible size for data type d
         ///
         Tensor workspace_as_type(DataType d=float_data) const
         {

@@ -5,10 +5,17 @@
 #include <list>
 
 namespace dlprim {
+    ///
+    /// Major object used for inference
+    ///
     class Net {
     public:
 
+        ///
+        /// Create an empty network object for a context
+        ///
         Net(Context &ctx);
+
         ~Net() {}
         Net const &operator=(Net const &) = delete;
         Net(Net const &) = delete;
@@ -16,13 +23,45 @@ namespace dlprim {
         Net &operator=(Net &&) = default;
         Net(Net &&) = default;
 
+        ///
+        /// Configure network graph from json
+        ///
         void load_from_json(json::value const &v);
+        ///
+        /// Configure network graph from json
+        ///
         void load_from_json_file(std::string const &name);
 
+        ///
+        /// Define network input
+        ///
         void add_input_tensor(std::string const &name,TensorSpecs const &ts);
+        ///
+        /// Make a tensor as output tensor (will be preserverd) by name
+        ///
         void mark_output_tensor(std::string const &name);
 
+        ///
+        /// Load parameters from binary stream DLP format (file) s must be seekable
+        ///
+        void load_parameters(std::istream &s,bool allow_missing=false);
+        ///
+        /// Load parameters from file name can be either DLP or HDF5 format
+        ///
+        void load_parameters(std::string const &name,bool allow_missing=false);
+
+        ///
+        /// Save network parameters to DLP format
+        ///
+        void save_parameters(std::string const &fname);
+
+        ///
+        /// Copy all parameters for hdf5 file format. allow_missing - ignore if parameter is not defined
+        ///
         void load_parameters_from_hdf5(std::string const &fname,bool allow_missing=false);
+        ///
+        /// Save all network parameters to a file
+        ///
         void save_parameters_to_hdf5(std::string const &fname);
 
         ///
@@ -41,6 +80,13 @@ namespace dlprim {
             keep_intermediate_tensors_ = keep;
         }
 
+        ///
+        /// Add an operator \a op to the network. name should be unique
+        ///
+        /// inputs - tensor input names - must be defined (as input or output of another operatos)
+        /// outputs - tensor output names
+        /// parameters - give cutom names to parameters
+        /// 
         void add_operator(  std::unique_ptr<Operator> op,
                             std::string const &name,
                             std::vector<std::string> const &inputs,
@@ -159,6 +205,7 @@ namespace dlprim {
         void tensor_use_list(std::vector<std::list<std::string> > &start,
                               std::vector<std::list<std::string> > &stop);
         void allocate_chunks();
+        void load_header(std::istream &f,json::value &v);
 
 
         Context ctx_;

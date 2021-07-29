@@ -160,7 +160,7 @@ int main(int argc,char **argv)
         //if(epoch <= 2)
         //    sgd.lr *= 0.1;
         net.copy_parameters_to_host();
-        net.save_parameters_to_hdf5("snap_" + std::to_string(epoch+1) + ".h5");
+        net.save_parameters("snap_" + std::to_string(epoch+1) + ".dlp");
         auto end = std::chrono::high_resolution_clock::now();
         auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((end-start)).count();
         std::cout << "Executed in " << passed << " second" << std::endl;

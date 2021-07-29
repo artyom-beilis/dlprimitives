@@ -48,6 +48,44 @@ namespace dlprim {
         throw ValidationError("Library was build without HDF5 support");
     }
 #else
+    void Net::save_parameters(std::string const &fname)
+    {
+        json::value header;
+        json::value &tensors = header["tensors"];
+        size_t start_pos = 0;
+        for(auto  &pr : parameters_) {
+            std::string name = pr.first;
+            json::value &tensor_specs = tensors[name];
+            tensor_specs["dtype"] = data_type_to_string(pr.second.dtype());
+            Shape shape = pr.second.shape();
+            for(int i=0;i<shape.size();i++)
+                tensor_specs["shape"][i] = shape[i];
+            size_t mem = pr.second.memory_size();
+            tensor_specs["size"] = mem;
+            tensor_specs["start"] = start_pos;
+            start_pos += mem;
+        }
+        std::ostringstream ss;
+        ss << header;
+        std::string header_content = ss.str();
+        unsigned len = header_content.size();
+        std::ofstream f(fname,std::fstream::binary);
+        f<< "DLPW";
+        for(int i=0;i<4;i++) {
+            unsigned char v = 0xFF & (len >> (24 - i*8));
+            f << (char)(v);
+        }
+        f << header_content;
+        for(auto  &pr : parameters_) {
+            void *ptr = pr.second.host_data();
+            size_t len = pr.second.memory_size();
+            f.write((char*)ptr,len);
+        }
+        f.flush();
+        if(!f) {
+            throw ValidationError("I/O error in saving to " + fname);
+        }
+    }
     void Net::save_parameters_to_hdf5(std::string const &fname)
     {
         try {
@@ -120,6 +158,86 @@ namespace dlprim {
         
     }
 #endif
+    void Net::load_header(std::istream &f,json::value &v)
+    {
+        unsigned char buf[8]={0};
+        f.read((char*)buf,8);
+        if(memcmp(buf,"DLPW",4) != 0)
+            throw ValidationError("Invalid File Format");
+        unsigned len = 0;
+        for(int i=0;i<4;i++) {
+            len |= unsigned(buf[4+i]) << ((3-i)*8);
+        }
+        if(len > 1024*1024*64)
+            throw ValidationError("Header seems to be too big");
+        std::vector<char> buffer(len+1);
+        f.read(buffer.data(),len);
+        if(!f)
+            throw ValidationError("Problem readfing file");
+        buffer[len] = 0;
+        char const *begin=&buffer[0];
+        char const *end  =&buffer[len]; // (there is +1)
+        if(!v.load(begin,end,true)) {
+            throw ValidationError("Problem parsing content");
+        }
+    }
+    void Net::load_parameters(std::string const &file_name,bool allow_missing)
+    {
+        std::ifstream f(file_name,std::ifstream::binary);
+        char buf[5]={};
+        f.read(buf,4);
+        if(buf==std::string("DLPW")) {
+            f.seekg(0);
+            try {
+                load_parameters(f,allow_missing);
+            }
+            catch(std::exception const &e) {
+                throw ValidationError(std::string(e.what()) + " in file " + file_name);
+            }
+        }
+        else if(buf==std::string("\211HDF")) {
+            f.close();
+            load_parameters_from_hdf5(file_name,allow_missing);
+        }
+        else {
+            throw ValidationError("Unidentified majic number for " + file_name);
+        }
+    }
+    void Net::load_parameters(std::istream &f,bool allow_missing)
+    {
+        json::value v;
+        load_header(f,v);
+        size_t offset = f.tellg();
+        json::object const &tensors=v.find("tensors").object();
+        for(auto  &pr : parameters_) {
+            std::string name = pr.first;
+            Tensor &tensor = pr.second;
+            auto p = tensors.find(name);
+            if(p == tensors.end()) {
+                if(allow_missing)
+                    continue;
+                throw ValidationError("No parameter " + name + " was found");
+            }
+            std::vector<int> dims = p->second.get<std::vector<int> >("shape");
+            DataType dt = string_to_data_type(p->second.get<std::string>("dtype"));
+            Shape ds_shape=Shape::from_range(dims.begin(),dims.end());
+            if(ds_shape != tensor.shape() || dt != tensor.dtype()) {
+                std::ostringstream ss;
+                ss << "Tensor shape/type mistmatch for " << name << " expecting " << tensor << " got " << ds_shape << " " << data_type_to_string(dt);
+                throw ValidationError(ss.str());
+            }
+            size_t start = p->second.get<size_t>("start");
+            size_t size  = p->second.get<size_t>("size");
+            if(size != tensor.memory_size()) {
+                throw ValidationError("Object size mistmatch");
+            }
+            f.seekg(start + offset);
+            f.read(static_cast<char *>(tensor.host_data()),size);
+            if(!f) {
+                throw ValidationError("I/O error");
+            }
+        }
+    }
     void Net::load_from_json(json::value const &v)
     {
         json::array const &inputs = v["inputs"].array();

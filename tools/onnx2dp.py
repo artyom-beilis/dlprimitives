@@ -1,6 +1,8 @@
 import sys
+import struct
 import onnx
 import json
+import os
 import argparse
 import h5py
 import numpy as np
@@ -223,8 +225,29 @@ def make_h5(file_name,params):
             ds[:] = value
     finally:
         h.close()
+
+def make_dlp(file_name,params):
+    with open(file_name,'wb') as f:
+        start = 0
+        tensors={}
+        for name in params:
+            shape = params[name]['shape']
+            value = params[name]['value']
+            length = value.nbytes
+            tensors[name] = dict(shape=shape,dtype='float',start=start,size=length)
+            start += length
+        hjs = dict(tensors=tensors)
+        h = json.dumps(hjs).encode();
+        f.write(b'DLPW')
+        f.write(struct.pack('!i',len(h)))
+        f.write(h)
+        for name in params:
+            blob = params[name]['value'].tobytes()
+            f.write(blob)
+            start += len(blob)
+
     
-def convert_onnx_to_dlprim(o_path,js,h5):    
+def convert_onnx_to_dlprim(o_path,js,h5,dlp):    
     model = onnx.load_model(o_path)
     inputs,outputs,params = get_inputs(model)
     print("Inputs",inputs)
@@ -240,7 +263,10 @@ def convert_onnx_to_dlprim(o_path,js,h5):
     with open(js,'w') as  f:
         json.dump(dp,f,indent=4)
     print("Saving weights")
-    make_h5(h5,params) 
+    if dlp:
+        make_dlp(dlp,params)
+    if h5:
+        make_h5(h5,params) 
     print("Done")
 
 
@@ -250,8 +276,9 @@ def convert_onnx_to_dlprim(o_path,js,h5):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument('--model',required=True)
+    p.add_argument('--h5')
     p.add_argument('--js',default='model_dp.js')
-    p.add_argument('--h5',default='model_dp.h5')
+    p.add_argument('--dlp',default='model_dp.dlp')
     r = p.parse_args()
-    convert_onnx_to_dlprim(r.model,r.js,r.h5)
+    convert_onnx_to_dlprim(r.model,r.js,r.h5,r.dlp)
 
