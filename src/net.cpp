@@ -154,8 +154,7 @@ namespace dlprim {
         catch(H5::Exception const &e) {
             throw ValidationError("Failed to load HDF5 file " + fname + ": " + std::string(e.getCDetailMsg()));
         }
-
-        
+        copy_parameters_to_device();
     }
 #endif
     void Net::load_header(std::istream &f,json::value &v)
@@ -237,6 +236,7 @@ namespace dlprim {
                 throw ValidationError("I/O error");
             }
         }
+        copy_parameters_to_device();
     }
     void Net::load_from_json(json::value const &v)
     {

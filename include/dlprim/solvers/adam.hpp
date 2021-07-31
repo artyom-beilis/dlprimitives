@@ -1,11 +1,12 @@
 #include <dlprim/net.hpp>
 #include <dlprim/ops/scal.hpp>
+#include <dlprim/solvers/solver_base.hpp>
 #include <iostream>
 #include <cmath>
 
 namespace dlprim {
     namespace solvers {
-        class Adam {
+        class Adam : public SolverBase {
         public:
             float lr    = 0.001;
             float beta1 = 0.9;

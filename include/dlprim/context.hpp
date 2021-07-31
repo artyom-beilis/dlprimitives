@@ -9,119 +9,6 @@
 namespace dlprim {
 
 ///
-/// This is main object that represent the pair of OpenCL platform and device
-/// all other objects use it.
-///
-/// It can be CPU context - meaning that it represents no OpenCL platform/device/context
-///
-///
-class Context {
-public:
-    /// Device used with the context, CPU or OpenCL device.
-    enum ContextType {
-        cpu = 0, ///< CPU no OpenCL platform/device/context are used
-        ocl = 1, ///< Use OpenCL device, it also may be CPU device.
-    };
-
-
-    ///
-    /// Create new context from textual ID. It can be "cpu" or "P:D"
-    /// were P is integer representing platform and D is device number on this platform
-    /// starting from 0, for example "0:1" is second device on 1st platform.
-    ///
-    Context(std::string const &dev_id);
-    ///
-    /// Create context from numerical platform and device number, of it is CPU context,
-    /// platform and device are ignored
-    ///
-    Context(ContextType dt = cpu,int platform = 0,int device = 0);
-    ///
-    /// Create the object from OpenCL context, platform and device..
-    ///
-    Context(cl::Context const &c,cl::Platform const &p,cl::Device const &d);
-
-    Context(Context const &) = default;
-    Context &operator=(Context const &) = default;
-    Context(Context &&) = default;
-    Context &operator=(Context &&) = default;
-    ~Context() {}
-
-    ///
-    /// Human readable name for the context, for example:
-    /// "GeForce GTX 960 on NVIDIA CUDA"
-    ///
-    std::string name() const;
-
-    /// return context type either cpu or ocl
-    ContextType context_type() const;
-
-    /// Returns true if the context was created as CPU context 
-    bool is_cpu_context() const
-    {
-        return type_ == cpu;
-    }
-    /// Returns true if the context was created as OpenCL context
-    bool is_opencl_context() const
-    {
-        return type_ == ocl;
-    }
-    /// Get OpenCL platform object
-    cl::Platform &platform()
-    {
-        return platform_;
-    }
-    /// Get OpenCL device object
-    cl::Device &device()
-    {
-        return device_;
-    }
-
-    /// Check if specific device extension is present
-    bool check_device_extension(std::string const &name);
-    
-    /// get all device extensions as a string
-    std::string const &device_extensions();
-
-    ///
-    /// Get estimated number of cores. Note since it is not something defined for OpenCL in general
-    /// it returns number of cuda cores for NVidia devices and similar values for AMD and Intel GPU
-    /// devices. For Nvidia it is 128 * cu, for AMD it is 64 * cu and for Intel it is 8 * cu where
-    /// cu is number of compute units reported by `CL_DEVICE_MAX_COMPUTE_UNITS` query 
-    /// 
-    int estimated_core_count();
-
-    /// checks if the device is AMD GPU
-    bool is_amd();
-    /// checks if the device is NVidia GPU
-    bool is_nvidia();
-    /// checks if the device is Intel GPU
-    bool is_intel();
-
-    /// Get OpenCL context object
-    cl::Context &context()
-    {
-        return context_;
-    }
-    /// Creates a new Command queue for the context with optional properties
-    cl::CommandQueue make_queue(cl_command_queue_properties props=0)
-    {
-        cl::CommandQueue q;
-        if(!is_cpu_context())
-            q=std::move(cl::CommandQueue(context_,device_,props));
-        return q;
-    }
-private:
-    void select_opencl_device(int p,int d);
-    cl::Platform platform_;
-    cl::Device device_;
-    cl::Context context_;
-    ContextType type_;;
-    std::map<std::string,bool> ext_cache_;
-    std::string ext_;
-};
-
-
-///
 /// Class used for benchmarking of the model
 ///
 /// Detailed description TBD
@@ -232,35 +119,35 @@ class ExecutionContext {
 public:
     /// default constructor - can be used for CPU context
     ExecutionContext() :
-        queue_(nullptr),event_(nullptr), events_(nullptr) {}
+        event_(nullptr), events_(nullptr) {}
 
     ///
     /// Create context from cl::CommandQueue, note no events will be waited/signaled
     ///
-    ExecutionContext(cl::CommandQueue &q) :
-        queue_(&q),event_(nullptr),events_(nullptr)
+    ExecutionContext(cl::CommandQueue const &q) :
+        queue_(new cl::CommandQueue(q)),event_(nullptr),events_(nullptr)
     {
     }
     ///
     /// Create a context with a request to signal completion event
     ///
-    ExecutionContext(cl::CommandQueue &q,cl::Event *event) :
-        queue_(&q),event_(event),events_(nullptr)
+    ExecutionContext(cl::CommandQueue const &q,cl::Event *event) :
+        queue_(new cl::CommandQueue(q)),event_(event),events_(nullptr)
     {
     }
 
     ///
     /// Create a context with a request to wait for events
     ///
-    ExecutionContext(cl::CommandQueue &q,std::vector<cl::Event> *events) :
-        queue_(&q),event_(nullptr),events_(events)
+    ExecutionContext(cl::CommandQueue const &q,std::vector<cl::Event> *events) :
+        queue_(new cl::CommandQueue(q)),event_(nullptr),events_(events)
     {
     }
     ///
     /// Create a context with a request to signal completion event and wait for events
     ///
-    ExecutionContext(cl::CommandQueue &q,std::vector<cl::Event> *events,cl::Event *event) :
-        queue_(&q),event_(event),events_(events)
+    ExecutionContext(cl::CommandQueue const &q,std::vector<cl::Event> *events,cl::Event *event) :
+        queue_(new cl::CommandQueue(q)),event_(event),events_(events)
     {
     }
 
@@ -316,7 +203,7 @@ public:
     ///
     cl::CommandQueue &queue() const
     {
-        DLPRIM_CHECK(queue_ != nullptr);
+        DLPRIM_CHECK(queue_);
         return *queue_;
     }
 
@@ -383,10 +270,133 @@ private:
 
 
     std::shared_ptr<TimingData> timing_;
-    cl::CommandQueue *queue_;
+    std::shared_ptr<cl::CommandQueue> queue_; /// make sure copying is fast
     cl::Event *event_;
     std::vector<cl::Event> *events_;
 };
+
+
+///
+/// This is main object that represent the pair of OpenCL platform and device
+/// all other objects use it.
+///
+/// It can be CPU context - meaning that it represents no OpenCL platform/device/context
+///
+///
+class Context {
+public:
+    /// Device used with the context, CPU or OpenCL device.
+    enum ContextType {
+        cpu = 0, ///< CPU no OpenCL platform/device/context are used
+        ocl = 1, ///< Use OpenCL device, it also may be CPU device.
+    };
+
+
+    ///
+    /// Create new context from textual ID. It can be "cpu" or "P:D"
+    /// were P is integer representing platform and D is device number on this platform
+    /// starting from 0, for example "0:1" is second device on 1st platform.
+    ///
+    Context(std::string const &dev_id);
+    ///
+    /// Create context from numerical platform and device number, of it is CPU context,
+    /// platform and device are ignored
+    ///
+    Context(ContextType dt = cpu,int platform = 0,int device = 0);
+    ///
+    /// Create the object from OpenCL context, platform and device..
+    ///
+    Context(cl::Context const &c,cl::Platform const &p,cl::Device const &d);
+
+    Context(Context const &) = default;
+    Context &operator=(Context const &) = default;
+    Context(Context &&) = default;
+    Context &operator=(Context &&) = default;
+    ~Context() {}
+
+    ///
+    /// Human readable name for the context, for example:
+    /// "GeForce GTX 960 on NVIDIA CUDA"
+    ///
+    std::string name() const;
+
+    /// return context type either cpu or ocl
+    ContextType context_type() const;
+
+    /// Returns true if the context was created as CPU context 
+    bool is_cpu_context() const
+    {
+        return type_ == cpu;
+    }
+    /// Returns true if the context was created as OpenCL context
+    bool is_opencl_context() const
+    {
+        return type_ == ocl;
+    }
+    /// Get OpenCL platform object
+    cl::Platform &platform()
+    {
+        return platform_;
+    }
+    /// Get OpenCL device object
+    cl::Device &device()
+    {
+        return device_;
+    }
+
+    /// Check if specific device extension is present
+    bool check_device_extension(std::string const &name);
+    
+    /// get all device extensions as a string
+    std::string const &device_extensions();
+
+    ///
+    /// Get estimated number of cores. Note since it is not something defined for OpenCL in general
+    /// it returns number of cuda cores for NVidia devices and similar values for AMD and Intel GPU
+    /// devices. For Nvidia it is 128 * cu, for AMD it is 64 * cu and for Intel it is 8 * cu where
+    /// cu is number of compute units reported by `CL_DEVICE_MAX_COMPUTE_UNITS` query 
+    /// 
+    int estimated_core_count();
+
+    /// checks if the device is AMD GPU
+    bool is_amd();
+    /// checks if the device is NVidia GPU
+    bool is_nvidia();
+    /// checks if the device is Intel GPU
+    bool is_intel();
+
+    /// Get OpenCL context object
+    cl::Context &context()
+    {
+        return context_;
+    }
+    /// Creates a new Command queue for the context with optional properties
+    cl::CommandQueue make_queue(cl_command_queue_properties props=0)
+    {
+        cl::CommandQueue q;
+        if(!is_cpu_context())
+            q=std::move(cl::CommandQueue(context_,device_,props));
+        return q;
+    }
+
+    /// Generate ExecutionContext (queue + events)
+    ExecutionContext make_execution_context()
+    {
+        ExecutionContext e(make_queue());
+        return e;
+    }
+
+private:
+    void select_opencl_device(int p,int d);
+    cl::Platform platform_;
+    cl::Device device_;
+    cl::Context context_;
+    ContextType type_;;
+    std::map<std::string,bool> ext_cache_;
+    std::string ext_;
+};
+
+
 
 class ExecGuard {
 public:

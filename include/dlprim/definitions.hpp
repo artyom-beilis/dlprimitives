@@ -109,6 +109,18 @@ namespace dlprim {
             return bfloat16_data;
         else if(s == "int32" || s == "int")
             return int32_data;
+        else if(s == "int8")
+            return int8_data;
+        else if(s == "uint8")
+            return uint8_data;
+        else if(s == "int16")
+            return int16_data;
+        else if(s == "uint16")
+            return uint16_data;
+        else if(s == "int64")
+            return int64_data;
+        else if(s == "uint64")
+            return uint64_data;
         throw ValidationError("Unknown data type " + s);
     }
     inline std::string data_type_to_string(DataType dt)

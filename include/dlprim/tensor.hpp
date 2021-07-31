@@ -3,7 +3,8 @@
 #include <dlprim/shape.hpp>
 #include <memory>
 namespace dlprim {
-    
+
+    class Tensor;    
     ///
     /// Definition of Tensor without actual memory/object
     ///
@@ -39,6 +40,11 @@ namespace dlprim {
             return shape_;
         }
 
+        void shape(Shape const &s)
+        {
+            shape_=s;
+        }
+
         ///
         /// return if tensor need to participate in gradient decent
         ///
@@ -60,22 +66,21 @@ namespace dlprim {
         {
             return dtype_;
         }
-    protected:
+    private:
+        friend class Tensor;
         Shape shape_;
         DataType dtype_;
         bool is_trainable_;
     };
 
-    inline std::ostream &operator<<(std::ostream &out,TensorSpecs const &ts)
-    {
-        out << '[' << ts.shape() << ",dtype=" << data_type_to_string(ts.dtype()) << ']';
-        return out;
-    }
 
     ///
     /// Central Data Contrainer - Tensor
     ///
-    class Tensor : public TensorSpecs {
+    /// Note all this object data is reference counted - copying is cheap but be aware that modifications
+    /// of one tensor affect other
+    ///
+    class Tensor {
     public:
        
         /// 
@@ -98,6 +103,40 @@ namespace dlprim {
         Tensor(Tensor &&) = default;
         Tensor &operator=(Tensor &&) = default;
         ~Tensor() {}
+        
+        TensorSpecs const &specs() const
+        {
+            return *specs_;
+        }
+
+        /// get tensor shape
+        Shape const &shape() const
+        {
+            return specs_->shape();
+        }
+
+        ///
+        /// return if tensor need to participate in gradient decent
+        ///
+        bool is_trainable() const
+        {
+            return specs_->is_trainable();
+        }
+
+        ///
+        /// Get reuired memory size for the tensor
+        ///
+        size_t memory_size() const
+        {
+            return shape().total_size() * size_of_data_type(dtype());
+        }
+
+
+        DataType dtype() const
+        {
+            return specs_->dtype();
+        }
+        
 
         ///
         /// Reshape the tensor, the only requirement that ns.total_size() <= shape().total_size()
@@ -167,10 +206,18 @@ namespace dlprim {
         template<typename T>
         T *data()
         {
-            DLPRIM_CHECK(TypeTraits<T>::data_type == dtype_);
+            DLPRIM_CHECK(TypeTraits<T>::data_type == dtype());
             return static_cast<T*>(host_data());
         }
 
+        ///
+        /// Copy external host memory to device, sync - for synchronoys copy
+        ///
+        void to_device(ExecutionContext const &c,void *host_memory,bool sync=true);
+        ///
+        /// Copy device memory to external host memory, sync - for synchronoys copy
+        ///
+        void to_host(ExecutionContext const &c,void *host_memory,bool sync=true);
         ///
         /// Copy host memory to device, sync - for synchronoys copy
         ///
@@ -191,6 +238,7 @@ namespace dlprim {
 
     private:
 		struct HostMem;
+        std::shared_ptr<TensorSpecs> specs_;
         std::shared_ptr<HostMem> host_;
         bool cpu_tensor_;
         int offset_;
@@ -209,6 +257,17 @@ namespace dlprim {
         Tensor diff; /// its gradient
     };
 
+    inline std::ostream &operator<<(std::ostream &out,TensorSpecs const &ts)
+    {
+        out << '[' << ts.shape() << ",dtype=" << data_type_to_string(ts.dtype()) << ']';
+        return out;
+    }
+
+    inline std::ostream &operator<<(std::ostream &out,Tensor const &ts)
+    {
+        out << ts.specs();
+        return out;
+    }
 
 }
 /// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4

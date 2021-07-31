@@ -94,6 +94,10 @@ namespace dlprim {
                             std::vector<std::string> const &parameters = std::vector<std::string>());
 
         void mode(CalculationsMode mode); 
+        CalculationsMode mode() const
+        {
+            return mode_;
+        }
         void setup();
         void reshape();
         void copy_parameters_to_device(); 

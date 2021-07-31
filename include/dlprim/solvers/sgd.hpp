@@ -2,9 +2,10 @@
 #include <iostream>
 #include <dlprim/ops/scal.hpp>
 #include <dlprim/ops/axpby.hpp>
+#include <dlprim/solvers/solver_base.hpp>
 namespace dlprim {
     namespace solvers {
-        class SGD {
+        class SGD : public SolverBase {
         public:
             float lr = 0.1;
             float momentum = 0.9;
