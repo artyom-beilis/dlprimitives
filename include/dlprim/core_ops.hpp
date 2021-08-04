@@ -319,6 +319,36 @@ namespace core {
         
     };
 
+    ///
+    /// Set to zero tensor - OpenCL only
+    ///
+    void fill_tensor(Context &ctx,ExecutionContext const &e,Tensor &t,double value);
+
+
+    ///
+    /// Type of random distribution
+    ///
+    enum RandomDistribution {
+        rnd_uniform = 0,
+        rnd_normal  = 1
+    };
+    ///
+    /// Fill tensor with random numbers using provided distribution
+    ///
+    /// \param t tesnor to fill
+    /// \param philox_seed - 64 bit seed for philox-2x4-10 algorithm
+    /// \param philox_seq  - counter for RNG to start. Note each philox counter item
+    ///     generated 4 random numbers. So if you have tensor of size 100, that 25 items
+    ///     will be used [philox_seq, philox_seq + 25)
+    /// \param distribution type
+    /// \param p1 - min value for uniform and mu for normal
+    /// \param p2 - max value for uniform and sigma for normal
+    ///
+    void fill_random(Context &ctx,ExecutionContext const &e,Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2);
+    
+
+
+
     
 
 } // core

@@ -6,24 +6,6 @@
 
 namespace dp = dlprim;
 
-void xavier(dp::Tensor &t)
-{
-    float *p = t.data<float>();
-    int no = t.shape()[0];
-    int ni = t.shape().size_no_batch();
-    int total = t.shape().total_size();
-    float factor = 1/std::sqrt(float(no+ni));
-    for(int i=0;i<total;i++) {
-        p[i] = factor*(float(rand())/RAND_MAX - 0.5f);
-    }
-}
-
-void xavier(dp::Net &n)
-{
-    for(auto &p : n.params()) {
-        xavier(p.second);
-    }
-}
 
 int main(int argc,char **argv)
 {
@@ -74,9 +56,10 @@ int main(int argc,char **argv)
             net.load_parameters(net_h5);
         }
         else {
-            xavier(net);
+            //xavier(net);
+            //net.copy_parameters_to_device();
+            net.initialize_parameters(ctx.make_execution_context());
         }
-        net.copy_parameters_to_device();
         net.reshape();
         std::vector<dp::Tensor> data,res,res_diff;
         std::cout << "Inputs" << std::endl;

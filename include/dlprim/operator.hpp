@@ -6,6 +6,8 @@
 namespace dlprim {
     namespace json { class value; }
 
+    class SharedResource;
+
 
     ///
     /// Base class for backward/forward propogation calculations for internal network
@@ -19,6 +21,17 @@ namespace dlprim {
             ctx_(ctx),
             mode_(CalculationsMode::predict)
         {
+        }
+
+        SharedResource &shared_resource()
+        {
+            DLPRIM_CHECK(shared_resource_);
+            return *shared_resource_;
+        }
+
+        void shared_resource(std::shared_ptr<SharedResource> r)
+        {
+            shared_resource_ = r;
         }
 
         virtual ~Operator() 
@@ -55,6 +68,14 @@ namespace dlprim {
         void operator=(Operator const &) = delete;
         Operator(Operator &&) = delete;
         void operator=(Operator &&) = delete;
+
+
+        ///
+        /// Set default parameters iniitalization
+        ///
+        virtual void initialize_params(std::vector<Tensor> &/*parameters*/,ExecutionContext const &/*e*/)
+        {
+        }
 
         ///
         /// Convigure operator
@@ -131,6 +152,7 @@ namespace dlprim {
     protected:
         Context ctx_; ///< OpenCL/CPU Context to work with
         CalculationsMode mode_; ///< computaions mode
+        std::shared_ptr<SharedResource> shared_resource_;
     };
    
     ///

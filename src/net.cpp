@@ -1,5 +1,7 @@
 #include <dlprim/net.hpp>
 #include <dlprim/json.hpp>
+#include <dlprim/shared_resource.hpp>
+#include <dlprim/ops/initialization.hpp>
 #include <sstream>
 #include <fstream>
 #include <list>
@@ -12,6 +14,7 @@
 namespace dlprim {
     Net::Net(Context &ctx) :
         ctx_(ctx),
+        shared_resource_(new SharedResource()),
         mode_(CalculationsMode::predict),
         keep_intermediate_tensors_(false)
     {
@@ -157,6 +160,18 @@ namespace dlprim {
         copy_parameters_to_device();
     }
 #endif
+    void Net::initialize_parameters(ExecutionContext const &e)
+    {
+        for(auto &conn : connections_) {
+            conn.op->initialize_params(conn.parameters,e);
+        }
+        if(mode() == CalculationsMode::train) {
+            // set loss diff
+            for(auto const &name : output_names()) {
+                set_to_constant(ctx_,e,tensor_diff(name),1.0);
+            }
+        }
+    }
     void Net::load_header(std::istream &f,json::value &v)
     {
         unsigned char buf[8]={0};
@@ -288,6 +303,7 @@ namespace dlprim {
     {
         Connection conn;
         conn.op = std::move(op);
+        conn.op->shared_resource(shared_resource());
         conn.op->mode(mode_);
         conn.name = name;
         if(connections_index_.find(name) != connections_index_.end()) {
@@ -632,8 +648,10 @@ namespace dlprim {
                 connections_[i].param_grad,
                 workspace_,
                 ec);
-            if(sync && ctx_.is_opencl_context())
+            if(sync && ctx_.is_opencl_context()) {
                 e.queue().finish();
+            }
+
         }
     }
       

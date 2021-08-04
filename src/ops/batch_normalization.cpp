@@ -1,6 +1,7 @@
 #include <dlprim/ops/batch_normalization.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/core_ops.hpp>
+#include <dlprim/ops/initialization.hpp>
 #include <cmath>
 #include <my_cblas.hpp>
 #include <iostream>
@@ -65,6 +66,16 @@ namespace dlprim {
         void BatchNorm2D::mode(CalculationsMode m)
         {
             Operator::mode(m);
+        }
+        
+        void BatchNorm2D::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
+        {
+            set_to_zero(ctx_,e,parameters.at(0));
+            set_to_constant(ctx_,e,parameters.at(1),1.0);
+            if(config_.affine) {
+                set_to_constant(ctx_,e,parameters.at(2),1.0);
+                set_to_zero(ctx_,e,parameters.at(3));
+            }
         }
         
         void BatchNorm2D::reshape(std::vector<Shape> const &in,

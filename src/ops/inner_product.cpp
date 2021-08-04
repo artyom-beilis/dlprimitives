@@ -5,6 +5,8 @@
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/core_ops.hpp>
 #include <dlprim/utils/json_helpers.hpp>
+#include <dlprim/ops/initialization.hpp>
+#include <dlprim/shared_resource.hpp>
 #include <dlprim/json.hpp>
 #include <my_cblas.hpp>
 
@@ -21,6 +23,14 @@ namespace dlprim {
     }
     InnerProduct::~InnerProduct()
     {
+    }
+    
+    void InnerProduct::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
+    {
+        float range = 1.0f / std::sqrt(1.0f * config_.inputs);
+        set_to_urandom(ctx_,e,parameters.at(0),shared_resource().rng_state(),-range,range);
+        if(config_.bias)
+            set_to_urandom(ctx_,e,parameters.at(1),shared_resource().rng_state(),-range,range);
     }
     
     InnerProduct::InnerProduct(Context &ctx,InnerProductConfig const &cfg) :

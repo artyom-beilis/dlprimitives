@@ -55,29 +55,6 @@ private:
     std::ifstream img_,lbl_;
 };
 
-void xavier(dp::Tensor &t)
-{
-    float *p = t.data<float>();
-    int no = t.shape()[0];
-    int ni = t.shape().size_no_batch();
-    int total = t.shape().total_size();
-    if(ni == no) {
-        memset(p,0,total * sizeof(float));
-    }
-    else {
-        float factor = 1.0f/std::sqrt(float(ni));
-        for(int i=0;i<total;i++) {
-            p[i] = factor*(2.0*rand()/RAND_MAX - 1.0);
-        }
-    }
-}
-
-void xavier(dp::Net &n)
-{
-    for(auto &p : n.params()) {
-        xavier(p.second);
-    }
-}
 
 int main(int argc,char **argv)
 {
@@ -87,6 +64,7 @@ int main(int argc,char **argv)
     }
     dp::Context ctx(argv[1]);
     std::cout << "Using: " << ctx.name() << std::endl;
+    dp::ExecutionContext q=ctx.make_execution_context();
     
     std::string net_js = argv[2];
     std::string mnist_img = argv[3];
@@ -97,8 +75,8 @@ int main(int argc,char **argv)
     net.mode(dp::CalculationsMode::train);
     net.load_from_json_file(net_js);
     net.setup();
-    xavier(net);
-    net.copy_parameters_to_device();
+    net.initialize_parameters(q);
+    
     dp::Tensor data = net.tensor("data");
     dp::Tensor labels  = net.tensor("label");
     dp::Tensor loss = net.tensor("loss");
@@ -106,14 +84,9 @@ int main(int argc,char **argv)
 
     int batch = data.shape()[0];
 
-    cl::CommandQueue queue=ctx.make_queue();
-    dp::ExecutionContext q(queue);
     //dp::solvers::SGD sgd(ctx);
     dp::solvers::Adam sgd(ctx);
     sgd.init(net,q);
-
-    loss_diff.data<float>()[0] = 1.0;
-    loss_diff.to_device(q,true);
 
     std::cout << "Start training" << std::endl;
 
@@ -136,7 +109,7 @@ int main(int argc,char **argv)
             labels.to_device(q,false);
             sgd.zero_grad(net,q);
             net.forward(q);
-            net.backward(q);
+            net.backward(q,true);
             sgd.apply(net,q);
             net.tensor("fc2").to_host(q,false);
             loss.to_host(q,true);

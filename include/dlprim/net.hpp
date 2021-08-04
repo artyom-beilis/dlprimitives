@@ -5,6 +5,8 @@
 #include <list>
 
 namespace dlprim {
+    class SharedResource;
+
     ///
     /// Major object used for inference
     ///
@@ -93,35 +95,78 @@ namespace dlprim {
                             std::vector<std::string> const &outputs,
                             std::vector<std::string> const &parameters = std::vector<std::string>());
 
+        /// Set the calculations mode
+        ///
+        /// default is testing. If setup was called when the network in testing mode it can't be switched to training
+        /// if you plan to use the network for training call it _before_ setup()
         void mode(CalculationsMode mode); 
+
+        /// get currenct calcuations mode
         CalculationsMode mode() const
         {
             return mode_;
         }
+
+        ///
+        /// Get SharedResource object that can be shared between all operators in same network allowing operator 
+        /// access to network level features
+        ///
+        std::shared_ptr<SharedResource> shared_resource()
+        {
+            return shared_resource_;
+        }
+
+        ///
+        /// Allocate all tensors and prepare network data
+        ///
         void setup();
+        ///
+        /// reshape all tensors in network after reshaping the input data
+        ///
         void reshape();
+
+        ///
+        /// Initialize all parameters for training
+        ///
+        void initialize_parameters(ExecutionContext const &e);
+
         void copy_parameters_to_device(); 
         void copy_parameters_to_host(); 
         void clear_memory();
 
+        ///
+        /// Get all intermediate tensors (operators inputs/outputs). Note if keep_intermediate_tensors() == false that same
+        /// memory may be shared between different tensors
+        ///
         std::map<std::string,Tensor> &tensors()
         {
             return tensors_;
         }
+        ///
+        /// Get all intermediate tensor (operators inputs/outputs) gradient. Note if keep_intermediate_tensors() == false that same
+        /// memory may be shared between different tensors
+        ///
         std::map<std::string,Tensor> &tensor_diffs()
         {
             return tensors_diff_;
         }
 
+        ///
+        /// All operator parameters trainable and not trainable
+        ///
         std::map<std::string,Tensor> &params()
         {
             return parameters_;
         }
+        ///
+        /// All operator parameters gradients trainable and not trainable
+        ///
         std::map<std::string,Tensor> &param_diffs()
         {
             return parameters_diff_;
         }
 
+        /// Get tensor by name, throws ValidationError if does not exist
         Tensor &tensor(std::string const &name)
         {
             auto p=tensors_.find(name);
@@ -129,6 +174,7 @@ namespace dlprim {
                 throw ValidationError("Unknown tensor name:" + name);
             return p->second;
         }
+        /// Get tensor gradient by name, throws ValidationError if does not exist
         Tensor &tensor_diff(std::string const &name)
         {
             auto p=tensors_diff_.find(name);
@@ -137,6 +183,7 @@ namespace dlprim {
             return p->second;
         }
         
+        /// Get parameter by name, throws ValidationError if does not exist
         Tensor &param(std::string const &name)
         {
             auto p=parameters_.find(name);
@@ -144,6 +191,7 @@ namespace dlprim {
                 throw ValidationError("Unknown parameter name:" + name);
             return p->second;
         }
+        /// Get parameter gradient by name, throws ValidationError if does not exist
         Tensor &param_diff(std::string const &name)
         {
             auto p=parameters_diff_.find(name);
@@ -155,16 +203,19 @@ namespace dlprim {
         void forward(ExecutionContext const &ectx,bool sync=false);
         void backward(ExecutionContext const &ectx,bool sync=false);
 
+        /// Get of all network inputs
         std::vector<std::string> const &input_names()
         {
             return inputs_;
         }
 
+        /// Get of all network outputs
         std::vector<std::string> const &output_names()
         {
             return outputs_;
         }
 
+        /// Get input tensors by their numeric id - according to the order in input_names()
         Tensor &input(unsigned id)
         {
             if(id >= inputs_.size())
@@ -172,13 +223,13 @@ namespace dlprim {
             return tensor(inputs_[id]);
         }
 
+        /// Get output tensors by their numeric id - according to the order in output_names()
         Tensor &output(unsigned id)
         {
             if(id >= outputs_.size())
                 throw ValidationError("Invalid output id");
             return tensor(outputs_[id]);
         }
-        
 
     private:
         struct Connection {
@@ -228,6 +279,8 @@ namespace dlprim {
         std::vector<std::string> inputs_;
         std::vector<std::string> outputs_;
         std::vector<Tensor> memory_;
+
+        std::shared_ptr<SharedResource> shared_resource_;
 
         CalculationsMode mode_;
         bool keep_intermediate_tensors_;

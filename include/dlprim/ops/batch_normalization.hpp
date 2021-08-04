@@ -25,6 +25,7 @@ namespace dlprim {
             return "BatchNorm2D";
         }
         
+        virtual void initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e);
         virtual void mode(CalculationsMode m);
         virtual CalculationsMode mode() { return Operator::mode(); }
 

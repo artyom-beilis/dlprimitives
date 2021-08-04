@@ -6,6 +6,8 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/ops/bwd_bias.hpp>
+#include <dlprim/ops/initialization.hpp>
+#include <dlprim/shared_resource.hpp>
 #include <dlprim/ops/activation.hpp>
 #include <dlprim/core_ops.hpp>
 #include <my_cblas.hpp>
@@ -51,6 +53,14 @@ namespace dlprim {
         return config_.channels_in / config_.groups * config_.kernel[0] * config_.kernel[1];
     }
 
+    void Convolution2D::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
+    {
+        float k = float(config_.groups) / (config_.channels_in * config_.kernel[0] * config_.kernel[1]);
+        float range = std::sqrt(k);
+        set_to_urandom(ctx_,e,parameters.at(0),shared_resource().rng_state(),-range,range);
+        if(config_.bias)
+            set_to_urandom(ctx_,e,parameters.at(1),shared_resource().rng_state(),-range,range);
+    }
 
     Convolution2D::Convolution2D(Context &ctx,Convolution2DConfig const &cfg) :
         Operator(ctx),

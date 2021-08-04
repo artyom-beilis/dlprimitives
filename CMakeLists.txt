@@ -78,8 +78,11 @@ set(DLPRIM_SRC
         src/ops/bwd_bias.cpp
         src/ops/axpby.cpp
         src/ops/scal.cpp
+        src/ops/initialization.cpp
         src/gemm.cpp
+        src/random.cpp
         src/core_ip.cpp
+        src/core_init.cpp
         src/core_conv.cpp
         src/core_bn.cpp
         ${EXTRA_SRC}
@@ -110,6 +113,7 @@ add_executable(image_predict tools/image_predict.cpp)
 add_executable(mnist tests/mnist.cpp)
 add_executable(train_mnist tests/train_mnist.cpp)
 add_executable(flops tools/flops.cpp)
+add_executable(test_random tests/test_random.cpp)
 
 target_link_libraries(test_from_template dlprim)
 target_link_libraries(mnist dlprim)
@@ -119,6 +123,7 @@ target_link_libraries(image_predict dlprim)
 target_link_libraries(test_json dlprim)
 target_link_libraries(flops dlprim)
 target_link_libraries(test_net dlprim)
+target_link_libraries(test_random dlprim)
 
 file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
 
@@ -128,3 +133,4 @@ foreach(TEMPLATE ${TEST_TEMPLATES})
 endforeach()
 add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
 add_test(test_json test_json)
+add_test(test_random test_random ${TEST_DEV})

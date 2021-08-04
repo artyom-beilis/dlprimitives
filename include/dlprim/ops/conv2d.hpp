@@ -29,6 +29,9 @@ namespace dlprim {
         {
             return "Convolution2D";
         }
+        
+        void initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e);
+
 		virtual void setup(std::vector<TensorSpecs> const &in,
                            std::vector<TensorSpecs> &out,
                            std::vector<TensorSpecs> &parameters,
