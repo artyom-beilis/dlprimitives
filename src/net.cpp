@@ -518,8 +518,8 @@ namespace dlprim {
         else
             allocate_optimized_chunks(!train); // forward = !train
         for(auto const &ps : parameter_specs_) {
-            parameters_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype());
-            if(train)
+            parameters_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype(),ps.second.is_trainable());
+            if(train && ps.second.is_trainable())
                 parameters_diff_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype());
         }
         for(auto &conn : connections_) {
@@ -557,9 +557,15 @@ namespace dlprim {
                 if(train) {
                     TensorAndGradient tg;
                     tg.data = parameters_[name];
-                    tg.diff = parameters_diff_[name];
-                    tg.accumulate_gradient = 1.0f;
-                    tg.requires_gradient = true;
+                    if(tg.data.is_trainable()) {
+                        tg.diff = parameters_diff_[name];
+                        tg.accumulate_gradient = 1.0f;
+                        tg.requires_gradient = true;
+                    }
+                    else {
+                        tg.accumulate_gradient = 0;
+                        tg.requires_gradient = false;
+                    }
                     conn.param_grad.push_back(tg);
                 }
             }

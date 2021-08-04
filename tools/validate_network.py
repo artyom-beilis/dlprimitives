@@ -8,10 +8,11 @@ import time
 import numpy as np
 import sys
 
-def benchmark_model(model,batch,device,warm,iters,train):
+def benchmark_model(model,batch,device,warm,iters,train,use_solver):
     if train:
         model.train()
     else:
+        use_solver = False
         model.eval()
     inp = torch.randn(batch,3,224,224).to(device)
     total_time = 0
@@ -26,14 +27,20 @@ def benchmark_model(model,batch,device,warm,iters,train):
         lbl = torch.randint(1000,size=(batch,)).to(device)
     else:
         sm = torch.nn.Softmax(dim=1)
+    if use_solver:
+        optimizer = torch.optim.Adam(model.parameters())
     for it in range(-warm,iters):
         start = time.time()
+        if use_solver:
+            optimizer.zero_grad()
         res = sm(model(inp))
         loss = torch.sum(res).detach().item()
         if train:
             tmp = time.time()
             l=nll(res,lbl)
             l.backward()
+            if use_solver:
+                optimizer.step()
             torch.cuda.synchronize()
         end = time.time()
         msg = ''
@@ -130,16 +137,17 @@ def main(args):
             predict_on_images(m,args.images,args.device,get_config())
     if args.benchmark:
         if args.train:
-            benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train)
+            benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train,args.solver)
         else:
             with torch.no_grad():
-                benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train)
+                benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train,False)
 
 if __name__ == '__main__': 
     p = argparse.ArgumentParser()
     p.add_argument('--model',default='vgg16')
     p.add_argument('--device',default='cuda')
     p.add_argument('--export')
+    p.add_argument('--solver',action='store_true')
     p.add_argument('--benchmark',action='store_true')
     p.add_argument('--train',action='store_true')
     p.add_argument('--onnx-opset',default=12,type=int)

@@ -1,4 +1,5 @@
 #include <dlprim/net.hpp>
+#include <dlprim/solvers/adam.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -13,6 +14,7 @@ int main(int argc,char **argv)
         bool enable_profiling = false;
         bool enable_backward = false;
         bool force_cpu_times = false;
+        bool enable_adam = false;
         int warm = 5;
         int iters = 20;
         while(argc >= 2 && argv[1][0] == '-') {
@@ -20,6 +22,8 @@ int main(int argc,char **argv)
             if(flag == "-t") {
                 enable_profiling = true;
             }
+            else if(flag == "-g") 
+                enable_adam = true;
             else if(flag == "-b") 
                 enable_backward = true;
             else if(flag == "-C")
@@ -56,8 +60,6 @@ int main(int argc,char **argv)
             net.load_parameters(net_h5);
         }
         else {
-            //xavier(net);
-            //net.copy_parameters_to_device();
             net.initialize_parameters(ctx.make_execution_context());
         }
         net.reshape();
@@ -74,7 +76,11 @@ int main(int argc,char **argv)
             if(enable_backward)
                 res_diff.push_back(net.tensor_diffs()[net.output_names()[i]]);
         }
-        
+        std::unique_ptr<dp::solvers::SolverBase> solver;
+        if(enable_adam) {
+            solver.reset(new dp::solvers::Adam(ctx));
+        }
+
         cl::CommandQueue queue=ctx.make_queue((enable_profiling && !force_cpu_times)? CL_QUEUE_PROFILING_ENABLE : 0);
         std::shared_ptr<dp::TimingData> timing;
         dp::ExecutionContext q(queue);
@@ -104,10 +110,14 @@ int main(int argc,char **argv)
                 throw std::runtime_error("Unsuported data");
             }
         }
+        if(solver)
+            solver->init(net,q);
         for(int i=-warm;i<iters;i++) {
             if(timing)
                 timing->reset();
             auto start = std::chrono::high_resolution_clock::now();
+            if(solver)
+                solver->zero_grad(net,q);
             auto bw_point = start;
             for(size_t j=0;j<data.size();j++) {
                 dp::ExecGuard g(q,"to_device");
@@ -128,6 +138,9 @@ int main(int argc,char **argv)
                     }
                 }
                 net.backward(q,force_cpu_times);
+                if(solver)
+                    solver->apply(net,q);
+                
                 if(!ctx.is_cpu_context())
                     q.queue().finish();
             }
