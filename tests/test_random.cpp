@@ -12,7 +12,7 @@ void test_values(dp::Tensor &t,float mean,float std,float minv,float maxv)
 {
     float *p=t.data<float>();
     size_t n=t.shape().total_size();
-    float s=0,s2=0;
+    double s=0,s2=0;
     for(size_t i=0;i<n;i++) {
         s+=p[i];
         s2+=p[i]*p[i];
@@ -20,8 +20,8 @@ void test_values(dp::Tensor &t,float mean,float std,float minv,float maxv)
         TEST(p[i] <= maxv);
         
     }
-    float calc_mean = s/n;
-    float calc_std  = std::sqrt(s2/n - calc_mean*calc_mean);
+    double calc_mean = s/n;
+    double calc_std  = std::sqrt(s2/n - calc_mean*calc_mean);
     std::cout << "  mean=" << calc_mean << " std=" << calc_std << std::endl;
     TEST(std::fabs(calc_mean - mean) < 1e-2);
     TEST(std::fabs(calc_std - std) < 1e-2);
