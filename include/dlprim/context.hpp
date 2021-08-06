@@ -197,6 +197,12 @@ public:
         if(timing_)
             timing_->leave();
     }
+
+    void finish()
+    {
+        if(queue_)
+            queue_->finish();
+    }
     
     ///
     /// Get the command queue. Never call it in non-OpenCL context

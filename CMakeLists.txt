@@ -1,3 +1,4 @@
+project(dlprimitives)
 cmake_minimum_required(VERSION 3.0)
 
 enable_testing()
@@ -37,16 +38,16 @@ endif()
 
 file(GLOB CL_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.cl)
 file(GLOB CL_HEADERS  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.h)
-add_custom_command(
-                  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp 
-                  DEPENDS
-                  ${CL_SOURCES} ${CL_HEADERS} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/build_source.py
-                  COMMAND 
-                  ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/build_source.py 
-                    -o ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
-                    -I ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels
-                    ${CL_SOURCES}
-                  )
+
+find_package(PythonLibs 3)
+find_package(Boost COMPONENTS python3 numpy3)
+
+if(PYTHONLIBS_FOUND AND Boost_NUMPY3_FOUND AND Boost_PYTHON3_FOUND)
+    set(BUILD_PYDLPRIM TRUE)
+else()
+    set(BUILD_PYDLPRIM FALSE)
+endif()
+
 if(NOT CBLAS_LIB OR NOT CBLAS_PATH) 
     set(EXTRA_SRC src/my_blas/my_cblas.cpp)
     set(BLAS_LIB )
@@ -60,6 +61,46 @@ endif()
 
 add_definitions(${EXTRA_DEFS})
 
+
+
+message("=== Status ===")
+message("  OpenCL: include ${OCL_PATH}")
+message("          lib     ${OCL_LIB}")
+message("  Python: ${PYTHON}")
+if(BLAS_LIB)
+    message("  BLAS: include ${CBLAS_PATH}")
+    message("        lib ${CBLAS_LIB}")
+else()
+    message("  BLAS: None")
+endif()
+
+if(HDF5_FOUND)
+    message("  HDF5: include ${HDF5_INCLUDE_DIR}")
+    message("        lib  ${HDF5_LIBRARIES} hdf5_cpp")
+else()
+    message("  HDF5: None")
+endif()
+if(BUILD_PYDLPRIM)
+    message("  Python dlprim: enabled")
+    message("  Python: lib ${PYTHON_LIBRARIES}")
+    message("          include ${PYTHON_INCLUDE_DIRS}")
+    message("  Boost: include ${Boost_INCLUDE_DIRS}")
+    message("     boost_numpy3 ${Boost_NUMPY3_LIBRARY}")
+    message("     boost_python3 ${Boost_PYTHON3_LIBRARY}")
+else()
+    message("  Python dlprim: disabled")
+endif()
+
+add_custom_command(
+                  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp 
+                  DEPENDS
+                  ${CL_SOURCES} ${CL_HEADERS} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/build_source.py
+                  COMMAND 
+                  ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/build_source.py 
+                    -o ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
+                    -I ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels
+                    ${CL_SOURCES}
+                  )
 set(DLPRIM_SRC
         src/context.cpp
         src/tensor.cpp
@@ -111,7 +152,7 @@ add_executable(test_json tests/json_test.cpp)
 add_executable(benchmark tools/benchmark.cpp)
 add_executable(image_predict tools/image_predict.cpp)
 add_executable(mnist tests/mnist.cpp)
-add_executable(train_mnist tests/train_mnist.cpp)
+add_executable(train_mnist examples/cpp/train_mnist.cpp)
 add_executable(flops tools/flops.cpp)
 add_executable(test_random tests/test_random.cpp)
 
@@ -124,6 +165,17 @@ target_link_libraries(test_json dlprim)
 target_link_libraries(flops dlprim)
 target_link_libraries(test_net dlprim)
 target_link_libraries(test_random dlprim)
+
+
+if(BUILD_PYDLPRIM)
+    add_library(pydlprim SHARED python/python_interface.cpp)
+    set_target_properties(pydlprim PROPERTIES PREFIX "" OUTPUT_NAME "_pydlprim")
+    include_directories(${Boost_INCLUDE_DIRS})
+    include_directories(${PYTHON_INCLUDE_DIRS})
+    target_link_libraries(pydlprim ${Boost_NUMPY3_LIBRARY} ${Boost_PYTHON3_LIBRARY} ${PYTHON_LIBRARIES})
+    target_link_libraries(pydlprim dlprim)
+endif()
+
 
 file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
 

@@ -1,6 +1,8 @@
 #include <dlprim/context.hpp>
 #include <dlprim/tensor.hpp>
 #include <dlprim/net.hpp>
+#include <dlprim/solvers/adam.hpp>
+#include <dlprim/solvers/sgd.hpp>
 #include <dlprim/json.hpp>
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
@@ -91,18 +93,51 @@ namespace dlprim {
     {
         return n.param(name);
     }
+
+    void net_forward(Net &n,ExecutionContext const &e)
+    {
+        n.forward(e);
+    }
+    void net_backward(Net &n,ExecutionContext const &e)
+    {
+        n.backward(e);
+    }
+    void net_load_parameters(Net &n,std::string const &path)
+    {
+        n.load_parameters(path);
+    }
+
+    enum CalculationsModePy {
+        TRAIN, PREDICT
+    };
+
+    int net_mode_get(Net &n)
+    {
+        if(n.mode() == CalculationsMode::train)
+            return TRAIN;
+        else
+            return PREDICT;
+    }
+    void net_mode_set(Net &n,int m)
+    {
+        if(m==TRAIN)
+            n.mode(CalculationsMode::train);
+        else
+            n.mode(CalculationsMode::predict);
+    }
 }
 
 
-BOOST_PYTHON_MODULE(dlprim)
+BOOST_PYTHON_MODULE(_pydlprim)
 {
     Py_Initialize();
     np::initialize();
     using namespace dlprim;
 
-    bp::enum_<CalculationsMode>("CalculationsMode").
-        value("train",CalculationsMode::train).
-        value("predict",CalculationsMode::predict);
+    bp::enum_<CalculationsModePy>("CalculationsMode").
+        value("TRAIN",TRAIN).
+        value("PREDICT",PREDICT).
+        export_values();
 
     bp::enum_<DataType>("DataType").
         value("float32",float_data).
@@ -129,7 +164,8 @@ BOOST_PYTHON_MODULE(dlprim)
 
     bp::class_<ExecutionContext>("ExecutionContext").
         def(bp::init<>()).
-        def(bp::init<cl::CommandQueue &>());
+        def(bp::init<cl::CommandQueue &>()).
+        def("finish",&ExecutionContext::finish);
         
 
     bp::class_<Shape>("Shape").
@@ -159,19 +195,43 @@ BOOST_PYTHON_MODULE(dlprim)
         add_property("keep_intermediate_tensors",
             static_cast<bool (Net::*)() const>(&Net::keep_intermediate_tensors),
             static_cast<void (Net::*)(bool)>(&Net::keep_intermediate_tensors)).
-        add_property("mode",
-            static_cast<CalculationsMode (Net::*)() const>(&Net::mode),
-            static_cast<void (Net::*)(CalculationsMode)>(&Net::mode)).
+        add_property("mode",net_mode_get,net_mode_set).
         def("setup",&Net::setup).
+        def("initialize_parameters",&Net::initialize_parameters).
         def("reshape",&Net::reshape).
-        def("forward",&Net::forward).
-        def("backward",&Net::backward).
+        def("forward",net_forward).
+        def("backward",net_backward).
         def("tensor",&net_get_tensor).
         def("param",&net_get_param).
         add_property("input_names",&net_get_input_names).
         add_property("output_names",&net_get_output_names).
         def("load_parameters",
             static_cast<void (Net::*)(std::string const &,bool v)>(&Net::load_parameters)).
-        def("save_parameters",&Net::save_parameters);
+        def("load_parameters",net_load_parameters).
+        def("save_parameters",&Net::save_parameters).
+        def("save_parameters_to_hdf5",&Net::save_parameters_to_hdf5);
+
+    using solvers::Adam;
+    bp::class_<Adam>("Adam",bp::init<Context &>()).
+        def_readwrite("lr",&Adam::lr).
+        def_readwrite("beta1",&Adam::beta1).
+        def_readwrite("beta2",&Adam::beta2).
+        def_readwrite("weight_decay",&Adam::weight_decay).
+        def_readwrite("eps",&Adam::eps).
+        def("init",&Adam::init).
+        def("zero_grad",&Adam::zero_grad).
+        def("apply",&Adam::apply).
+        def("step",&Adam::step);
+
+    using solvers::SGD;
+    bp::class_<SGD>("SGD",bp::init<Context &>()).
+        def_readwrite("lr",&SGD::lr).
+        def_readwrite("momentum",&SGD::momentum).
+        def_readwrite("weight_decay",&SGD::weight_decay).
+        def("init",&SGD::init).
+        def("zero_grad",&SGD::zero_grad).
+        def("apply",&SGD::apply).
+        def("step",&SGD::step);
+
 
 }
