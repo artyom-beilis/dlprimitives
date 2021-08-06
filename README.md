@@ -8,8 +8,13 @@ For example: AMD provides ROCm platform, but there is no support of RDNA platfor
 there is no support of APUs and no support 
 of any operating systems other than Linux.
 
-This project aims to provide open source deep learning primitives similar to cuDNN and MIOpen that would support
-multiple GPU architectures. Another goal is to provide tools for inference of pre-trained models similar to TensorRT or MIGraphX.
+## Goals
+
+- Create an open source, crop platform deep learning primitives library similar to cuDNN or MIOpen that would support
+multiple GPU architectures.
+- Create inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
+- Create minimalistic deep-learning framework as POC of capabilities and performance.
+- _Long Shot_: Integrate to existing large scale deep learing projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
 
 Please note this is only work in progress - first and preliminary stages.
 
