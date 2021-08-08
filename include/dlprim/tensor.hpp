@@ -54,6 +54,22 @@ namespace dlprim {
         }
 
         ///
+        /// Mark tensor as one that does not participate in gradients calculations
+        ///
+        void freeze()
+        {
+            is_trainable_ = false;
+        }
+
+        ///
+        /// set - non-trainable property
+        ///
+        void is_trainable(bool v)
+        {
+            is_trainable_ = v;
+        }
+
+        ///
         /// Get reuired memory size for the tensor
         ///
         size_t memory_size() const

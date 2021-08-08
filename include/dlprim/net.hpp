@@ -37,11 +37,16 @@ namespace dlprim {
         ///
         /// Define network input
         ///
-        void add_input_tensor(std::string const &name,TensorSpecs const &ts);
+        void add_input_tensor(std::string const &name,TensorSpecs const &ts,bool requires_gradient=false);
         ///
-        /// Make a tensor as output tensor (will be preserverd) by name
+        /// Make a tensor as an output tensor (will be preserverd) by name
         ///
         void mark_output_tensor(std::string const &name);
+        ///
+        /// Make a tensor as an output loss tensor, regardless of its name (by default a name starting with "loss")
+        /// considered loss
+        ///
+        void set_loss_weight(std::string const &name,float loss_weight=1.0);
 
         ///
         /// Load parameters from binary stream DLP format (file) s must be seekable
@@ -93,7 +98,8 @@ namespace dlprim {
                             std::string const &name,
                             std::vector<std::string> const &inputs,
                             std::vector<std::string> const &outputs,
-                            std::vector<std::string> const &parameters = std::vector<std::string>());
+                            std::vector<std::string> const &parameters = std::vector<std::string>(),
+                            bool frozen=false);
 
         /// Set the calculations mode
         ///
@@ -252,10 +258,14 @@ namespace dlprim {
             std::vector<TensorAndGradient> out_grad;
             std::vector<TensorAndGradient> param_grad;
             size_t ws_size;
+            int gradient_flags;
+            bool frozen;
         };
 
         void setup_ws();
+        void mark_backpropagating_edges();
         void allocate_tensors();
+        bool is_loss(std::string const &name);
         void allocate_optimized_chunks(bool forward_only);
         void tensor_use_list(std::vector<std::list<std::string> > &start,
                               std::vector<std::list<std::string> > &stop);
@@ -276,6 +286,7 @@ namespace dlprim {
 
         std::map<std::string,Tensor> parameters_;
         std::map<std::string,Tensor> parameters_diff_;
+        std::map<std::string,float> loss_weights_;
         std::vector<std::string> inputs_;
         std::vector<std::string> outputs_;
         std::vector<Tensor> memory_;

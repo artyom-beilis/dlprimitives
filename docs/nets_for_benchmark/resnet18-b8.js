@@ -11,7 +11,7 @@
         }
     ],
     "outputs": [
-        "prob"
+        "loss"
     ],
     "operators": [
         {
@@ -1397,7 +1397,7 @@
                 "270"
             ],
             "outputs": [
-                "prob"
+                "loss"
             ],
             "params": [
                 "fc.weight",

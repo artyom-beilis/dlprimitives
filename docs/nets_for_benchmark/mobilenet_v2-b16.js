@@ -11,7 +11,7 @@
         }
     ],
     "outputs": [
-        "prob"
+        "loss"
     ],
     "operators": [
         {
@@ -3489,7 +3489,7 @@
                 "753"
             ],
             "outputs": [
-                "prob"
+                "loss"
             ],
             "params": [
                 "classifier.1.weight",

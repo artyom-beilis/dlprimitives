@@ -4,6 +4,7 @@
 #include <dlprim/ops/initialization.hpp>
 #include <sstream>
 #include <fstream>
+#include <set>
 #include <list>
 #include <algorithm>
 
@@ -27,19 +28,29 @@ namespace dlprim {
             c.op->mode(m);
     }
 
-    void Net::add_input_tensor(std::string const &name,TensorSpecs const &ts)
+    void Net::add_input_tensor(std::string const &name,TensorSpecs const &ts,bool requires_gradient)
     {
-        if(!tensor_specs_.insert(std::make_pair(name,ts)).second) {
+        TensorSpecs new_ts(ts.shape(),ts.dtype(),requires_gradient);
+        if(!tensor_specs_.insert(std::make_pair(name,new_ts)).second) {
             throw ValidationError("Tensor " + name + " already exists");
         }
         inputs_.push_back(name);
+    }
+    void Net::set_loss_weight(std::string const &name,float lw)
+    {
+        mark_output_tensor(name);
+        loss_weights_[name] = lw;
     }
     void Net::mark_output_tensor(std::string const &name)
     {
         if(tensor_specs_.find(name) == tensor_specs_.end()) {
             throw ValidationError("mark_output_tensor::No such tensor name " + name);
         }
-        outputs_.push_back(name);
+        if(std::find(outputs_.begin(),outputs_.end(),name)==outputs_.end()) {
+            outputs_.push_back(name);
+            if(name.find("loss")==0)
+                loss_weights_[name] = 1.0f;
+        }
     }
 #ifdef DISABLE_HDF5
     void Net::save_parameters_to_hdf5(std::string const &)
@@ -168,7 +179,8 @@ namespace dlprim {
         if(mode() == CalculationsMode::train) {
             // set loss diff
             for(auto const &name : output_names()) {
-                set_to_constant(ctx_,e,tensor_diff(name),1.0);
+                if(is_loss(name))
+                    set_to_constant(ctx_,e,tensor_diff(name),loss_weights_[name]);
             }
         }
     }
@@ -270,16 +282,24 @@ namespace dlprim {
             json::value const &op = operators[i];
             std::string name = op.get<std::string>("name");
             std::string type = op.get<std::string>("type");
+            bool frozen = op.get<bool>("frozen",false);
             std::vector<std::string> inputs  = op.get("inputs", std::vector<std::string>());
             std::vector<std::string> outputs = op.get("outputs",std::vector<std::string>());
             std::vector<std::string> params  = op.get("params", std::vector<std::string>());
             json::value const &opts = op.find("options").is_undefined() ? empty_options : op["options"];
             std::unique_ptr<Operator> oper = create_by_name(ctx_,type,opts);
-            add_operator(std::move(oper),name,inputs,outputs,params);
+            add_operator(std::move(oper),name,inputs,outputs,params,frozen);
         }
-        std::vector<std::string> outputs = v.get<std::vector<std::string> >("outputs");
-        for(auto const &name : outputs) {
-            mark_output_tensor(name);
+        for(json::value const &output : v["outputs"].array()) {
+            if(output.type() == json::is_string)
+                mark_output_tensor(output.str());
+            else {
+                std::string const &name = output.get<std::string>("name");
+                if(output.find("loss_weight").is_undefined())
+                    mark_output_tensor(name);
+                else
+                    set_loss_weight(name,output.get<float>("loss_weight"));
+            }
         }
     }
 
@@ -299,12 +319,14 @@ namespace dlprim {
                             std::string const &name,
                             std::vector<std::string> const &inputs,
                             std::vector<std::string> const &outputs,
-                            std::vector<std::string> const &parameters)
+                            std::vector<std::string> const &parameters,
+                            bool frozen)
     {
         Connection conn;
         conn.op = std::move(op);
         conn.op->shared_resource(shared_resource());
         conn.op->mode(mode_);
+        conn.frozen = frozen;
         conn.name = name;
         if(connections_index_.find(name) != connections_index_.end()) {
             throw ValidationError("Operator with name " + name + " exists");
@@ -339,6 +361,11 @@ namespace dlprim {
                     throw ValidationError("Output " + outputs[i] + " for operator " + name + " aleady exists "
                             " howover it isn't as as input, output tensor can't have different sources other "
                             " then self/in-place operations ");
+                }
+            }
+            if(frozen) {
+                for(auto &spec : conn.parameter_specs) {
+                    spec.freeze();
                 }
             }
             unsigned params_no = conn.parameter_specs.size();
@@ -376,6 +403,7 @@ namespace dlprim {
     void Net::setup()
     {
         clear_memory();
+        mark_backpropagating_edges();
         setup_ws();
         allocate_tensors();
     }
@@ -393,6 +421,69 @@ namespace dlprim {
         }
         else
             workspace_ = Tensor();
+    }
+
+    bool Net::is_loss(std::string const &name)
+    {
+        return loss_weights_.find(name)!=loss_weights_.end();
+    }
+
+    void Net::mark_backpropagating_edges()
+    {
+        std::map<std::string,int> requires_gradient;
+        for(std::string const &name : inputs_) {
+            if(tensor_specs_[name].is_trainable())
+                requires_gradient[name] |= 1;
+        }
+        for(std::string const &name : outputs_) {
+            if(is_loss(name))
+                requires_gradient[name] |= 2;
+        }
+        for(size_t i=0;i<connections_.size();i++) {
+            connections_[i].gradient_flags = 0;
+        }
+        // needs gradient
+        for(size_t i=0;i<connections_.size();i++) {
+            int &gradient_flags = connections_[i].gradient_flags;
+            for(auto const &spec : connections_[i].parameter_specs) {
+                if(spec.is_trainable()) {
+                    gradient_flags |= 1;
+                    break;
+                }
+            }
+            
+            for(auto const &name : connections_[i].input_names) {
+                if(requires_gradient[name] & 1) {
+                    gradient_flags |= 1;
+                    break;
+                }
+            }
+            if((gradient_flags & 1) == 0)
+                continue;
+            for(auto const &name : connections_[i].output_names) {
+                requires_gradient[name] |= 1;
+            }
+        }
+        // needs gradient
+        for(int i=connections_.size()-1;i>=0;i--) {
+            int &gradient_flags = connections_[i].gradient_flags;
+            for(auto const &name : connections_[i].output_names) {
+                if(requires_gradient[name] & 2) {
+                    gradient_flags |= 2;
+                    break;
+                }
+            }
+            if((connections_[i].gradient_flags & 2) == 0)
+                continue;
+            for(auto const &name : connections_[i].input_names) {
+                requires_gradient[name] |= 2;
+            }
+        }
+        for(auto &ts : tensor_specs_) {
+            if(requires_gradient[ts.first]!=3) {
+                ts.second.freeze();
+            }
+        }
     }
 
     void Net::tensor_use_list(std::vector<std::list<std::string> > &start,
@@ -522,52 +613,83 @@ namespace dlprim {
             if(train && ps.second.is_trainable())
                 parameters_diff_[ps.first ] = Tensor(ctx_,ps.second.shape(),ps.second.dtype());
         }
+
+        /// FWD connections
         for(auto &conn : connections_) {
             conn.input_tensors.clear();
             conn.output_tensors.clear();
             for(auto const &name : conn.input_names) {
                 conn.input_tensors.push_back(tensors_[name]);
-                if(train) {
-                    TensorAndGradient tg;
-                    tg.data = tensors_[name];
-                    tg.diff = tensors_diff_[name];
-                    tg.accumulate_gradient = 0.0;
-                    tg.requires_gradient = std::find(inputs_.begin(),inputs_.end(),name) == inputs_.end();
-                    conn.in_grad.push_back(tg);
-                }
             }
 
             for(auto const &name : conn.output_names) {
                 conn.output_tensors.push_back(tensors_[name]);
-                if(train) {
-                    TensorAndGradient tg;
-                    tg.data = tensors_[name];
-                    tg.diff = tensors_diff_[name];
-                    tg.accumulate_gradient = 0.0;
-                    tg.requires_gradient = true;
-                    conn.out_grad.push_back(tg);
-                }
             }
 
             if(conn.parameter_names.empty())
                 continue;
+
             conn.parameters.clear();
             for(auto const &name : conn.parameter_names) {
                 conn.parameters.push_back(parameters_[name]);
-                if(train) {
-                    TensorAndGradient tg;
-                    tg.data = parameters_[name];
-                    if(tg.data.is_trainable()) {
-                        tg.diff = parameters_diff_[name];
-                        tg.accumulate_gradient = 1.0f;
-                        tg.requires_gradient = true;
+            }
+        }
+
+        /// BWD Connections
+        std::set<std::string> zeroed_grad;
+        for(int index=connections_.size()-1;index>=0;index--) {
+            auto &conn = connections_[index];
+            conn.in_grad.clear();
+            conn.out_grad.clear();
+            conn.param_grad.clear();
+            bool is_trainable = train && conn.gradient_flags == 3;
+            for(auto const &name : conn.input_names) {
+                bool in_place = std::find(conn.output_names.begin(),
+                                          conn.output_names.end(),
+                                          name) != conn.output_names.end();
+                TensorAndGradient tg;
+                tg.data = tensors_[name];
+                if(tensor_specs_[name].is_trainable() && is_trainable) {
+                    tg.diff = tensors_diff_[name];
+                    if(zeroed_grad.find(name) == zeroed_grad.end() || in_place) {
+                        tg.accumulate_gradient = 0.0; // first in BP zeroes gradient
+                        zeroed_grad.insert(name);
                     }
                     else {
-                        tg.accumulate_gradient = 0;
-                        tg.requires_gradient = false;
+                        tg.accumulate_gradient = 1.0; // next accumulate
                     }
-                    conn.param_grad.push_back(tg);
+                    tg.requires_gradient = true; 
                 }
+                else
+                    tg.requires_gradient = false;
+                conn.in_grad.push_back(tg);
+            }
+
+            for(auto const &name : conn.output_names) {
+                TensorAndGradient tg;
+                tg.data = tensors_[name];
+                if(is_trainable)
+                    tg.diff = tensors_diff_[name];
+                tg.accumulate_gradient = 0.0;
+                tg.requires_gradient = true;
+                conn.out_grad.push_back(tg);
+            }
+
+            if(conn.parameter_names.empty())
+                continue;
+            for(auto const &name : conn.parameter_names) {
+                TensorAndGradient tg;
+                tg.data = parameters_[name];
+                if(tg.data.is_trainable() && is_trainable) {
+                    tg.diff = parameters_diff_[name];
+                    tg.accumulate_gradient = 1.0f;
+                    tg.requires_gradient = true;
+                }
+                else {
+                    tg.accumulate_gradient = 0;
+                    tg.requires_gradient = false;
+                }
+                conn.param_grad.push_back(tg);
             }
         }
     }
@@ -600,7 +722,7 @@ namespace dlprim {
             conn.op->reshape(in,out,conn.ws_size);
             for(unsigned i=0;i<out.size();i++) {
                 conn.output_tensors[i].reshape(out[i]);
-                if(train) {
+                if(train && tensor_specs_[conn.output_names[i]].is_trainable()) {
                     conn.out_grad[i].diff.reshape(out[i]);
                 }
             }
@@ -648,6 +770,8 @@ namespace dlprim {
         for(int i=connections_.size() - 1,it=0;i >= 0;i--,it++) {
             ExecGuard g(e,connections_[i].name.c_str());
             ExecutionContext ec = e.generate_series_context(it,connections_.size());
+            if(connections_[i].gradient_flags != 3)
+                continue;
             connections_[i].op->backward(
                 connections_[i].in_grad,
                 connections_[i].out_grad,

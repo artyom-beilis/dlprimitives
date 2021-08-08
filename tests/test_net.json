@@ -31,14 +31,14 @@
                 "cnv1"
             ],
             "options": {
-                "channels_out": 32,
+                "channels_out": 16,
                 "kernel": [
-                    5,
-                    5
+                    3,
+                    3
                 ],
                 "pad": [
-                    2,
-                    2
+                    1,
+                    1
                 ],
                 "activation": "relu"
             }
@@ -67,54 +67,122 @@
                 "cnv2"
             ],
             "options": {
-                "channels_out": 64,
+                "channels_out": 24,
                 "kernel": [
-                    5,
-                    5
+                    3,
+                    3
                 ],
                 "pad": [
-                    2,
-                    2
-                ],
+                    1,
+                    1
+                ]
+            }
+        },
+        {
+            "name": "cnv2a",
+            "type": "Convolution2D",
+            "inputs": [
+                "p1"
+            ],
+            "outputs": [
+                "cnv2a"
+            ],
+            "options": {
+                "channels_out": 8,
+                "kernel": 1,
+                "pad": 0,
+                "bias": false
+            }
+        },
+        {
+            "name": "bn2a",
+            "type": "BatchNorm2D",
+            "inputs": [
+                "cnv2a"
+            ],
+            "outputs": [
+                "bn2a"
+            ],
+            "options": {
+                "features": 8
+            }
+        },
+        {
+            "name": "relu_bn2",
+            "type": "Activation",
+            "inputs": [
+                "bn2a"
+            ],
+            "outputs": [
+                "bn2a"
+            ],
+            "options": {
+                "activation": "relu"
+            }
+        },
+        {
+            "name": "cnv2b",
+            "type": "Convolution2D",
+            "inputs": [
+                "bn2a"
+            ],
+            "outputs": [
+                "cnv2b"
+            ],
+            "options": {
+                "channels_out": 24,
+                "kernel": 3,
+                "pad": 1
+            }
+        },
+        {
+            "name": "elt",
+            "type": "Elementwise",
+            "inputs": [
+                "cnv2",
+                "cnv2b"
+            ],
+            "outputs": [
+                "elt"
+            ],
+            "options": {
+                "operations": "sum"
+            }
+        },
+        {
+            "name": "elt_relu",
+            "type": "Activation",
+            "inputs": [
+                "elt"
+            ],
+            "outputs": [
+                "elt"
+            ],
+            "options": {
                 "activation": "relu"
             }
         },
         {
             "name": "p2",
-            "type": "Pooling2D",
+            "type": "GlobalPooling",
             "inputs": [
-                "cnv2"
+                "elt"
             ],
             "outputs": [
                 "p2"
             ],
             "options": {
-                "kernel": 2,
-                "stride": 2
+                "mode": "avg"
             }
         },
         {
-            "name": "fc1",
+            "name": "fc",
             "type": "InnerProduct",
             "inputs": [
                 "p2"
             ],
             "outputs": [
-                "fc1"
-            ],
-            "options": {
-                "outputs": 256,
-                "activation": "relu"
-            }
-        },
-        {
-            "name": "fc2",
-            "type": "InnerProduct",
-            "inputs": [
-                "fc1"
-            ],
-            "outputs": [
-                "fc2"
+                "fc"
             ],
             "options": {
                 "outputs": 10
@@ -124,7 +192,7 @@
             "name": "prob",
             "type": "SoftmaxWithLoss",
             "inputs": [
-                "fc2",
+                "fc",
                 "label"
             ],
             "outputs": [
