@@ -9,13 +9,15 @@ import json
 class Net2(nn.Module):
     def __init__(self,batch):
         super(Net2, self).__init__()
-        self.cnv1 = nn.Conv2d(1, 32,5,padding=2)
-        self.cnv2 = nn.Conv2d(32,64,5,padding=2)
-        self.fc1 = nn.Linear(((28//4)**2)*64,256)
-        self.fc2 = nn.Linear(256, 10)
+        self.cnv1 = nn.Conv2d(1, 16,3,padding=1)
+        self.cnv2 = nn.Conv2d(16,24,3,padding=1)
+        self.cnv2a = nn.Conv2d(16,8,1,padding=0,bias=False)
+        self.bn2a = nn.BatchNorm2d(8)
+        self.cnv2b = nn.Conv2d(8,24,3,padding=1)
+        self.fc = nn.Linear(24, 10)
         
         self.p1   = nn.MaxPool2d(2,stride=2)
-        self.p2   = nn.MaxPool2d(2,stride=2)
+        self.p2   = nn.AdaptiveAvgPool2d((1,1))
 
         self.mjs = dict(
             inputs = [dict(shape=[batch,1,28,28],name='data'),
@@ -27,7 +29,7 @@ class Net2(nn.Module):
                      inputs=["data"],
                      outputs=["cnv1"],
                      options = dict(
-                        channels_out = 32,
+                        channels_out = 16,
                         kernel=list(self.cnv1.kernel_size),
                         pad=list(self.cnv1.padding),
                         activation="relu"
@@ -42,36 +44,53 @@ class Net2(nn.Module):
                      inputs=["p1"],
                      outputs=["cnv2"],
                      options = dict(
-                        channels_out = 64,
+                        channels_out = 24,
                         kernel=list(self.cnv2.kernel_size),
-                        pad=list(self.cnv2.padding),
-                        activation="relu"
+                        pad=list(self.cnv2.padding)
                     )
                 ),
+                dict(name="cnv2a",
+                     type="Convolution2D",
+                     inputs=["p1"],
+                     outputs=["cnv2a"],
+                     options = dict(channels_out=8,kernel = 1,pad = 0,bias=False)),
+                dict(name="bn2a",
+                     type="BatchNorm2D",
+                     inputs=["cnv2a"],
+                     outputs=["bn2a"],
+                     options=dict(features=8)),
+                dict(name="relu_bn2",
+                     type="Activation",
+                     inputs=["bn2a"],outputs=["bn2a"],
+                     options=dict(activation='relu')),
+                dict(name="cnv2b",
+                     type="Convolution2D",
+                     inputs=["bn2a"],
+                     outputs=["cnv2b"],
+                     options = dict(channels_out=24,kernel = 3,pad = 1)),
+                dict(name="elt",
+                     type="Elementwise",
+                     inputs=["cnv2","cnv2b"],
+                     outputs=["elt"],
+                     options= dict(operations="sum")),
+                dict(name="elt_relu",type="Activation",
+                     inputs=["elt"],outputs=["elt"],
+                     options=dict(activation="relu")),
                 dict(name="p2",
-                     type="Pooling2D",
-                     inputs=["cnv2"],outputs=["p2"],
-                     options = dict(kernel=2,stride=2)),
-                dict(name="fc1",
+                     type="GlobalPooling",
+                     inputs=["elt"],outputs=["p2"],
+                     options = dict(mode="avg")),
+                dict(name="fc",
                      type="InnerProduct",
                      inputs=['p2'],
-                     outputs=['fc1'],
-                     options = dict(
-                        outputs=256,
-                        activation='relu'
-                     )
-                ),
-                dict(name="fc2",
-                     type="InnerProduct",
-                     inputs=['fc1'],
-                     outputs=['fc2'],
+                     outputs=['fc'],
                      options = dict(
                         outputs=10,
                      )
                 ),
                 dict(name="prob",
                      type="SoftmaxWithLoss",
-                     inputs=["fc2","label"],
+                     inputs=["fc","label"],
                      outputs=["loss"]
                 )
             ]
@@ -81,15 +100,31 @@ class Net2(nn.Module):
 
     def forward(self, x):
         x = self.p1(F.relu(self.cnv1(x)))
-        x = self.p2(F.relu(self.cnv2(x)))
-        x = F.relu(self.fc1(torch.flatten(x,1)))
-        x = self.fc2(x)
+        a = self.cnv2(x)
+        b1 = F.relu(self.bn2a(self.cnv2a(x)))
+        b = self.cnv2b(b1)
+        x = F.relu(a+b)
+        x = self.p2(x)
+        x = self.fc(torch.flatten(x,1))
         if self.training:
             output = F.log_softmax(x, dim=1)
         else:
             output = F.softmax(x,dim=1)
         return output
 
+    def _add_bn(self,js,fc,name,tp):
+        for n,param in enumerate([fc.running_mean,fc.running_var] + list(fc.parameters())):
+            name_code = '%s.%d' % (name,n)
+            if tp == 'param_diff':
+                v=param.grad
+            elif tp == 'param' or tp == 'param_updated':
+                v=param
+            if v is None:
+                continue
+            lst = v.detach().cpu().numpy().reshape(-1).tolist()
+            js.append(dict(name=name_code,type=tp,value=lst))
+ 
+    
     def _add_fc(self,js,fc,name,tp):
         for n,param in enumerate(fc.parameters()):
             name_code = '%s.%d' % (name,n)
@@ -103,8 +138,10 @@ class Net2(nn.Module):
     def save_dp_weights(self,js,tp):
         self._add_fc(js,self.cnv1,'cnv1',tp)
         self._add_fc(js,self.cnv2,'cnv2',tp)
-        self._add_fc(js,self.fc1,'fc1',tp)
-        self._add_fc(js,self.fc2,'fc2',tp)
+        self._add_fc(js,self.cnv2a,'cnv2a',tp)
+        self._add_fc(js,self.cnv2b,'cnv2b',tp)
+        self._add_bn(js,self.bn2a,'bn2a',tp)
+        self._add_fc(js,self.fc,'fc',tp)
 
 dataset1 = datasets.MNIST('../data', train=True, download=True,transform=True)
 
