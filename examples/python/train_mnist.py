@@ -128,6 +128,6 @@ def main(p):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument('--device',default='0:0')
-    p.add_argument('--batch',default=128)
+    p.add_argument('--batch',default=128,type=int)
     main(p.parse_args())
 
