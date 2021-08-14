@@ -126,6 +126,63 @@ def make_eltwise():
                         cases.append(case)
     return report
 
+def make_concat():
+    report = {
+        "operator" : "Concat",
+        "tests" : []
+    }
+    tests = report["tests"]
+    tc = [
+        (0, [ [[10,5],[10,5]],
+              [[30,5],[30,5]],
+              [[1,1], [1,1 ]] ] ),
+        (0, [ [[10,5],[5,5],    [15,5]],
+              [[3,20],[7,20],   [10,20]] ]),
+        (0, [ [[10,5],[5,5],[3,5],    [18,5]],
+              [[3,20],[7,20],[1,20],   [11,20]] ]),
+        (1, [ [[10,5],[10,5]],
+              [[30,5],[30,5]],
+              [[1,1], [1,1 ]] ] ),
+        (1, [ [[10,5],[10,5],    [10,10]],
+              [[15,2],[15,1],    [15,3 ]] ]),
+        (1, [ [[10,5,2],[10,5,2],[10,10,2]],
+              [[15,2,4],[15,1,4],    [15,3,4 ]] ]),
+
+    ]
+    for dim,tmpl in tc:
+        cases=[]
+        test = {
+            "train" : True,
+            "options" : {
+                "dim": dim,
+            },
+            "setup_tensors" : [ {"shape":v} for v in tmpl[0][0:-1]  ],
+            "output_tensors" : [ {"shape":tmpl[0][-1]} ],
+            "workspce": 0,
+            "cases": cases
+        }
+        tests.append(test)
+        for shapes in tmpl:
+            inp_shapes = shapes[0:-1]
+            out_shape = shapes[-1]
+            case = dict(in_shapes = inp_shapes ,out_shapes = [out_shape])
+            
+            ins = []
+            for s in inp_shapes:
+                a = torch.randn(*s,requires_grad=True)
+                ins.append(a)
+            c = torch.cat(ins,dim=dim)
+            dc = torch.randn(c.shape)
+            c.backward(dc,retain_graph=True)
+            assert tuple(c.shape) == tuple(out_shape)
+            case["in_tensors"]  = [a.reshape((-1,)).tolist() for a in ins]
+            case["out_tensors"] = [c.reshape((-1,)).tolist()]
+            case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+            case["in_diffs"] = [a.grad.reshape((-1)).tolist() for a in ins]
+            cases.append(case)
+    return report
+
+
 def make_activation():
     report = {
         "operator" : "Activation",
@@ -543,7 +600,8 @@ if __name__ == "__main__":
         "conv2d_win" : make_conv2d_win,
         "conv2d_dsc" : make_conv2d_dsc,
         "activation" : make_activation,
-        "batchnorm" : make_batchnorm
+        "batchnorm" : make_batchnorm,
+        "concat" : make_concat,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))

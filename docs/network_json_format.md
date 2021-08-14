@@ -140,6 +140,12 @@ Parameters
 - `affine` - boolean, default true, apply additional trainable gamma scale and beta offset after normalization
 - `use_global_stats` - use previously calculated mean/variance instead of calculating them per-batch and updating running sums. Useful for freezing layer, default false. Note: for testing it is "always true"
 
+### Concat
+
+Parameters
+
+- `dim` - concatenate input tensors over dimension dim, default 1
+
 
 ## Standard Activations
 

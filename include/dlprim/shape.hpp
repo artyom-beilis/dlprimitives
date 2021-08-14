@@ -78,12 +78,35 @@ namespace dlprim {
         {
             return size_;
         }
+        size_t &operator[](int i)
+        {
+            return shape_[i];
+        }
         ///
         /// specific dimension
         ///
         size_t operator[](int i) const
         {
             return shape_[i];
+        }
+        ///
+        /// Split the shape accordint to axis - before axis and after
+        /// for example:
+        /// - [2,3,4,5] split axis==2 -> [6,4,5]
+        /// - [2,3,4,5] split axis == 0 -> [1,2,60]
+        /// - [2,3] split axis == 2 -> [6,1,1]
+        Shape split_and_merge_over_axis(int axis) const
+        {
+            size_t d0 = 1,d1 = 1,d2=1;
+            for(int i=0;i<size_;i++) {
+                if(i < axis)
+                    d0*=shape_[i];
+                else if(i == axis)
+                    d1*=shape_[i];
+                else
+                    d2*=shape_[i];
+            }
+            return Shape(d0,d1,d2);
         }
     private:
         std::array<size_t,max_tensor_dim> shape_;

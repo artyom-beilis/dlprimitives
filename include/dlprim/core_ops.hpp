@@ -345,10 +345,35 @@ namespace core {
     /// \param p2 - max value for uniform and sigma for normal
     ///
     void fill_random(Context &ctx,ExecutionContext const &e,Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2);
+   
     
+    ///
+    /// Class for copying a slice of an tensor
+    ///
+    class SliceCopy {
+    public:
+        SliceCopy(Context &ctx,DataType dtype=float_data);
+        ~SliceCopy();
+        
+        ///
+        /// Copy one part of tensor to another over single dimentsion dim, lets say if target and source are 4d tensors
+        /// and dim == 1 then it is equivalent of following in numpy:
+        ///
+        /// \code
+        /// target[:,taget_offset:target_offset + slice,:,:] *=target_scale
+        /// target[:,taget_offset:target_offset + slice,:,:] += source[:,source_offset:source_offset+slice,:,:]
+        /// \endcode
+        ///
+        void tensor_slice_copy(int dim,size_t slice,
+                               Tensor &target,size_t target_offset,
+                               Tensor &source,size_t source_offset,
+                               float target_scale,ExecutionContext const &e);
+    private:
+        cl::Kernel kernel_;
+        DataType dtype_;
+    };
 
-
-
+    
     
 
 } // core

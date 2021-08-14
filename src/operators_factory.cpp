@@ -60,6 +60,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         [](Context &ctx,json::value const &p) {
             return new BatchNorm2D(ctx,BatchNorm2DConfig::from_json(p));
         }
+    },
+    {
+        "Concat", 
+        [](Context &ctx,json::value const &p) {
+            return new Concat(ctx,ConcatConfig::from_json(p));
+        }
     }
 };
     

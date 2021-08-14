@@ -119,6 +119,7 @@ set(DLPRIM_SRC
         src/ops/bwd_bias.cpp
         src/ops/axpby.cpp
         src/ops/scal.cpp
+        src/ops/concat.cpp
         src/ops/initialization.cpp
         src/gemm.cpp
         src/random.cpp
@@ -126,6 +127,7 @@ set(DLPRIM_SRC
         src/core_init.cpp
         src/core_conv.cpp
         src/core_bn.cpp
+        src/core_slice.cpp
         ${EXTRA_SRC}
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
