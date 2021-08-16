@@ -108,6 +108,7 @@ def main(p):
     ts_d,ts_l = test_data()
     print("Prepare network")
     ctx = dp.Context(p.device)
+    print(" using",ctx.name)
     e = ctx.make_execution_context()
     n = make_net(p.batch,False)
     net = dp.Net(ctx)

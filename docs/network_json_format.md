@@ -129,6 +129,23 @@ Parameters:
 
 Note: kernel, stride, dilate and pad can be either single number for symmetric values or pair of integers, 1st for height dimension and second for width
 
+### TransposedConvolution2D
+
+Parameters:
+
+- `channels_out` - integer, number of output channels/features
+- `channels_in` - number of input channels, can be deduced automatically
+- `groups` - number of convolution groups, integer, default 1
+- `bias` - boolean - apply bias, default true
+- `kernel` - integer or list of two integers, convolution kernel size.
+- `stride` - integer or list of two integers, convolution stride, default 1
+- `pad`  - integer or list of two integer, padding, default 0
+- `output_pad`  - integer or list of two integer, padding of output in order to solve ambiguity if "input" size due to strides, default 0
+- `dilate`  - integer or list of two integer, dilation, default 1
+
+Note: kernel, stride, dilate, pad and output\_pad can be either single number for symmetric values or pair of integers, 1st for height dimension and second for width
+
+
 ### BatchNorm2D
 
 Parameters

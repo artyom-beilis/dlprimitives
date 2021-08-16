@@ -96,7 +96,7 @@ namespace core {
     class Conv2DForward : public Conv2DBase {
     public:
         virtual ~Conv2DForward() {}
-        virtual void enqueue(Tensor &x,Tensor &w,Tensor *bias,Tensor &y,Tensor &ws,ExecutionContext const &e) = 0;
+        virtual void enqueue(Tensor &x,Tensor &w,Tensor *bias,Tensor &y,Tensor &ws,float factor,ExecutionContext const &e) = 0;
         /// Create optimal object for conv2d
         /// 
         /// algo is one of 
@@ -345,6 +345,11 @@ namespace core {
     /// \param p2 - max value for uniform and sigma for normal
     ///
     void fill_random(Context &ctx,ExecutionContext const &e,Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2);
+
+    ///
+    /// Add bias to t over dimentsion 1: t[:,i,:,:] = b[i]
+    ///
+    void add_bias(Context &ctx,ExecutionContext const &e,Tensor &t,Tensor &b);
    
     
     ///

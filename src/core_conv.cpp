@@ -24,7 +24,7 @@ namespace core {
         {
             return "gemm";
         }
-        virtual void enqueue(Tensor &x,Tensor &W,Tensor *bias,Tensor &y, Tensor &,ExecutionContext const &e) 
+        virtual void enqueue(Tensor &x,Tensor &W,Tensor *bias,Tensor &y, Tensor &,float factor,ExecutionContext const &e) 
         {
             cl::Buffer *bias_buffer = nullptr;
             int bias_offset = 0;
@@ -51,7 +51,7 @@ namespace core {
                 N,
                 bias_buffer,
                 bias_offset,
-                0.0f,
+                factor,
                 y.shape().total_size(),
                 e);
         }
@@ -206,7 +206,7 @@ namespace core {
         {
             return sizeof(float)*16 * config_.channels_in * config_.channels_out;
         }
-        virtual void enqueue(Tensor &in,Tensor &W,Tensor *bias,Tensor &out, Tensor &ws,ExecutionContext const &ec)
+        virtual void enqueue(Tensor &in,Tensor &W,Tensor *bias,Tensor &out, Tensor &ws,float factor,ExecutionContext const &ec)
         {
             int B = in.shape()[0];
             int N = config_.channels_out;
@@ -235,6 +235,7 @@ namespace core {
                 bias->set_arg(conv_,p);
             }
             out.set_arg(conv_,p);
+            conv_.setArg(p++,factor);
 
             auto ec1 = ec.generate_series_context(0,2);
             auto ec2 = ec.generate_series_context(1,2);
@@ -432,7 +433,7 @@ namespace core {
         {
             return "depthwise_separable";
         }
-        virtual void enqueue(Tensor &in,Tensor &W,Tensor *bias,Tensor &out, Tensor &,ExecutionContext const &ec)
+        virtual void enqueue(Tensor &in,Tensor &W,Tensor *bias,Tensor &out, Tensor &,float factor,ExecutionContext const &ec)
         {
             int batch = in.shape()[0];
             int height = in.shape()[2];
@@ -447,6 +448,7 @@ namespace core {
                 bias->set_arg(conv_,p);
             }
             out.set_arg(conv_,p);
+            conv_.setArg(p++,factor);
             
             int gW = (width+1)/2;
             int gH = (height+1)/2;

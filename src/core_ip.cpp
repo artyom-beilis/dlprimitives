@@ -251,6 +251,33 @@ namespace core {
         return r;
     }
 
+    void add_bias(Context &ctx,ExecutionContext const &e,Tensor &t,Tensor &bias)
+    {
+        DLPRIM_CHECK(t.dtype() == float_data);
+        DLPRIM_CHECK(t.shape().size() >= 2);
+        DLPRIM_CHECK(t.shape()[1] == bias.shape().total_size());
+
+        cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"fwd_bias");
+        cl::Kernel k(prog,"fwd_bias");
+
+        Shape const &s = t.shape();
+        int B = s[0];
+        int F = s[1];
+        int RC = 1;
+        if(s.size() >= 3)
+            RC *= s[2];
+        if(s.size() >= 4)
+            RC *= s[3];
+
+        int p = 0;
+        k.setArg(p++,B);
+        k.setArg(p++,F);
+        k.setArg(p++,RC);
+        t.set_arg(k,p);
+        bias.set_arg(k,p);
+        e.queue().enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(RC,F,B),cl::NullRange,e.events(),e.event("fwd_bias"));
+    }
+
 
 } // core
 } // dlprim

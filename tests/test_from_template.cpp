@@ -127,6 +127,9 @@ void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &re
             if(dev > 1) {
                 eps *= dev;
             }
+            else if(total == 1 && std::fabs(sum) > 1) {
+                eps *= std::fabs(sum);
+            }
             for(int j=0;j<total && fail_counts < 10;j++) {
                 if(fabs(a[j] - factor * r[j]) > eps) {
                     std::cerr << "Comparison failed for tensor " << name 
@@ -387,8 +390,8 @@ int main(int argc,char **argv)
                             params_grad.push_back(p.is_trainable());
                             params_nograd.push_back(!p.is_trainable());
                         }
-                        compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter",params_grad);
                         compare_tensors(in_diffs,in_ref_diffs,eps,1.0 + accum * 0.5f,"data",grad);
+                        compare_tensors(param_diffs,param_ref_diffs,eps,1.0 + accum * 0.5f,"filter",params_grad);
                         if(!cases[i].find("parameters_check").is_undefined()) {
                             for(dp::Tensor &tensor : params)
                                 tensor.to_host(e);

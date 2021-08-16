@@ -13,7 +13,8 @@ void conv(int batch,int height,int width,
 #if BIAS != 0
           __global const float *bias,ulong bias_offset,
 #endif          
-          __global float *output,ulong output_offset)
+          __global float *output,ulong output_offset,
+          float scale)
 {
     input += input_offset;
     output += output_offset;
@@ -81,7 +82,12 @@ void conv(int batch,int height,int width,
                 for(int dck=0;dck<KERN;dck++)
                     sum = mad(K_vals[drk][dck],I_vals[dr+drk][dc+dck],sum);
 
-            output[dr*width+dc] = ACTIVATION_F(sum);
+            float value = ACTIVATION_F(sum);
+            __global float *optr = output + dr*width+dc;
+            if(scale == 0.0)
+                *optr = value;
+            else
+                *optr = scale * *optr + value;
         }
     }
 

@@ -581,6 +581,139 @@ def make_conv2d(algo=None):
             cases.append(case)
     return report
 
+def make_tr_conv2d_gemm():
+    return make_tr_conv2d(algo="gemm")
+
+def make_tr_conv2d_win():
+    return make_tr_conv2d(algo="winograd")
+
+def make_tr_conv2d_dsc():
+    return make_tr_conv2d(algo="depthwise_separable")
+
+
+def make_tr_conv2d(algo=None):
+    report = {
+        "operator" : "TransposedConvolution2D",
+        "tests" : []
+    }
+    tests = report["tests"]
+    dev='cuda' #
+    # There is but in PT for stride==2 https://github.com/pytorch/pytorch/issues/63314 so using gpu
+    for kernel,pad,stride,dilate,cout,cin,bias,groups,relu,opad in \
+        [ 
+            (1, 0, 2, 1, 1, 1,False,1,False,0), 
+            (1, 0, 2, 1, 1, 1,False,1,False,1), 
+            (3, 1, 1, 1, 1, 1,False,1,False,0), 
+            (3, 1, 1, 1, 2, 1,False,1,False,0), 
+            (3, 1, 1, 1, 1, 2,False,1,False,0), 
+            (3, 1, 1, 1, 3, 8,False,1,False,0), 
+            (3, 1, 1, 1, 3, 8,False,1,False,0), 
+            (3, 1, 1, 1, 128, 64,False,1,False,0), 
+            (3, 1, 1, 1, 3, 8,True, 1, True,0), 
+            (3, 1, 1, 1, 3, 8,True, 1, True,0), 
+            (1, 0, 1, 1, 3, 5,False,1,False,0),
+            (1, 0, 2, 1, 3, 5,False,1,False,0),
+            (3, 1, 1, 1, 4, 8,True,2,False,0), 
+            (3, 1, 2, 1, 6, 8,True,2,False,0), 
+            (3, 1, 2, 1, 6, 8,True,2,False,1), 
+            (3, 1, 1, 1, 8, 8,True,8,False,0), 
+            ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False,0),
+            ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False,[0,1]),
+            (5, 2, 1, 1, 16,32,True,1,False,0),
+            (11,2, 4, 1, 16,32,True,1,False,0),
+            (11,2, 4, 1, 16,32,True,1,False,1),
+        ]:
+
+        convop = torch.nn.ConvTranspose2d(cin,cout,kernel,stride=stride,padding=pad,output_padding=opad,dilation=dilate,groups=groups, bias=bias).to(dev)
+        params = list(convop.parameters())
+        if relu:
+            op = lambda x:(torch.nn.ReLU())(convop(x))
+        else:
+            op = convop
+        cases=[]
+        tin = torch.randn(64,cin,256,256).to(dev)
+        tout = op(tin)
+        test = {
+            "init" : "small_frac",
+            "train" : True,
+            "options" : {
+                "kernel": kernel,
+                "pad" : pad,
+                "output_pad": opad,
+                "stride" : stride,
+                "dilate" : dilate,
+                "bias" : bias,
+                "channels_in" : cin,
+                "channels_out" : cout,
+                "groups" : groups
+            },
+            "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+            "output_tensors": [ { "shape" : list(tout.shape) } ],
+            "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
+            "cases": cases
+        }
+        if algo is not None:
+            test['options'].update(
+                {
+                    "fwd_algo" : algo,
+                    "bwd_data_algo" : algo,
+                    "bwd_filter_algo" : algo
+
+                })
+
+        if np.prod(params[0].shape) < 1000:
+            pred_param=True
+            test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
+        else:
+            pred_param=False
+            test['random_params'] = True
+        if relu:
+            test["options"]["activation"] = "relu"
+        print(test["options"],"predefined params",pred_param)
+        tests.append(test)
+        for sout in [[1,cout,2,2],[1,cout,7,7],[1,cout,4,4],[3,cout,4,4],[2,cout,7,7],[2,cout,10,5],[2,cout,10,10],[2,cout,19,19],[2,cout,20,20]]:
+            ihw = [0,0]
+            ohw = sout[2:]
+            for d in range(2):
+                ihw[d] = (ohw[d] - 1) * _at(stride,d) - 2 * _at(pad,d) + _at(dilate,d) * (_at(kernel,d) - 1) + _at(opad,d) + 1;
+
+            valid_pad = True
+            for d in range(2):
+                ref = (ihw[d] + 2 * _at(pad,d) - _at(dilate,d)* (_at(kernel,d) - 1) -1) // _at(stride,d) + 1
+                if ref != ohw[d]:
+                    valid_pad = False
+            if not valid_pad:
+                assert opad > 0
+                print("  Can't use output padding")
+                continue
+            s = [sout[0],cin,ihw[0],ihw[1]]
+            lkh,lkw = _at(kernel,0)*_at(dilate,0), _at(kernel,1)*_at(dilate,1)
+            if s[2] + _at(pad,0) < lkh or s[3] + _at(pad,1) < lkw:
+                continue
+            tin = torch.randn(s).to(dev)
+            tin.requires_grad = True
+            tout = op(tin)
+            dtout = torch.randn(tout.shape).to(dev)
+            tout.backward(dtout,retain_graph=True)
+            case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
+            if np.prod(s) < 5000 and pred_param:
+                case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
+                case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                case["params_diffs"] = [ p.grad.reshape((-1,)).tolist() for p in params ]
+                print("- ",s,"predefined")
+            else:
+                case["use_cpu_reference"]=True
+                print("- ",s,"cpu as ref")
+            for p in params:
+                p.grad*=0
+            cases.append(case)
+    return report
+
+
+
+
 
 
 def gen(name,func): 
@@ -599,6 +732,10 @@ if __name__ == "__main__":
         "conv2d_gemm" : make_conv2d_gemm,
         "conv2d_win" : make_conv2d_win,
         "conv2d_dsc" : make_conv2d_dsc,
+        "tr_conv2d" : make_tr_conv2d,
+        "tr_conv2d_gemm" : make_tr_conv2d_gemm,
+        "tr_conv2d_win" : make_tr_conv2d_win,
+        "tr_conv2d_dsc" : make_tr_conv2d_dsc,
         "activation" : make_activation,
         "batchnorm" : make_batchnorm,
         "concat" : make_concat,

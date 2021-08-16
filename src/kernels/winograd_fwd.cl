@@ -206,6 +206,14 @@ inline void store_local(__local float *l_val,int strd,float16 v)
 #define PATCH_K 8
 #define PATCH_T 8
 
+void scale_and_add(__global float *p,float value,float scale)
+{
+    if(scale == 0.0)
+        *p = value;
+    else
+        *p = *p * scale + value;
+}
+
 #if TILES_IN_WG * KERNELS_IN_WG * 16 != PATCH_K * PATCH_T * WG_SIZE
 #error
 #endif
@@ -220,7 +228,8 @@ void winconv_3x3(int B, int N,int C,int H,int W,
 #if BIAS == 1                  
                   __global float const * restrict bias,ulong bias_offset,
 #endif                  
-                  __global float *restrict result,ulong result_offset)
+                  __global float *restrict result,ulong result_offset,
+                  float scale)
 {
     image += image_offset;
     kernels += kernels_offset / 16;
@@ -394,16 +403,16 @@ void winconv_3x3(int B, int N,int C,int H,int W,
                 bool cv1 = s_col + 1 < W;
                 if(rv0) {
                     if(cv0)
-                        ptr[0] = s_img_tile.s0;
+                        scale_and_add(ptr + 0, s_img_tile.s0, scale);
                     if(cv1)
-                        ptr[1] = s_img_tile.s1;
+                        scale_and_add(ptr + 1, s_img_tile.s1, scale);
                 }
                 ptr += W;
                 if(rv1) {
                     if(cv0)
-                        ptr[0] = s_img_tile.s2;
+                        scale_and_add(ptr + 0, s_img_tile.s2, scale);
                     if(cv1)
-                        ptr[1] = s_img_tile.s3;
+                        scale_and_add(ptr + 1, s_img_tile.s3, scale);
                 }
             }
         }

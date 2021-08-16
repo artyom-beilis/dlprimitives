@@ -62,6 +62,7 @@ ResNet18, batch 16.
 |Softmax                |                                       | Fwd               |
 |SoftmaxWithLoss        |                                       | Fwd,Bwd           |
 |Elementwise            | ax+by, max(ax,by), ax\*y              | Fwd,Bwd           |
+|Concat                 |                                       | Fwd,Bwd           |
 |MaxPool2d              |                                       | Fwd,Bwd           |
 |AvgPool2d              |                                       | Fwd,Bwd           |
 |GlobalMaxPool2d        |                                       | Fwd,Bwd           |
@@ -69,6 +70,7 @@ ResNet18, batch 16.
 |Inner Product          |                                       | Fwd,Bwd           |
 |BatchNorm2D            |                                       | Fwd,Bwd           | 
 |Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
+|TransposedConv2d       | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
 |Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
 
 Solvers: SGD, Adam
