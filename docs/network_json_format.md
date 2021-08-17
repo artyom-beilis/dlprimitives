@@ -163,6 +163,15 @@ Parameters
 
 - `dim` - concatenate input tensors over dimension dim, default 1
 
+### Slice
+
+Parameters
+
+- `dim` - slice input tensor over dimension dim, default 1
+- `begin` - begin index of slice, default 0
+- `end` - end index of slice, default end 
+
+For example: `{ "begin":1, "end":2","dim":1 }` - slice green channel
 
 ## Standard Activations
 

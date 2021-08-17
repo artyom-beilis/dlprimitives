@@ -156,6 +156,14 @@ def get_operators(model,inputs,params):
         elif n.op_type in ('Flatten','Dropout','Reshape'):
             assert operators[-1]['outputs'][0] == n.input[0]
             operators[-1]['outputs'][0] = n.output[0]
+        elif n.op_type == 'Concat':
+            op = dict(name = n.name,
+                      type = 'Concat',
+                      inputs = list(n.input),
+                      outputs = list(n.output),
+                      options = dict(dim = attrs['axis'])
+                    )
+            operators.append(op)
         elif n.op_type == 'Softmax':
             assert attrs.get('axis',-1) in (1,-1)
             op = dict(name = n.name,
@@ -205,7 +213,8 @@ def get_operators(model,inputs,params):
             operators.append(op)
         else:
             print("Warning Unsupported operation: " + str(n.op_type) + " with attributes " + json.dumps(attrs));
-            print("Final network may not represent actual!!!")
+            print("  Inputs",list(n.input)," Outputs",list(n.output))
+            print("  Final network may not represent actual!!!")
         if op_len == len(operators):
             print("Skipped or modified last op from %s" % str(n.op_type))
         else:

@@ -72,6 +72,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         [](Context &ctx,json::value const &p) {
             return new Concat(ctx,ConcatConfig::from_json(p));
         }
+    },
+    {
+        "Slice", 
+        [](Context &ctx,json::value const &p) {
+            return new Slice(ctx,SliceConfig::from_json(p));
+        }
     }
 };
     

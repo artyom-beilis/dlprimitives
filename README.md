@@ -63,6 +63,7 @@ ResNet18, batch 16.
 |SoftmaxWithLoss        |                                       | Fwd,Bwd           |
 |Elementwise            | ax+by, max(ax,by), ax\*y              | Fwd,Bwd           |
 |Concat                 |                                       | Fwd,Bwd           |
+|Slice                  |                                       | Fwd,Bwd           |
 |MaxPool2d              |                                       | Fwd,Bwd           |
 |AvgPool2d              |                                       | Fwd,Bwd           |
 |GlobalMaxPool2d        |                                       | Fwd,Bwd           |

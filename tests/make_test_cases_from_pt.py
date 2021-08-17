@@ -126,6 +126,60 @@ def make_eltwise():
                         cases.append(case)
     return report
 
+def make_slice():
+    report = {
+        "operator" : "Slice",
+        "tests" : []
+    }
+    tests = report["tests"]
+    tc = [
+        (0, 1,3,[ [10,5],[15,2],[20,5] ]),
+        (1, 2,7,[ [2,10,5],[5,10,1] ]),
+        (1, 2,7,[ [2,10],[5,10] ])
+    ]
+    for dim,begin,end,shapes in tc:
+        cases=[]
+        out_shape = shapes[0][:]
+        out_shape[dim]  = end - begin
+        test = {
+            "train" : True,
+            "options" : {
+                "dim": dim,
+                "begin":begin,
+                "end":end,
+            },
+            "setup_tensors" : [ {"shape": shapes[0]} ],
+            "output_tensors" : [ {"shape": out_shape} ],
+            "workspce": 0,
+            "cases": cases
+        }
+        tests.append(test)
+        for shape in shapes:
+            inp_shape = shape
+            out_shape = inp_shape[:]
+            out_shape[dim]  = end - begin
+            case = dict(in_shapes = [inp_shape] ,out_shapes = [out_shape])
+            
+            a = torch.randn(*shape,requires_grad=True)
+            if len(shape) == 2 and dim == 0:
+                c = a[begin:end,:]
+            elif len(shape)==2 and dim == 1:
+                c = a[:,begin:end]
+            elif len(shape)==3 and dim == 1:
+                c = a[:,begin:end,:]
+            else:
+                assert not "get there"
+            dc = torch.randn(c.shape)
+            c.backward(dc,retain_graph=True)
+            assert tuple(c.shape) == tuple(out_shape),"%s %s" % (str(c.shape),str(out_shape))
+            case["in_tensors"]  = [a.reshape((-1,)).tolist()]
+            case["out_tensors"] = [c.reshape((-1,)).tolist()]
+            case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+            case["in_diffs"] = [a.grad.reshape((-1)).tolist()]
+            cases.append(case)
+    return report
+
+
 def make_concat():
     report = {
         "operator" : "Concat",
@@ -739,6 +793,7 @@ if __name__ == "__main__":
         "activation" : make_activation,
         "batchnorm" : make_batchnorm,
         "concat" : make_concat,
+        "slice" : make_slice,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))
