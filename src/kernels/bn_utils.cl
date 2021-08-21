@@ -109,7 +109,7 @@ void compute_backward_factors(int N,int M,float eps,
     offset += offset_offset; 
     mean += mean_offset;
     var  += var_offset;
-    if(gamma_in != NULL)
+    if(gamma_in)
         gamma_in += gamma_in_offset;
     dyx_sum += dyx_sum_offset;
     dy_sum  += dy_sum_offset;
