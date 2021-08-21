@@ -5,6 +5,7 @@ import json
 import numpy as np
 import argparse
 import random
+import time
 from PIL import Image
 
 class TinyImageNetReader(object):
@@ -196,15 +197,21 @@ def train(e,net,opt,batch,reader):
     l = np.zeros(batch,dtype=np.float32)
     loss = np.zeros(1,dtype=np.float32)
     prob = np.zeros((batch,reader.classes),dtype=np.float32)
+    start_time = time.time()
     reader.fill_train_batch(d,l,True)
+    times = np.zeros(5)
     for p in range(epoch_size):
+        pt0 = time.time()
         dtensor.to_device(d,e)
         ltensor.to_device(l,e)
+        pt1 = time.time()
         opt.step(net,e)
+        pt2 = time.time()
         #use fact that operations are asynchronouse and prepare next batch for gpu
         if p+1 != epoch_size:
             lsave = l.copy() # save labels
             reader.fill_train_batch(d,l,True)
+        pt3 = time.time()
         # back to synchronous
         loss_tensor.to_host(loss,e)
         prob_tensor.to_host(prob,e)
@@ -212,8 +219,12 @@ def train(e,net,opt,batch,reader):
         total_acc += np.sum(np.argmax(prob,axis=1)==lsave) 
         count += batch
         i+=1
+        total = time.time()
         if i % 100 == 0 or i+1 == epoch_size:
-            print("  Iter %d: Loss=%f Accuracy=%f" %(i,total_loss / count,total_acc / count))
+            time_per_item = (time.time() - start_time) * 1e3 / count * batch;
+            start_time = time.time()
+            print("  Iter %d: Loss=%7.6f Accuracy=%5.4f iter time %5.3f ms" %(i,total_loss / count,total_acc / count,time_per_item))
+            times *=0
             total_acc = 0
             total_loss = 0
             count = 0
@@ -229,6 +240,9 @@ def main(p):
     net = dp.Net(ctx)
     net.mode= dp.TRAIN
     net.load_from_json(n.to_str())
+    with open('train.js','w') as f:
+        f.write(n.to_str())
+        f.write('\n')
     net.setup()
     net.initialize_parameters(e)
     ops = n.to_json()['operators']
@@ -241,7 +255,7 @@ def main(p):
             print("   out: ",out,net.tensor(out).shape)
     opt = dp.Adam(ctx)
     opt.init(net,e)
-    for epoch in range(5):
+    for epoch in range(p.epochs):
         print("Train Epoch:",epoch)
         train(e,net,opt,p.batch,imgnet)
         print("Valid Epoch",epoch)
@@ -252,7 +266,8 @@ def main(p):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument('--device',default='0:0')
+    p.add_argument('--epochs',default=20,type=int)
     p.add_argument('--path',required=True)
-    p.add_argument('--batch',default=64,type=int)
+    p.add_argument('--batch',default=128,type=int)
     main(p.parse_args())
 
