@@ -71,6 +71,11 @@ namespace dlprim {
     }
     static size_t shape_getitem(Shape const &s,int i)
     {
+        if(i < 0 || i>= s.size()) {
+            std::ostringstream ss;
+            ss << "Invalid shape index " << i << " for shape " << s;
+            throw ValidationError(ss.str());
+        }
         return s[i];
     }
     static void load_net_from_json(Net &net,std::string const &s)

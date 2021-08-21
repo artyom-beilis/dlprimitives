@@ -49,12 +49,15 @@ class NetConfig(object):
 
         self._operators.append(dict(type=op,name=name,inputs=inputs,outputs=outputs,options=options))
 
-    def to_str(self):
+    def to_json(self):
         if not self.network['outputs'] and self._operators:
             n=dict(inputs = self.network['inputs'],operators=self._operators,outputs=self._operators[-1]['outputs'])
         else:
             n=self.network
-        return json.dumps(n,indent=2)
+        return n
+
+    def to_str(self):
+        return json.dumps(self.to_json(),indent=2)
 
     def __str__(self):
         return self.to_str()

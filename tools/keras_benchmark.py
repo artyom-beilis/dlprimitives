@@ -113,12 +113,13 @@ def make_model_from_dp(js):
 def make_model(path):
     with open(path,'r') as f:
         dp = json.load(f)
+    img_size = dp['inputs'][0]['shape'][-1]
     model = make_model_from_dp(dp)
     print(model.summary())
-    return model
+    return model,img_size
 
-def benchmark(model,batch_size,warm,iters):
-    data = np.random.random((batch_size,3,224,224)).astype(np.float32) #.astype(np.half)
+def benchmark(model,batch_size,img_size,warm,iters):
+    data = np.random.random((batch_size,3,img_size,img_size)).astype(np.float32) #.astype(np.half)
     lbls = np.random.randint(1000,size=(batch_size,))
     tgt = to_categorical(lbls,num_classes=1000)
 
@@ -155,8 +156,8 @@ def benchmark(model,batch_size,warm,iters):
 
 
 def run(path,batch,warm,iters):
-    m = make_model(path)
-    benchmark(m,batch,warm,iters)
+    m,ims = make_model(path)
+    benchmark(m,batch,ims,warm,iters)
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
