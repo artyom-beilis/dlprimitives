@@ -6,7 +6,10 @@
 
 namespace dp = dlprim;
 
-
+///
+/// Custom configuration for predict, mean/std normalization if needed
+/// class names for output
+///
 struct Config {
     std::vector<float> fact;
     std::vector<float> off;
@@ -48,6 +51,9 @@ struct Config {
     }
 };
 
+///
+/// Copy PPM/PGM image to tensor and convert
+///
 void load_image(dp::Tensor &t,int batch,std::string const &path,Config const &cfg)
 {
     float *img = t.data<float>() + t.shape().size_no_batch() * batch;
@@ -154,8 +160,7 @@ int main(int argc,char **argv)
         cfg.load(config);
 
        
-        cl::CommandQueue queue(ctx.make_queue());
-        dp::ExecutionContext q(queue);
+        dp::ExecutionContext q = ctx.make_execution_context();
         std::vector<std::string> names;
         int n = 0;
         std::ofstream rep("report_dp.csv");
