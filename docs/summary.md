@@ -68,7 +68,8 @@ assembly.
 
 Original networks are taken from pytorch and converted in train mode to ONNX. ONNX is converted to dlprimitives model or to caffe model.
 dlprimitives model (json) is also used to generate keras/plaidml model. Times for both training and testing (inference) are compared.
-Warmup of 5 iterations is always used followed by 20 real measurement iterations.
+Warmup of 5 iterations is always used followed by 20 real measurement iterations. Measurement units are milliseconds per batch.
+Input image size is standard ImageNet size 224x224.
 
 Since Caffe and Keras/Plaidml do not support ReLU6, ReLU is used in benchmarks as substitution for mobilenet\_v2.
 
@@ -80,7 +81,7 @@ Since Caffe and Keras/Plaidml do not support ReLU6, ReLU is used in benchmarks a
 - ROCm 3.7 is used for OpenCL AMD Drivers
 - Intel OpenCL Neo 18.35.0 used for Intel HD530 GPU/Intel i5-6600 CPU.
 
-Benchmarks published for master 8559e6aae8f682e7fdb71379f49aef9b9db4d6fc commit. Scripts in use
+Benchmarks published for master 8559e6aae8f682e7fdb71379f49aef9b9db4d6fc commit.
 
 Tool and useful instruments
 
@@ -90,6 +91,7 @@ Tool and useful instruments
 - <https://github.com/MTLab/onnx2caffe> - ONNX to Caffe model converter
 - `benchmark` - centeral dlprim benchmarking tool
 - `docs/nets_for_benchmark` - networks converted to dlprimitives/caffe format
+
 ## Benchmarks AMD Rx 560
 
 ### Train
