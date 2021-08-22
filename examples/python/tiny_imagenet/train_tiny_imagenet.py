@@ -261,7 +261,7 @@ def main(p):
         print("Valid Epoch",epoch)
         test(e,net,p.batch,imgnet)
         net.save_parameters('snap_%d.dlp' % epoch)
-    make_net(p.batch,True).save('net.json')
+    make_net(p.batch,True,imgnet.img_size,imgnet.classes).save('net.json')
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
