@@ -37,7 +37,7 @@ It is based on average difference over 5 networks: alexnet, resnet18, resnet50, 
 
 ### DlPrimitives vs Other Frameworks
 
-ResNet18, batch 16.
+ResNet18, batch 16 224x224 images. ms per batch.  
 
 |Nvidia GTX 960|train|test|train|test|
 |--------------|-----|----|-----|----|
