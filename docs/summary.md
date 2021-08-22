@@ -14,6 +14,28 @@ alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
 |      AMD Rx 560|    8|            55%|        54.19%|           172%|       122.64%|
 |    Intel HD 530|    8|               |              |           109%|        66.12%|
 
+## DlPrimitives vs Other Frameworks
+
+Tested using ResNet18, batch size is 16 224x224 images. Units: milliseconds per batch.  
+
+|Nvidia GTX 960|train|test|train|test|
+|--------------|-----|----|-----|----|
+|        dlprim|196.6|50.7|     |    |
+|   cudnn/caffe|211.8|65.5| 108%|129%|
+|   cudnn/keras|183.9|69.9|  94%|138%|
+| cudnn/pytorch|110.2|35.1|  56%| 69%|
+
+|  AMD RX 560|train|test|train|test|
+|------------|-----|----|-----|----|
+|      dlprim|  318|77.5|     |    |
+|  rocm/caffe|  274|79.8|  86%|103%|
+|  rocm/keras|240.7|82.8|  76%|107%|
+|rocm/pytorch|167.4|39.2|  53%| 51%|
+
+
+
+
+
 ## Details
 
 DLPrimitives implements 3 variants of convolution algorithms
