@@ -385,7 +385,7 @@ namespace core {
             dy.set_arg(bw_conv_filter_,p);
             bw_conv_filter_.setArg(p++,factor);
             
-            cl::NDRange wg(256,1);
+            cl::NDRange wg(256,1,1);
             int g1 = 256 * ((C+31)/32);
             int g2 = (N+31)/32;
             cl::NDRange gr(g1,g2,reduce_k_ ? 8 : 1);

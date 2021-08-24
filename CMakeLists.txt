@@ -7,10 +7,23 @@ if(NOT WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall")
 endif()
 
-find_path(OCL_PATH CL/cl2.hpp)
+option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/cl2.hpp" OFF)
+option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
+if(USE_CL_HPP)
+    find_path(OCL_PATH CL/cl.hpp)
+    set(DLPRIM_USE_CL1_HPP 1)
+else()
+    find_path(OCL_PATH CL/cl2.hpp)
+    set(DLPRIM_USE_CL1_HPP 0)
+endif()
+
 find_library(OCL_LIB OpenCL) 
 
+configure_file(config.cmake.hpp dlprim/config.hpp)
+set(DLPRIM_PUBLIC_HEADERS ${CMAKE_CURRENT_BINARY_DIR}/dlprim/config.hpp)
+
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include") 
+include_directories("${CMAKE_CURRENT_BINARY_DIR}") 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/my_blas") 
 include_directories("${OCL_PATH}")
 
@@ -26,7 +39,11 @@ else()
     add_definitions(-DDISABLE_HDF5)
 endif()
 
-option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
+if(NOT LIBDIR)
+	set(LIBDIR lib CACHE STRING "Library installation directory" FORCE)
+endif()
+
+
 SET(TEST_DEV "0:0" CACHE STRING "OpenCL platform:device, default 0:0")
 
 if(NOT USE_INTERNAL_BLAS)
@@ -132,6 +149,7 @@ set(DLPRIM_SRC
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
+SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${LIBDIR}")
 
 if(WIN32)
 	add_library(dlprim STATIC ${DLPRIM_SRC})
@@ -145,26 +163,29 @@ if(HDF5_FOUND)
     target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
 endif()
 
+set_target_properties(dlprim PROPERTIES 
+			PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
+
 add_executable(test_context tests/test_context.cpp)
 target_link_libraries(test_context dlprim)
 
 add_executable(test_from_template tests/test_from_template.cpp)
 add_executable(test_net tests/test_net.cpp)
 add_executable(test_json tests/json_test.cpp)
-add_executable(benchmark tools/benchmark.cpp)
+add_executable(dlprim_benchmark tools/benchmark.cpp)
 add_executable(image_predict examples/cpp/image_predict.cpp)
 add_executable(mnist tests/mnist.cpp)
 add_executable(train_mnist examples/cpp/train_mnist.cpp)
-add_executable(flops tools/flops.cpp)
+add_executable(dlprim_flops tools/flops.cpp)
 add_executable(test_random tests/test_random.cpp)
 
 target_link_libraries(test_from_template dlprim)
 target_link_libraries(mnist dlprim)
 target_link_libraries(train_mnist dlprim)
-target_link_libraries(benchmark dlprim)
+target_link_libraries(dlprim_benchmark dlprim)
 target_link_libraries(image_predict dlprim)
 target_link_libraries(test_json dlprim)
-target_link_libraries(flops dlprim)
+target_link_libraries(dlprim_flops dlprim)
 target_link_libraries(test_net dlprim)
 target_link_libraries(test_random dlprim)
 
@@ -174,8 +195,12 @@ if(BUILD_PYDLPRIM)
     set_target_properties(pydlprim PROPERTIES PREFIX "" OUTPUT_NAME "_pydlprim")
     include_directories(${Boost_INCLUDE_DIRS})
     include_directories(${PYTHON_INCLUDE_DIRS})
-    target_link_libraries(pydlprim ${Boost_NUMPY3_LIBRARY} ${Boost_PYTHON3_LIBRARY} ${PYTHON_LIBRARIES})
-    target_link_libraries(pydlprim dlprim)
+    target_link_libraries(pydlprim dlprim ${Boost_NUMPY3_LIBRARY} ${Boost_PYTHON3_LIBRARY} ${PYTHON_LIBRARIES})
+    file(GLOB PY_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/python/dlprim/*.py)
+    install(FILES ${PY_SOURCES} DESTINATION python/dlprim)
+    install(TARGETS pydlprim
+	    LIBRARY DESTINATION python)
+ 
 endif()
 
 
@@ -188,3 +213,19 @@ endforeach()
 add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
 add_test(test_json test_json)
 add_test(test_random test_random ${TEST_DEV})
+
+
+#################
+# Installation
+#################
+
+
+install(TARGETS 
+    dlprim dlprim_benchmark dlprim_flops
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION ${LIBDIR}
+	ARCHIVE DESTINATION ${LIBDIR}
+	PUBLIC_HEADER DESTINATION include/dlprim)
+
+install(DIRECTORY include/dlprim DESTINATION include)
+

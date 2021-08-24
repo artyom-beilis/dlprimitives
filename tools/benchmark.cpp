@@ -42,7 +42,13 @@ int main(int argc,char **argv)
             argc--;
         }
         if(argc<3) {
-            std::cerr << "Usage [-t] [-iNNN] [-wMMM] device net.json [net.h5/.dlpw]" << std::endl;
+            std::cerr << "Usage [-t] [-g] [-C] [-iNNN] [-wMMM] device net.json [net.h5/.dlp]" << std::endl;
+            std::cerr << "  -t enable profiling \n"
+                         "  -b measure backpropogation as well, not inference only\n"
+                         "  -C profile execution times rather than gpu counters (forces sync for each layer)\n"
+                         "  -g add Adam optimizer to benchmark\n"
+                         "  -iNNN - number of iterations to calc average over, default 20\n"
+                         "  -wMMM - number of iterations to warmup, default 20\n";
             return 1;
         }
         dp::Context ctx(argv[1]);

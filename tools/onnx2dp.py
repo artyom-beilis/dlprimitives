@@ -4,7 +4,6 @@ import onnx
 import json
 import os
 import argparse
-import h5py
 import numpy as np
 import argparse
 
@@ -225,6 +224,7 @@ def get_operators(model,inputs,params):
     return operators 
 
 def make_h5(file_name,params):
+    import h5py
     h = h5py.File(file_name,'w')
     try:
         for name in params:

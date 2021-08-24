@@ -14,14 +14,14 @@ namespace dlprim {
 
         inline cl::NDRange round_range(int x,cl::NDRange const &l)
         {
-            auto const *size = l.get();
+            size_t const *size = l;
             x=round_up(x,size[0]);
             return cl::NDRange(x);
         }
         
         inline cl::NDRange round_range(int x,int y,cl::NDRange const &l)
         {
-            auto const *size = l.get();
+            size_t const *size = l;
             x=round_up(x,size[0]);
             y=round_up(y,size[1]);
             return cl::NDRange(x,y);
@@ -29,7 +29,7 @@ namespace dlprim {
 
         inline cl::NDRange round_range(int x,int y,int z,cl::NDRange const &l)
         {
-            auto const *size = l.get();
+            size_t const *size = l;
             x=round_up(x,size[0]);
             y=round_up(y,size[1]);
             z=round_up(z,size[2]);

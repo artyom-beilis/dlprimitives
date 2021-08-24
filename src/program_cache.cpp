@@ -42,6 +42,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
     try {
         prg.build(std::vector<cl::Device>{ctx.device()},ss.str().c_str());
     }
+    #ifndef DLPRIM_USE_CL1_HPP
     catch(cl::BuildError const &e) {
         std::string log;
         auto cl_log = e.getBuildLog();
@@ -53,6 +54,15 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
         }
         throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + log.substr(0,1024),log);
     }
+    #else
+    catch(cl::Error const &e) {
+        char buffer[1024];
+        size_t len=0;
+        clGetProgramBuildInfo(prg(), ctx.device()(), CL_PROGRAM_BUILD_LOG, sizeof(buffer)-1, buffer, &len);
+        buffer[std::min(len,sizeof(buffer)-1)]=0;
+        throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + buffer,buffer);
+    }
+    #endif
     return prg;
 }
 

@@ -22,6 +22,13 @@ else:
 
 backend.set_image_data_format('channels_first')
 
+def _get_ker_pad(op):
+    dl_pad = op.get('pad',0)
+    dl_ker = op['kernel']
+    pad=dl_pad[0] if isinstance(dl_pad,list) else dl_pad
+    ker=dl_ker[0] if isinstance(dl_ker,list) else dl_ker
+    return ker,pad
+
 def make_model_from_dp(js):
     shape = tuple(js['inputs'][0]['shape'][1:])
     blobs={}
@@ -36,8 +43,7 @@ def make_model_from_dp(js):
             if op['activation'] == 'relu6':
                 op['activation'] = 'relu' # workaround for missing layer - not important for benchmarks
         if tp == 'Convolution2D':
-            pad=op['pad'][0]
-            ker=op['kernel'][0]
+            ker,pad = _get_ker_pad(op)
             if pad * 2 + 1 != ker:
                 padding = 'valid'
                 prep = layers.ZeroPadding2D(padding = op['pad'])
@@ -45,18 +51,18 @@ def make_model_from_dp(js):
                 padding = 'same'
                 prep = None
             activation = op.get('activation')
-            if op['groups'] == op['channels_out'] and op['groups'] == op['channels_in']:
+            if op.get('groups',1) == op['channels_out'] and (op['groups'] == op.get('channels_in',op['channels_out'])):
                 l = layers.DepthwiseConv2D(
                                      kernel_size = op['kernel'],
                                      strides=op['stride'],
                                      padding = padding,
                                      activation = activation,
                                      use_bias = op['bias'])
-            elif op['groups'] == 1:
+            elif op.get('groups',1) == 1:
                 l = layers.Convolution2D(filters=op['channels_out'],
                                      kernel_size = op['kernel'],
-                                     strides=op['stride'],
-                                     dilation_rate = op['dilate'],
+                                     strides=op.get('stride',1),
+                                     dilation_rate = op.get('dilate',1),
                                      padding = padding,
                                      activation = activation,
                                      use_bias = op['bias'])
@@ -67,15 +73,15 @@ def make_model_from_dp(js):
             else:
                 blobs[out[0]] = l(blobs[inp[0]])
         elif tp == 'Pooling2D':
-            pad=op['pad'][0]
-            ker=op['kernel'][0]
+            ker,pad = _get_ker_pad(op)
             if pad * 2 + 1 != ker:
                 padding = 'valid'
                 prep = layers.ZeroPadding2D(padding = op['pad'])
             else:
                 padding = 'same'
                 prep = None
-            if op['mode']=='max':
+            mode = op.get('mode','max')
+            if mode=='max':
                 l = layers.MaxPooling2D(pool_size=op['kernel'],strides=op['stride'],padding=padding)
             else:
                 l = layers.AveragePooling2D(pool_size=op['kernel'],strides=op['stride'],padding=padding)
@@ -85,17 +91,19 @@ def make_model_from_dp(js):
                 blobs[out[0]] = l(blobs[inp[0]])
         elif tp == 'BatchNorm2D':
             affine = op.get('affine',True)
-            l=layers.BatchNormalization(epsilon=op['eps'],momentum=(1-op['momentum']),scale=affine,center=affine)
+            eps = op.get('eps',1e-5)
+            momentum = op.get('momentum',0.1)
+            l=layers.BatchNormalization(epsilon=eps,momentum=(1-momentum),scale=affine,center=affine)
             blobs[out[0]] = l(blobs[inp[0]])
         elif tp == 'Activation':
             blobs[out[0]] = layers.Activation(activation=op['activation'])(blobs[inp[0]])
-        elif tp == 'Elementwise' and op['operation']=='sum':
+        elif tp == 'Elementwise' and op.get('operation','sum')=='sum':
             act = op.get('activation',None)
             if act:
                 blobs[out[0]] =layers.Activation(activation=op['activation'])(layers.Add()([blobs[inp[0]],blobs[inp[1]]]))
             else:
                 blobs[out[0]] =layers.Add()([blobs[inp[0]],blobs[inp[1]]])
-        elif tp=='GlobalPooling' and op['mode']=='avg':
+        elif tp=='GlobalPooling' and op.get('mode','max')=='avg':
             blobs[out[0]] = layers.GlobalAveragePooling2D()(blobs[inp[0]])
         elif tp=='InnerProduct':
             if len(blobs[inp[0]].shape.dims)!=2:
@@ -103,7 +111,11 @@ def make_model_from_dp(js):
                 blobs[in_name] = layers.Flatten()(blobs[inp[0]])
             else:
                 in_name = inp[0]
-            blobs[out[0]] = layers.Dense(op['outputs'],use_bias=op['bias'],activation=op.get('activation'))(blobs[in_name])
+            blobs[out[0]] = layers.Dense(op['outputs'],use_bias=op.get('bias',True),activation=op.get('activation'))(blobs[in_name])
+        elif tp=='Softmax':
+            blobs[out[0]] = layers.Softmax()(blobs[inp[0]])
+        elif tp=='SoftmaxWithLoss':
+            blobs[out[0]] = blobs[inp[0]]
         else:
             raise Exception("Unsupported layer %s/%s" % (tp,json.dumps(op)))
         print("Output Shape",blobs[out[0]])
@@ -118,10 +130,10 @@ def make_model(path):
     print(model.summary())
     return model,img_size
 
-def benchmark(model,batch_size,img_size,warm,iters):
+def benchmark(model,batch_size,img_size,classes,warm,iters):
     data = np.random.random((batch_size,3,img_size,img_size)).astype(np.float32) #.astype(np.half)
-    lbls = np.random.randint(1000,size=(batch_size,))
-    tgt = to_categorical(lbls,num_classes=1000)
+    lbls = np.random.randint(classes,size=(batch_size,))
+    tgt = to_categorical(lbls,num_classes=classes)
 
 
     model.compile(
@@ -155,9 +167,9 @@ def benchmark(model,batch_size,img_size,warm,iters):
     return tt
 
 
-def run(path,batch,warm,iters):
+def run(path,batch,warm,iters,classes):
     m,ims = make_model(path)
-    benchmark(m,batch,ims,warm,iters)
+    benchmark(m,batch,ims,classes,warm,iters)
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
@@ -165,6 +177,7 @@ if __name__ == "__main__":
     p.add_argument('--batch',default=16,type=int)
     p.add_argument('--warm',default=5,type=int)
     p.add_argument('--iters',default=20,type=int)
+    p.add_argument('--classes',default=1000,type=int)
     r = p.parse_args()
-    run(r.model,r.batch,r.warm,r.iters)
+    run(r.model,r.batch,r.warm,r.iters,r.classes)
 

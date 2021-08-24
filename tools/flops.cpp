@@ -8,7 +8,9 @@ namespace dp = dlprim;
 int main(int argc,char **argv)
 {
     if(argc < 2) {
-        std::cerr << "Usage flops PLAT:DEV" << std::endl;
+        std::cerr << "Usage flops PLAT:DEV [mpl]" << std::endl;
+        std::cerr << " mpl is multipier how much bigger/smaller buffers/duration to calculate\n"
+                     " For example dlprim_flops 0:0 0.5\n";
         return 1;
     }
     double scale = 1;
