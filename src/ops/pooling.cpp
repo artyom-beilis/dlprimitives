@@ -277,8 +277,8 @@ void Pooling2D::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,Execut
     dy.set_arg(bwd_kernel_,p);
     dx.set_arg(bwd_kernel_,p);
 
-    cl::NDRange wg(1,wg_size_,wg_size_);
-    cl::NDRange gr = gpu::round_range(bc,out_h,out_w,wg);
+    cl::NDRange wg(wg_size_,wg_size_,1);
+    cl::NDRange gr = gpu::round_range(out_h,out_w,bc,wg);
     
     ex.queue().enqueueNDRangeKernel(bwd_kernel_,cl::NullRange,gr,wg,ec2.events(),ec2.event("pooling_bw"));
 }
@@ -350,8 +350,8 @@ void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
     in.set_arg(kernel_,p);
     out.set_arg(kernel_,p);
      
-    cl::NDRange wg(1,wg_size_,wg_size_);
-    cl::NDRange gr = gpu::round_range(bc,out_h,out_w,wg);
+    cl::NDRange wg(wg_size_,wg_size_,1);
+    cl::NDRange gr = gpu::round_range(out_h,out_w,bc,wg);
     
     ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("pooling"));
     
