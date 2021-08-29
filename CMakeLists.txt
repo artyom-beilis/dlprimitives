@@ -118,10 +118,20 @@ add_custom_command(
                     -I ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels
                     ${CL_SOURCES}
                   )
-set(DLPRIM_SRC
+set(DLPRIM_CORE_SRC
         src/context.cpp
         src/tensor.cpp
         src/program_cache.cpp
+        src/gemm.cpp
+        src/random.cpp
+        src/core/ip.cpp
+        src/core/init.cpp
+        src/core/conv.cpp
+        src/core/bn.cpp
+        src/core/slice.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp)
+
+set(DLPRIM_SRC 
         src/operators_factory.cpp
         src/json.cpp
         src/activation.cpp
@@ -138,27 +148,21 @@ set(DLPRIM_SRC
         src/ops/scal.cpp
         src/ops/concat.cpp
         src/ops/initialization.cpp
-        src/gemm.cpp
-        src/random.cpp
-        src/core/ip.cpp
-        src/core/init.cpp
-        src/core/conv.cpp
-        src/core/bn.cpp
-        src/core/slice.cpp
         ${EXTRA_SRC}
-        ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )
 
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${LIBDIR}")
 
 if(WIN32)
+	add_library(dlprim_core STATIC ${DLPRIM_CORE_SRC})
 	add_library(dlprim STATIC ${DLPRIM_SRC})
 else()
+	add_library(dlprim_core SHARED ${DLPRIM_CORE_SRC})
 	add_library(dlprim SHARED ${DLPRIM_SRC})
 endif()
 		
-		
-target_link_libraries(dlprim ${OCL_LIB} ${BLAS_LIB})
+target_link_libraries(dlprim_core ${OCL_LIB})	
+target_link_libraries(dlprim dlprim_core ${OCL_LIB} ${BLAS_LIB})
 if(HDF5_FOUND)
     target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
 endif()
@@ -167,7 +171,7 @@ set_target_properties(dlprim PROPERTIES
 			PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
 
 add_executable(test_context tests/test_context.cpp)
-target_link_libraries(test_context dlprim)
+target_link_libraries(test_context dlprim_core)
 
 add_executable(test_from_template tests/test_from_template.cpp)
 add_executable(test_net tests/test_net.cpp)
@@ -213,6 +217,7 @@ endforeach()
 add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
 add_test(test_json test_json)
 add_test(test_random test_random ${TEST_DEV})
+add_test(test_context test_context ${TEST_DEV})
 
 
 #################
@@ -221,7 +226,7 @@ add_test(test_random test_random ${TEST_DEV})
 
 
 install(TARGETS 
-    dlprim dlprim_benchmark dlprim_flops
+    dlprim_core dlprim dlprim_benchmark dlprim_flops
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION ${LIBDIR}
 	ARCHIVE DESTINATION ${LIBDIR}
