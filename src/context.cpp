@@ -93,8 +93,8 @@ namespace dlprim {
     {
         if(is_cpu_context())
             return "CPU";
-        std::string plat = platform_.getInfo<CL_PLATFORM_NAME>();
-        std::string dev  = device_.getInfo<CL_DEVICE_NAME>();
+        std::string plat = platform_.getInfo<CL_PLATFORM_NAME>().c_str();
+        std::string dev  = device_.getInfo<CL_DEVICE_NAME>().c_str();
         return dev + " on " + plat;
     }
 
