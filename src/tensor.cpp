@@ -46,6 +46,16 @@ namespace dlprim {
         capacity_(0),full_capacity_(0)
     {
     }
+    Tensor::Tensor(cl::Buffer const &buffer,cl_ulong offset,Shape const &s,DataType d,bool is_train) :
+        specs_(new TensorSpecs(s,d,is_train)),
+		host_(new Tensor::HostMem()),
+        cpu_tensor_(false),
+        offset_(offset),
+        capacity_(s.total_size()*size_of_data_type(d)),
+        full_capacity_(capacity_)
+    {
+        buffer_ = buffer;
+    }
     Tensor::Tensor(Context &ctx,Shape const &s,DataType d,bool is_train):
         specs_(new TensorSpecs(s,d,is_train)),
 		host_(new Tensor::HostMem()),
