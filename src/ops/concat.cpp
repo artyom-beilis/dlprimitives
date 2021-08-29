@@ -1,5 +1,5 @@
 #include <dlprim/ops/concat.hpp>
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/common.hpp>
 #include <dlprim/json.hpp>
 #include <my_cblas.hpp>
 namespace dlprim {

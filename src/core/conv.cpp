@@ -1,4 +1,6 @@
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/conv.hpp>
+#include <dlprim/core/bias.hpp>
+#include <dlprim/core/common.hpp>
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 
@@ -262,29 +264,6 @@ namespace core {
         cl::Kernel conv_,conv_kernel_;
         Conv2DSettings config_;
     };
-
-    Scale::Scale(Context &ctx,DataType dt)
-    {
-        DLPRIM_CHECK(dt==float_data);
-        cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"scal");
-        k_ = cl::Kernel(prog,"sscal");
-    }
-    void Scale::enqueue(float s,Tensor &t,ExecutionContext const &ec)
-    {
-        int p = 0;
-        int size = t.shape().total_size();
-        int wg;
-        if(size >= 1024)
-            wg = 256;
-        else
-            wg = 64;
-        k_.setArg(p++,int(size));
-        k_.setArg(p++,s);
-        t.set_arg(k_,p);
-        cl::NDRange l(wg);
-        cl::NDRange g=gpu::round_range(size,l);
-        ec.queue().enqueueNDRangeKernel(k_,cl::NullRange,g,l,ec.events(),ec.event("sscal"));
-    }
 
     class Conv2DBackwardDataWinograd : public Conv2DBackwardData {
     public:

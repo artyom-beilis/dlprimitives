@@ -140,11 +140,11 @@ set(DLPRIM_SRC
         src/ops/initialization.cpp
         src/gemm.cpp
         src/random.cpp
-        src/core_ip.cpp
-        src/core_init.cpp
-        src/core_conv.cpp
-        src/core_bn.cpp
-        src/core_slice.cpp
+        src/core/ip.cpp
+        src/core/init.cpp
+        src/core/conv.cpp
+        src/core/bn.cpp
+        src/core/slice.cpp
         ${EXTRA_SRC}
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp
         )

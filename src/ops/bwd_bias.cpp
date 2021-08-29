@@ -1,6 +1,6 @@
 #include <dlprim/ops/bwd_bias.hpp>
 #include <dlprim/gpu/program_cache.hpp>
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/bias.hpp>
 #include <my_cblas.hpp>
 #include <iostream>
 

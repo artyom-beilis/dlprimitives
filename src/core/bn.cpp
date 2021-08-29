@@ -1,4 +1,4 @@
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/bn.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 
 namespace dlprim {

@@ -3,7 +3,9 @@
 #include <dlprim/ops/activation.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/gpu/program_cache.hpp>
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/common.hpp>
+#include <dlprim/core/ip.hpp>
+#include <dlprim/core/bias.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/ops/initialization.hpp>
 #include <dlprim/shared_resource.hpp>

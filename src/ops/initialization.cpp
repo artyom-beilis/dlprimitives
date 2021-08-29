@@ -1,5 +1,5 @@
 #include <dlprim/ops/initialization.hpp>
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/common.hpp>
 #include <dlprim/random.hpp>
 #include <string.h>
 #include <cmath>

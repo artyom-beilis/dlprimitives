@@ -1,6 +1,7 @@
 #include <dlprim/ops/batch_normalization.hpp>
 #include <dlprim/json.hpp>
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/common.hpp>
+#include <dlprim/core/bn.hpp>
 #include <dlprim/ops/initialization.hpp>
 #include <cmath>
 #include <my_cblas.hpp>

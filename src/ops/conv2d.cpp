@@ -9,7 +9,9 @@
 #include <dlprim/ops/initialization.hpp>
 #include <dlprim/shared_resource.hpp>
 #include <dlprim/ops/activation.hpp>
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/common.hpp>
+#include <dlprim/core/conv.hpp>
+#include <dlprim/core/bias.hpp>
 #include <my_cblas.hpp>
 
 namespace dlprim {

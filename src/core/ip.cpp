@@ -1,4 +1,5 @@
-#include <dlprim/core_ops.hpp>
+#include <dlprim/core/ip.hpp>
+#include <dlprim/core/bias.hpp>
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 
