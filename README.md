@@ -10,9 +10,9 @@ of any operating systems other than Linux.
 
 ## Goals
 
-- Create an open source, crop platform deep learning primitives library similar to cuDNN or MIOpen that would support
+- Create an open source, cross platform deep learning primitives library similar to cuDNN or MIOpen that supports
 multiple GPU architectures.
-- Create inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
+- Create an inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
 - Create minimalistic deep-learning framework as POC of capabilities and performance.
 - _Long Shot_: Integrate to existing large scale deep learing projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
 
