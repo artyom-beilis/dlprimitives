@@ -15,7 +15,7 @@ struct FlopsStats {
     double bps;
 };
 
-struct Metrics { double flops,bps; };
+struct Metrics { double flops,bps; char const *algo="";};
 
 class Benchmarker {
 public:
@@ -209,12 +209,11 @@ public:
         double bytes = X.memory_size() + Y.memory_size() + M.memory_size();
         if(op == dp::backward_param)
             bytes += M.memory_size();
-        else if(op == dp::backward_data)
-            bytes += X.memory_size();
         bytes*=calc;
         Metrics met;
         met.flops = flop / seconds;
         met.bps = bytes / seconds;
+        met.algo = conv->algo();
 
         return met;
     }
@@ -224,16 +223,37 @@ public:
         printf("Convolution\n");
         ConvBM setups[] = {
             //  k   p   s   g  in out dim net 
-            {   3,  1,  1,  1,192,384, 13,"alexnet" },
-            {   3,  1,  1,  1,256,256, 13,"alexnet" },
-            {   3,  1,  1,  1,384,256, 13,"alexnet" },
             {  11,  2,  4,  1,  3, 64,224,"alexnet" },
-            {   5,  2,  1,  1, 64,192, 27,"alexnet" },
-            {   3,  1,  1,  2,384,256, 13,"alexnet" },
             {   5,  2,  1,  2, 96,192, 27,"alexnet" },
-            {  11,  2,  4,  1,  3, 96,224,"alexnet" },
+            {   5,  2,  1,  1, 64,192, 27,"alexnet" },
+            {   3,  1,  1,  1,384,256, 13,"alexnet" },
+            
+            {   7,  3,  2,  1,  3, 64,224,"resnet" },
+            {   1,  0,  1,  1, 64,256, 56,"resnet" },
+            {   1,  0,  1,  1, 64, 64, 56,"resnet" },
+            {   3,  1,  1,  1, 64, 64, 56,"resnet" },
             {   1,  0,  2,  1,1024,2048, 14,"resnet" },
             {   1,  0,  1,  1,1024,256, 14,"resnet" },
+            {   3,  1,  1,  1,256,256, 14,"resnet" },
+            
+            {   3,  1,  1,  1,  3, 64,224,"vgg" },
+            {   3,  1,  1,  1, 64, 64,224,"vgg" },
+            {   3,  1,  1,  1,512,512, 28,"vgg" },
+           
+            {   3,  1,  2,  1,  3, 32,224,"mobile" },
+            {   3,  1,  1,144,144,144, 56,"mobile" },
+            {   3,  1,  2,144,144,144, 56,"mobile" },
+            {   1,  0,  1,  1,144, 24, 56,"mobile" },
+            {   1,  0,  1,  1, 24,144, 56,"mobile" },
+            {   1,  0,  1,  1,960,160,  7,"mobile" },
+            {   1,  0,  1,  1,960,320,  7,"mobile" },
+            {   3,  1,  1,960,960,960,  7,"mobile" },
+#ifdef FULL_TEST 
+            {   3,  1,  1,  1,192,384, 13,"alexnet" },
+            {   3,  1,  1,  1,256,256, 13,"alexnet" },
+            {   3,  1,  1,  2,384,256, 13,"alexnet" },
+            {  11,  2,  4,  1,  3, 96,224,"alexnet" },
+
             {   1,  0,  1,  1,1024,512, 14,"resnet" },
             {   3,  1,  1,  1,128,128, 28,"resnet" },
             {   3,  1,  2,  1,128,128, 56,"resnet" },
@@ -241,32 +261,21 @@ public:
             {   1,  0,  1,  1,2048,512,  7,"resnet" },
             {   1,  0,  1,  1,256,1024, 14,"resnet" },
             {   1,  0,  1,  1,256,128, 56,"resnet" },
-            {   3,  1,  1,  1,256,256, 14,"resnet" },
             {   3,  1,  2,  1,256,256, 28,"resnet" },
             {   1,  0,  2,  1,256,512, 56,"resnet" },
             {   1,  0,  1,  1,256, 64, 56,"resnet" },
-            {   7,  3,  2,  1,  3, 64,224,"resnet" },
             {   1,  0,  2,  1,512,1024, 28,"resnet" },
             {   1,  0,  1,  1,512,128, 28,"resnet" },
             {   1,  0,  1,  1,512,2048,  7,"resnet" },
             {   1,  0,  1,  1,512,256, 28,"resnet" },
             {   3,  1,  1,  1,512,512,  7,"resnet" },
             {   3,  1,  2,  1,512,512, 14,"resnet" },
-            {   1,  0,  1,  1, 64,256, 56,"resnet" },
-            {   1,  0,  1,  1, 64, 64, 56,"resnet" },
-            {   3,  1,  1,  1, 64, 64, 56,"resnet" },
             {   3,  1,  1,  1,128,128,112,"vgg" },
             {   3,  1,  1,  1,128,256, 56,"vgg" },
             {   3,  1,  1,  1,256,256, 56,"vgg" },
             {   3,  1,  1,  1,256,512, 28,"vgg" },
-            {   3,  1,  1,  1,  3, 64,224,"vgg" },
             {   3,  1,  1,  1,512,512, 14,"vgg" },
-            {   3,  1,  1,  1,512,512, 28,"vgg" },
             {   3,  1,  1,  1, 64,128,112,"vgg" },
-            {   3,  1,  1,  1, 64, 64,224,"vgg" },
-            {   3,  1,  1,144,144,144, 56,"mobile" },
-            {   3,  1,  2,144,144,144, 56,"mobile" },
-            {   1,  0,  1,  1,144, 24, 56,"mobile" },
             {   1,  0,  1,  1,144, 32, 28,"mobile" },
             {   1,  0,  1,  1,160,960,  7,"mobile" },
             {   1,  0,  1,  1, 16, 96,112,"mobile" },
@@ -274,7 +283,6 @@ public:
             {   3,  1,  2,192,192,192, 28,"mobile" },
             {   1,  0,  1,  1,192, 32, 28,"mobile" },
             {   1,  0,  1,  1,192, 64, 14,"mobile" },
-            {   1,  0,  1,  1, 24,144, 56,"mobile" },
             {   1,  0,  1,  1,320,1280,  7,"mobile" },
             {   1,  0,  1,  1, 32, 16,112,"mobile" },
             {   1,  0,  1,  1, 32,192, 28,"mobile" },
@@ -282,20 +290,21 @@ public:
             {   3,  1,  1,384,384,384, 14,"mobile" },
             {   1,  0,  1,  1,384, 64, 14,"mobile" },
             {   1,  0,  1,  1,384, 96, 14,"mobile" },
-            {   3,  1,  2,  1,  3, 32,224,"mobile" },
             {   1,  0,  1,  1,576,160,  7,"mobile" },
             {   3,  1,  1,576,576,576, 14,"mobile" },
             {   3,  1,  2,576,576,576, 14,"mobile" },
             {   1,  0,  1,  1,576, 96, 14,"mobile" },
             {   1,  0,  1,  1, 64,384, 14,"mobile" },
-            {   1,  0,  1,  1,960,160,  7,"mobile" },
-            {   1,  0,  1,  1,960,320,  7,"mobile" },
-            {   3,  1,  1,960,960,960,  7,"mobile" },
             {   1,  0,  1,  1, 96, 24, 56,"mobile" },
             {   1,  0,  1,  1, 96,576, 14,"mobile" },
             {   3,  1,  2, 96, 96, 96,112,"mobile" }
+#endif      
         };
+#ifdef FULL_TEST 
         int batches[]={16,64,128};
+#else        
+        int batches[]={64};
+#endif        
         for(unsigned bi = 0;bi <sizeof(batches)/sizeof(batches)[0];bi++) {
             int batch = batches[bi];
             for(unsigned setup = 0;setup < sizeof(setups)/sizeof(setups[0]);setup++) {
@@ -315,11 +324,12 @@ public:
                     double max_per = std::max(flops_per,bandw_per);
                     char const *limited = (flops_per > bandw_per) ? "gflops" : "memory";
                     
-                    printf("  %10s %8s b=%-2d k=%-2d p=%d s=%d in=%-4d out=%-4d g=%-3d D=%-3d  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%%\n",
+                    printf("  %10s %8s b=%-2d k=%-2d p=%d s=%d in=%-4d out=%-4d g=%-3d D=%-3d  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%% algo=%s\n",
                                 bm.type,op_name[op],batch,bm.kern,bm.pad,bm.stride,bm.c_in,bm.c_out,bm.groups,bm.img_size,
                                 m.flops * 1e-9, flops_per,
                                 m.bps * 1e-9, bandw_per,
-                                limited, max_per
+                                limited, max_per,
+                                m.algo
                                 );
                 }
             }
