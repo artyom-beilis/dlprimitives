@@ -232,8 +232,8 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
 
     __local float wg_local_memory[(XTILES_IN_WG + YTILES_IN_WG + 16) * WG_K * 16];
 
-#define l_xtile_stride (XTILES_IN_WG * WG_K + 1)
-#define l_ytile_stride (YTILES_IN_WG * WG_K + 1)
+#define l_xtile_stride (XTILES_IN_WG * WG_K + STRIDE_OFFSET)
+#define l_ytile_stride (YTILES_IN_WG * WG_K + STRIDE_OFFSET)
 
 #define l_xtiles(a,b,c) wg_local_memory[(a)*l_xtile_stride + (b)*XTILES_IN_WG + (c)]
 #define l_ytiles(a,b,c) wg_local_memory[(a)*l_ytile_stride + (b)*YTILES_IN_WG + (c) + (XTILES_IN_WG*WG_K*16 + 32)]

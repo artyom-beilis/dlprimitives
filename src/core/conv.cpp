@@ -254,8 +254,10 @@ namespace core {
         Conv2DForwardWinograd(Context &ctx,Conv2DSettings const &config,bool bias,StandardActivations activation = StandardActivations::identity) :
             config_(config)
         {
+            int off = ctx.is_amd() ? 0 : 1;
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_fwd",
                                             "ACTIVATION",int(activation),
+                                            "STRIDE_OFFSET",off,
                                             "BIAS",int(bias));
             conv_kernel_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
             conv_ = cl::Kernel(prog,"winconv_3x3");
@@ -279,7 +281,8 @@ namespace core {
             config_(config),
             s_(ctx,config.dtype)
         {
-            cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_bwd_data");
+            int off = ctx.is_amd() ? 0 : 1;
+            cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_bwd_data","STRIDE_OFFSET",off);
             conv_kernel_bwd_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
             bw_conv_data_ = cl::Kernel(prog,"winconv_3x3_bwd_data");
         }
@@ -346,8 +349,9 @@ namespace core {
             int w = config.shape[3];
             int winograd_work_items = (config_.channels_in / 32) * (config_.channels_out / 32) * 256;
             reduce_k_ = winograd_work_items < ctx.estimated_core_count();
+            int off = ctx.is_amd() ? 0 : 1;
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_bwd_filter",
-                                                                            "IMG_H",h,"IMG_W",w);
+                                                                            "IMG_H",h,"IMG_W",w,"STRIDE_OFFSET",off);
             bw_conv_filter_ = cl::Kernel(prog,"winconv_3x3_bwd_filter");
         }
         virtual void enqueue(Tensor &x,Tensor &dK,Tensor &dy,Tensor &,float factor,ExecutionContext const &ec) 

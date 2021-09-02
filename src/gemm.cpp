@@ -26,13 +26,13 @@ namespace gpu {
             }
             else {
                 if(ctx.is_amd() && !actual_gemm) {
-                    if(M >= 256 && N >= 256) {
-                        tile_size_m_ = 96;
-                        tile_size_n_ = 96;
-                        block_size_m_ = 6;
-                        block_size_n_ = 6;
-                        tile_size_k_ = 16;
-                        off_ = 1;
+                    if(M >= 128 && N >= 128) {
+                        tile_size_m_ = 128;
+                        tile_size_n_ = 128;
+                        block_size_m_ = 8;
+                        block_size_n_ = 8;
+                        tile_size_k_ = 32;
+                        off_ = 0;
                     }
                     else if(M >= 64 && N>= 64) {
                         tile_size_m_ = 64;
@@ -40,7 +40,7 @@ namespace gpu {
                         block_size_m_ = 4;
                         block_size_n_ = 4;
                         tile_size_k_ = 16;
-                        off_ = 1;
+                        off_ = 0;
                     }
                     else if(M >= 32 && N >= 32) {
                         tile_size_m_ = 32;
@@ -74,7 +74,7 @@ namespace gpu {
                         block_size_m_ = 8;
                         block_size_n_ = 8;
                         tile_size_k_ = 16;
-                        off_ = 1;
+                        off_ = ctx.is_amd() ? 0 :1;
                     }
                     else if(M >= 128 && N>= 128) {
                         tile_size_m_ = 64;
@@ -82,7 +82,7 @@ namespace gpu {
                         block_size_m_ = 8;
                         block_size_n_ = 8;
                         tile_size_k_ = 16;
-                        off_ = 1;
+                        off_ = ctx.is_amd() ? 0: 1;
                     }
                     else if(M >= 32 && N >= 32) {
                         tile_size_m_ = 32;

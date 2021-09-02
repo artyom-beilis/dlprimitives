@@ -244,8 +244,8 @@ void winconv_3x3(int B, int N,int C,int H,int W,
 
     __local float wg_local_memory[(TILES_IN_WG + KERNELS_IN_WG + 16) * WG_K * 16];
 
-#define l_tile_stride (TILES_IN_WG * WG_K + 1)
-#define l_kern_stride (KERNELS_IN_WG * WG_K + 1)
+#define l_tile_stride (TILES_IN_WG * WG_K + STRIDE_OFFSET)
+#define l_kern_stride (KERNELS_IN_WG * WG_K + STRIDE_OFFSET)
 
 #define l_tiles(a,b,c) wg_local_memory[(a)*l_tile_stride + (b)*TILES_IN_WG + (c)]
 #define l_kernels(a,b,c) wg_local_memory[(a)*l_kern_stride + (b)*KERNELS_IN_WG + (c) + (TILES_IN_WG*WG_K*16 + 32)]
