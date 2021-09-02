@@ -5,6 +5,7 @@
 #include <dlprim/core/common.hpp>
 #include <dlprim/core/conv.hpp>
 #include <iostream>
+#include <sstream>
 #include <cmath>
 
 namespace dp = dlprim;
@@ -65,8 +66,14 @@ public:
                     double approx_flop = double(M) * N * K * 2;
                     double gemm_per_sec = approx_flop / ref_.flops;
                     double target_calls = 2 / gemm_per_sec;
-                    int calls = std::max(5,std::min(1000,int(target_calls)));
+                    int calls = std::max(5,std::min(200,int(target_calls)));
                     int warms = std::max(1,calls / 5);
+
+                    printf("  %c%c %4d, %4d, %4d",
+                                (ta ? 'T' : 'N'), (tb ? 'T' : 'N'),
+                                M,N,K);
+
+                    fflush(stdout);
                     Metrics m = test_gemm(warms,calls,M,N,K,ta,tb);
 
                     double flops_per =  m.flops / ref_.flops * 100;
@@ -74,13 +81,12 @@ public:
                     double max_per = std::max(flops_per,bandw_per);
                     char const *limited = (flops_per > bandw_per) ? "gflops" : "memory";
                     
-                    printf("  %c%c %4d, %4d, %4d  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%%\n",
-                                (ta ? 'T' : 'N'), (tb ? 'T' : 'N'),
-                                M,N,K,
+                    printf("  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%%\n",
                                 m.flops * 1e-9, flops_per,
                                 m.bps * 1e-9, bandw_per,
                                 limited, max_per
                                 );
+                    fflush(stdout);
                 }
             }
         }
@@ -173,9 +179,11 @@ public:
         }
         dp::Shape in_shape = dp::Shape(batch,bm.c_in,bm.img_size,bm.img_size);
         dp::Shape out_shape = dp::core::Conv2DBase::get_output_shape(config,in_shape);
+        std::ostringstream ss;
         dp::Tensor X(ctx_,in_shape,dt_);
         dp::Tensor Y(ctx_,out_shape,dt_);
         dp::Tensor M(ctx_,dp::Shape(bm.c_out,bm.c_in/bm.groups,bm.kern,bm.kern),dt_);
+        ss << Y.shape();
         rand(X,1.0);
         rand(Y,1.0);
         rand(M,1.0/(bm.kern*bm.kern*bm.c_in/bm.groups));
@@ -309,14 +317,17 @@ public:
             int batch = batches[bi];
             for(unsigned setup = 0;setup < sizeof(setups)/sizeof(setups[0]);setup++) {
                 ConvBM bm = setups[setup];
-                int out_size = (bm.img_size + 2*bm.pad - bm.kern + 1) / bm.stride;
-                double approx_flop = 2 * (out_size*out_size * bm.c_out*batch) * (bm.c_in / bm.groups * bm.kern * bm.kern);
-                double gemm_per_sec = approx_flop / ref_.flops;
-                double target_calls = 2 / gemm_per_sec;
-                int calls = std::max(5,std::min(1000,int(target_calls)));
+                int out_size = (bm.img_size + 2*bm.pad - bm.kern) / bm.stride + 1;
+                double approx_flop = 2 * (double(out_size)*out_size * bm.c_out*batch) * (bm.c_in / bm.groups * bm.kern * bm.kern);
+                double sec_per_gemm = approx_flop / ref_.flops;
+                double target_calls = 2 / sec_per_gemm;
+                int calls = std::max(5,std::min(200,int(target_calls)));
                 int warms = std::max(1,calls / 5);
                 char const *op_name[]={"nop","forward","bwd-data","bwd-filt"};
                 for(int op = dp::forward_data;op<=dp::backward_param;op++) {
+                    printf("  %10s %8s b=%-2d k=%-2d p=%d s=%d in=%-4d out=%-4d g=%-3d D=%-3d",
+                                bm.type,op_name[op],batch,bm.kern,bm.pad,bm.stride,bm.c_in,bm.c_out,bm.groups,bm.img_size);
+                    fflush(stdout);
                     Metrics m = test_conv(warms,calls,op,batch,bm);
 
                     double flops_per =  m.flops / ref_.flops * 100;
@@ -324,13 +335,13 @@ public:
                     double max_per = std::max(flops_per,bandw_per);
                     char const *limited = (flops_per > bandw_per) ? "gflops" : "memory";
                     
-                    printf("  %10s %8s b=%-2d k=%-2d p=%d s=%d in=%-4d out=%-4d g=%-3d D=%-3d  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%% algo=%s\n",
-                                bm.type,op_name[op],batch,bm.kern,bm.pad,bm.stride,bm.c_in,bm.c_out,bm.groups,bm.img_size,
+                    printf("  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%% algo=%s\n",
                                 m.flops * 1e-9, flops_per,
                                 m.bps * 1e-9, bandw_per,
                                 limited, max_per,
                                 m.algo
                                 );
+                    fflush(stdout);
                 }
             }
         }
