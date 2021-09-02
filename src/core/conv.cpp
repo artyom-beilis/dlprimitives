@@ -517,7 +517,7 @@ namespace core {
     public:
         virtual char const *algo() const
         {
-            return "winograd";
+            return "depthwise_separable";
         }
 
         virtual size_t workspace()

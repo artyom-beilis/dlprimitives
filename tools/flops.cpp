@@ -41,7 +41,7 @@ public:
         return std::chrono::duration_cast<std::chrono::duration<double> > ((end-start)).count();
     }
 
-    void run_gemm_bm()
+    void run_gemm_bm(int index=-1)
     {
         printf("GEMM\n");
         int setups[][3] = {
@@ -60,6 +60,8 @@ public:
         for(int ta = 0; ta < 2; ta ++) {
             for(int tb = 0; tb < 2; tb ++) {
                 for(unsigned setup = 0;setup < sizeof(setups)/sizeof(setups[0]);setup++) {
+                    if(index != -1 && index != int(setup))
+                        continue;
                     int M = setups[setup][0];
                     int N = setups[setup][1];
                     int K = setups[setup][2];
@@ -226,7 +228,7 @@ public:
         return met;
     }
 
-    void run_conv_bm()
+    void run_conv_bm(int index)
     {
         printf("Convolution\n");
         ConvBM setups[] = {
@@ -316,6 +318,8 @@ public:
         for(unsigned bi = 0;bi <sizeof(batches)/sizeof(batches)[0];bi++) {
             int batch = batches[bi];
             for(unsigned setup = 0;setup < sizeof(setups)/sizeof(setups[0]);setup++) {
+                if(index != -1 && index != int(setup))
+                    continue;
                 ConvBM bm = setups[setup];
                 int out_size = (bm.img_size + 2*bm.pad - bm.kern) / bm.stride + 1;
                 double approx_flop = 2 * (double(out_size)*out_size * bm.c_out*batch) * (bm.c_in / bm.groups * bm.kern * bm.kern);
@@ -445,10 +449,28 @@ FlopsStats get_flops(std::string device, double scale)
 int main(int argc,char **argv)
 {
     if(argc < 2) {
-        std::cerr << "Usage flops PLAT:DEV [mpl]" << std::endl;
+        std::cerr << "Usage flops [-gN] [-cN] PLAT:DEV [mpl]" << std::endl;
         std::cerr << " mpl is multipier how much bigger/smaller buffers/duration to calculate\n"
                      " For example dlprim_flops 0:0 0.5\n";
         return 1;
+    }
+    int gemm_index = -1;
+    int conv_index = -1;
+    if(argv[1][0] == '-') {
+        if(argv[1][1] == 'g') {
+            gemm_index = atoi(argv[1]+2);
+            argv++;
+            argc--;
+        }
+        else if(argv[1][1] == 'c') {
+            conv_index = atoi(argv[1]+2);
+            argv++;
+            argc--;
+        }
+        else {
+            std::cerr << "Expecting g/c after -" << std::endl;
+            return 1;
+        }
     }
     double scale = 1;
     if(argc >= 3) {
@@ -456,7 +478,9 @@ int main(int argc,char **argv)
     }
     FlopsStats fs = get_flops(argv[1],scale);
     Benchmarker bm(argv[1],fs,scale);
-    bm.run_gemm_bm();
-    bm.run_conv_bm();
+    if(conv_index==-1)
+        bm.run_gemm_bm(gemm_index);
+    if(gemm_index==-1)
+        bm.run_conv_bm(conv_index);
 }
 
