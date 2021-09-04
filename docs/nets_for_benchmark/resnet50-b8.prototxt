@@ -65,8 +65,6 @@ layer {
     kernel_w: 3
     stride_h: 2
     stride_w: 2
-    pad_h: 1
-    pad_w: 1
   }
 }
 layer {
