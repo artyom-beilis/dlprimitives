@@ -94,7 +94,8 @@ backpropogation is convered by per-layer regression.
 
 | Device    | Vendor    |   Notes                       |
 |-----------|-----------|-------------------------------|
-|RX 560     | AMD       | 16cu model, ROCm & Clover     | 
+|RX 6600XT  | AMD       | ROCr                          | 
+|RX 560     | AMD       | 16cu model, ROCm, PAL, Clover | 
 |HD 530     | Intel     | i5-6600, NEO driver           |
 |GTX 960    | NVidia    |                               |
 |GTX 1080   | NVidia    |                               |
