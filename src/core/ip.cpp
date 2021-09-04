@@ -203,7 +203,7 @@ namespace core {
                 kernel_.setArg(p++,size2_);
                 kernel_.setArg(p++,0.0f);
                 auto ec1 = e.generate_series_context(0,2);
-                auto ec2 = e.generate_series_context(0,2);
+                auto ec2 = e.generate_series_context(1,2);
                 e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,g,l,ec1.events(),ec1.event("bwd_bias_a"));
                 p=0;
                 kernel2_.setArg(p++,features_);
