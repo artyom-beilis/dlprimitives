@@ -8,6 +8,14 @@
 #include <sstream>
 #include <cmath>
 
+#ifdef CUDA_TEST
+#include <cublas.h>
+#include <cublas_v2.h>
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+#include <cudnn.h>
+#endif
+
 namespace dp = dlprim;
 
 struct FlopsStats {
@@ -94,7 +102,75 @@ public:
         }
     }
 
+#ifdef CUDA_TEST
+    Metrics test_gemm(int warm,int calc,int m,int n,int k,bool ta,bool tb)
+    {
+        static bool init = false;
+        if(!init) {
+            cublasInit();
+            init=true;
+        }
+        cublasHandle_t h;
+        int status;
+        if((status=cublasCreate(&h))!=0)
+    		throw std::runtime_error(std::string("Failed to create cublas:") + std::to_string(status));
 
+        float *A,*B,*C;
+        cudaMalloc((void**)&A,m*k*sizeof(float));
+        cudaMalloc((void**)&B,k*n*sizeof(float));
+        cudaMalloc((void**)&C,m*n*sizeof(float));
+
+        rand(A,m*k,std::sqrt(1.0/k));
+        rand(B,n*k,std::sqrt(1.0/k));
+        zero(C,m*n);        
+
+        time_point_type start,end;
+        for(int i=-warm;i<calc;i++) {
+            if(i == 0) {
+                cudaDeviceSynchronize();
+                start = clock_type::now();
+            }
+            cublasStatus_t status;
+            float alpha = 1.0f;
+            float beta = 0.0f;
+            status = cublasSgemm(h,(tb ? CUBLAS_OP_T : CUBLAS_OP_N), (ta ? CUBLAS_OP_T : CUBLAS_OP_N),
+                n,m,k,
+                &alpha,
+                B,(!tb?n:k),
+                A,(!ta?k:m),
+                &beta,
+                C,n);
+            if(status != CUBLAS_STATUS_SUCCESS)
+                throw std::runtime_error("sgemm");
+        }
+        cudaDeviceSynchronize();
+        end = clock_type::now();
+        double seconds = sec_diff(start,end);
+        double flop = double(m)*n*(k*2-1) * calc;
+        double bytes = ((size_t)m*k + (size_t)k*n + (size_t)m*n) * sizeof(float) * calc;
+        Metrics met;
+        met.flops = flop / seconds;
+        met.bps = bytes / seconds;
+
+        cudaFree(A);
+        cudaFree(B);
+        cudaFree(C);
+
+        return met;
+
+    }
+    void rand(void *p,size_t N,float sigma)
+    {
+        std::vector<float> v(N);
+        for(size_t i=0;i<N;i++)
+            v[i]=((double)random()/RAND_MAX - 0.5) * 2 * sigma;
+        cudaMemcpy(p,v.data(),N*sizeof(float),cudaMemcpyHostToDevice);
+    }
+    void zero(void *p,size_t N)
+    {
+        cudaMemset(p,0,sizeof(float)*N);
+    }
+#else
 
     Metrics test_gemm(int warm,int calc,int m,int n,int k,bool ta,bool tb)
     {
@@ -136,12 +212,12 @@ public:
 
         return met;
     }
-
     void rand(dp::Tensor &t,float sigma)
     {
         dp::core::fill_random(ctx_,ec_,t,seed_,seq_,dp::core::rnd_normal,0,sigma);
         seq_ += (t.shape().total_size() + 3)/4;
     }
+#endif
 
     struct ConvBM {
         int kern;
@@ -154,7 +230,182 @@ public:
         char const *type;
     };
 
+#ifdef CUDA_TEST
 
+#define check(expression)                               \
+do{                                                          \
+	cudnnStatus_t status = (expression);                     \
+	if (status != CUDNN_STATUS_SUCCESS) {                    \
+		std::ostringstream ss; ss << "Error on line " << __LINE__ << ": "      \
+		<< cudnnGetErrorString(status) << std::endl; \
+		throw std::runtime_error(ss.str()); \
+	}                                                        \
+}while(0)
+
+    Metrics test_conv(int warm,int calc,int op,int batch,ConvBM const &bm)
+    {
+        cudnnHandle_t handle;
+        cudnnConvolutionDescriptor_t desc;
+		check(cudnnCreate(&handle));
+        cudnnTensorDescriptor_t X_d,Y_d;
+        cudnnFilterDescriptor_t M_d;
+		check(cudnnCreateTensorDescriptor(&X_d));
+		check(cudnnCreateFilterDescriptor(&M_d));
+        
+        check(cudnnSetTensor4dDescriptor(X_d,CUDNN_TENSOR_NCHW,CUDNN_DATA_FLOAT,batch,bm.c_in,bm.img_size,bm.img_size));
+        check(cudnnSetFilter4dDescriptor(M_d,CUDNN_DATA_FLOAT,CUDNN_TENSOR_NCHW,bm.c_out,bm.c_in/bm.groups,bm.kern,bm.kern));
+        
+        check(cudnnCreateConvolutionDescriptor(&desc));
+        check(cudnnSetConvolution2dDescriptor(desc,bm.pad,bm.pad,bm.stride,bm.stride,
+                    1,1,CUDNN_CROSS_CORRELATION,CUDNN_DATA_FLOAT));
+        check(cudnnSetConvolutionGroupCount(desc,bm.groups));
+
+        dp::Shape in_shape(batch,bm.c_in,bm.img_size,bm.img_size);
+        dp::Shape k_shape(bm.c_out,bm.c_in/bm.groups,bm.kern*bm.kern);
+        int shape[4]={};
+        check(cudnnGetConvolution2dForwardOutputDim(desc,X_d,M_d,&shape[0],&shape[1],&shape[2],&shape[3]));
+        int o_size = shape[2];
+        //int o_size = 1 + ( bm.img_size + 2*bm.pad - bm.kern )/bm.stride;
+        dp::Shape out_shape(batch,bm.c_out,o_size,o_size);
+		check(cudnnCreateTensorDescriptor(&Y_d));
+        check(cudnnSetTensor4dDescriptor(Y_d,CUDNN_TENSOR_NCHW,CUDNN_DATA_FLOAT,batch,bm.c_out,o_size,o_size));
+
+
+
+
+        cudnnConvolutionFwdAlgoPerf_t perf_fwd;
+        cudnnConvolutionBwdDataAlgoPerf_t perf_bwd_data;
+        cudnnConvolutionBwdFilterAlgoPerf_t perf_bwd_filter;
+        int algs = 0;
+        size_t ws = 0;
+        char const *aname = nullptr;
+        int algo_id = 0;
+
+        switch(op) {
+        case dp::forward_data:
+		    check(cudnnFindConvolutionForwardAlgorithm(handle,X_d,M_d,desc,Y_d,1,&algs,&perf_fwd));
+            ws = perf_fwd.memory;
+            algo_id = perf_fwd.algo;
+            {
+                static char const *names[] = {
+                    "IMPLICIT_GEMM",
+                    "IMPLICIT_PRECOMP_GEMM",
+                    "GEMM",
+                    "DIRECT",
+                    "FFT",
+                    "FFT_TILING",
+                    "WINOGRAD",
+                    "WINOGRAD_NONFUSED"
+
+                };
+                if(algo_id < sizeof(names)/sizeof(names[0]))
+                    aname = names[algo_id];
+            }
+            break;
+        case dp::backward_data:
+		    check(cudnnFindConvolutionBackwardDataAlgorithm(handle,M_d,Y_d,desc,X_d,1,&algs,&perf_bwd_data));
+            ws = perf_bwd_data.memory;
+            algo_id = perf_bwd_data.algo;
+            {
+                static char const *names[] = {
+                    "0" /* non-deterministic */,
+                        "1",
+                        "FFT",
+                        "FFT_TILING",
+                        "WINOGRAD",
+                        "WINOGRAD_NONFUSED"
+                };
+                if(algo_id < sizeof(names)/sizeof(names[0]))
+                    aname = names[algo_id];
+            }
+            break;
+        case dp::backward_param:
+		    check(cudnnFindConvolutionBackwardFilterAlgorithm(handle,X_d,Y_d,desc,M_d,1,&algs,&perf_bwd_filter));
+            ws = perf_bwd_filter.memory;
+            algo_id = perf_bwd_filter.algo;
+            {
+                static char const *names[] = {
+                    "0" /* non-deterministic */,
+                        "1",
+                        "FFT",
+                        "3" /* non-deterministic */,
+                        "WINOGRAD" /* not implemented */,
+                        "WINOGRAD_NONFUSED",
+                        "FFT_TILING"
+                };
+                if(algo_id < sizeof(names)/sizeof(names[0]))
+                    aname = names[algo_id];
+            }
+            break;
+        default:
+            throw std::runtime_error("Invalid conv op");
+        }
+        
+        float *X=nullptr,*Y=nullptr,*M=nullptr;
+        void *W=nullptr;
+        cudaMalloc((void**)&X,in_shape.total_size()*sizeof(float));
+        cudaMalloc((void**)&Y,out_shape.total_size()*sizeof(float));
+        cudaMalloc((void**)&M,k_shape.total_size()*sizeof(float));
+        if(ws > 0) {
+            cudaMalloc(&W,ws);
+        }
+
+        rand(X,in_shape.total_size(),1.0);
+        rand(Y,out_shape.total_size(),1.0);
+        rand(M,k_shape.total_size(),1.0 / (bm.kern*bm.kern*bm.c_in/bm.groups));
+
+
+        time_point_type start,end;
+        for(int i=-warm;i<calc;i++) {
+            if(i == 0) {
+                cudaDeviceSynchronize();
+                start = clock_type::now();
+            }
+            float alpha = 1.0;
+            float beta  = 0.0;
+            switch(op) {
+                case dp::forward_data:
+                    check(cudnnConvolutionForward(handle,&alpha,X_d,X,M_d,M,desc,perf_fwd.algo,W,ws,&beta,Y_d,Y));
+                    break;
+                case dp::backward_data:
+                    check(cudnnConvolutionBackwardData(handle,&alpha,M_d,M,Y_d,Y,desc,perf_bwd_data.algo,W,ws,&beta,X_d,X));
+                    break;
+                case dp::backward_param:
+                    beta = 1.0;
+                    check(cudnnConvolutionBackwardFilter(handle,&alpha,X_d,X,Y_d,Y,desc,perf_bwd_filter.algo,W,ws,&beta,M_d,M));
+                    break;
+            }
+        }
+        cudaDeviceSynchronize();
+        end = clock_type::now();
+        double seconds = sec_diff(start,end);
+        double flop = 2 * out_shape.total_size() * (bm.c_in / bm.groups * bm.kern * bm.kern) * calc;
+        double bytes = in_shape.total_size() + out_shape.total_size() + k_shape.total_size();
+        if(op == dp::backward_param)
+            bytes += k_shape.total_size();
+        bytes*=sizeof(float);
+        bytes*=calc;
+        Metrics met;
+        met.flops = flop / seconds;
+        met.bps = bytes / seconds;
+        if(aname)
+            met.algo = aname;
+        else {
+            static char buf[256];
+            snprintf(buf,sizeof(buf),"algo_%d",algo_id);
+            met.algo = buf;
+        }
+
+        if(W)
+            cudaFree(W);
+        cudaFree(M);
+        cudaFree(X);
+        cudaFree(Y);
+
+        return met;
+
+    }
+#else
     Metrics test_conv(int warm,int calc,int op,int batch,ConvBM const &bm)
     {
         dp::Convolution2DConfigBase cfg;
@@ -227,7 +478,7 @@ public:
 
         return met;
     }
-
+#endif
     void run_conv_bm(int index)
     {
         printf("Convolution\n");
@@ -457,7 +708,7 @@ int main(int argc,char **argv)
     int gemm_index = -1;
     int conv_index = -1;
     if(argv[1][0] == '-') {
-        if(argv[1][1] == 'g') {
+       if(argv[1][1] == 'g') {
             gemm_index = atoi(argv[1]+2);
             argv++;
             argc--;
@@ -477,6 +728,24 @@ int main(int argc,char **argv)
         scale = atof(argv[2]);
     }
     FlopsStats fs = get_flops(argv[1],scale);
+#if CUDA_TEST    
+    {
+        int cuda_dev = -1;
+        std::string ocl_dev(argv[1]);
+        size_t pos = ocl_dev.find(':');
+        if(pos == std::string::npos) {
+            throw std::runtime_error("invalid name");
+        }
+        cuda_dev = atoi(ocl_dev.c_str() + pos + 1);
+        cudaDeviceProp prop;
+        if(cudaGetDeviceProperties (&prop,cuda_dev)!=0) {
+            throw std::runtime_error("Failed to get cuda dev props for " + std::to_string(cuda_dev));
+        }
+        std::cout << "Cuda Device " << prop.name << std::endl;
+        if(cudaSetDevice(cuda_dev)!=0)
+            throw std::runtime_error("cuda set device failed");
+    }
+#endif
     Benchmarker bm(argv[1],fs,scale);
     if(conv_index==-1)
         bm.run_gemm_bm(gemm_index);
