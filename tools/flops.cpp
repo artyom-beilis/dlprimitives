@@ -79,8 +79,9 @@ public:
                     int calls = std::max(5,std::min(200,int(target_calls)));
                     int warms = std::max(1,calls / 5);
 
-                    printf("  %c%c %4d, %4d, %4d",
+                    printf("  %c%c %2d: %4d, %4d, %4d ",
                                 (ta ? 'T' : 'N'), (tb ? 'T' : 'N'),
+                                setup,
                                 M,N,K);
 
                     fflush(stdout);
@@ -509,6 +510,9 @@ do{                                                          \
             {   1,  0,  1,  1,960,160,  7,"mobile" },
             {   1,  0,  1,  1,960,320,  7,"mobile" },
             {   3,  1,  1,960,960,960,  7,"mobile" },
+            
+            {   1,  0,  1,256,256,256,  56,"scale" },
+            {   1,  0,  1,1024,1024,1024,  7,"scale" },
 #ifdef FULL_TEST 
             {   3,  1,  1,  1,192,384, 13,"alexnet" },
             {   3,  1,  1,  1,256,256, 13,"alexnet" },
@@ -580,8 +584,8 @@ do{                                                          \
                 int warms = std::max(1,calls / 5);
                 char const *op_name[]={"nop","forward","bwd-data","bwd-filt"};
                 for(int op = dp::forward_data;op<=dp::backward_param;op++) {
-                    printf("  %10s %8s b=%-2d k=%-2d p=%d s=%d in=%-4d out=%-4d g=%-3d D=%-3d",
-                                bm.type,op_name[op],batch,bm.kern,bm.pad,bm.stride,bm.c_in,bm.c_out,bm.groups,bm.img_size);
+                    printf("  %2d %10s %8s b=%-2d k=%-2d p=%d s=%d in=%-4d out=%-4d g=%-3d D=%-3d",
+                                setup,bm.type,op_name[op],batch,bm.kern,bm.pad,bm.stride,bm.c_in,bm.c_out,bm.groups,bm.img_size);
                     fflush(stdout);
                     Metrics m = test_conv(warms,calls,op,batch,bm);
 
