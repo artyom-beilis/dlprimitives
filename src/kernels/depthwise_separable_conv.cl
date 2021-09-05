@@ -1,6 +1,10 @@
 #include "defs.h"
 #include "atomic.h"
 
+#define DIM_R 0
+#define DIM_C 1
+#define DIM_BD 2
+
 #define KERN_PAD ((KERN-1)/2)
 
 #define PATCH_H (PATCH_ROWS + KERN - 1)
@@ -19,10 +23,10 @@ void conv(int batch,int height,int width,
     input += input_offset;
     output += output_offset;
     kern += kernel_offset;
-    int b = get_global_id(0) / CHANNELS;
-    int d = get_global_id(0) % CHANNELS;
-    int r = get_global_id(1) * PATCH_ROWS;
-    int c = get_global_id(2) * PATCH_COLS;
+    int r = get_global_id(DIM_R) * PATCH_ROWS;
+    int c = get_global_id(DIM_C) * PATCH_COLS;
+    int b = get_global_id(DIM_BD) / CHANNELS;
+    int d = get_global_id(DIM_BD) % CHANNELS;
 
     if(r >= height || c >= width || b >= batch)
         return;
@@ -102,10 +106,10 @@ void backward_data_conv(int batch,int height,int width,
     input += input_offset;
     output += output_offset;
     kern += kernel_offset;
-    int b = get_global_id(0) / CHANNELS;
-    int d = get_global_id(0) % CHANNELS;
-    int r = get_global_id(1) * PATCH_ROWS;
-    int c = get_global_id(2) * PATCH_COLS;
+    int b = get_global_id(DIM_BD) / CHANNELS;
+    int d = get_global_id(DIM_BD) % CHANNELS;
+    int r = get_global_id(DIM_R) * PATCH_ROWS;
+    int c = get_global_id(DIM_C) * PATCH_COLS;
 
     if(r >= height || c >= width || b >= batch)
         return;
@@ -158,7 +162,11 @@ void backward_data_conv(int batch,int height,int width,
             #pragma unroll
             for(int dc=0;dc<PATCH_W;dc++,x++) {
                 if(0 <= x && x < width) {
+                    #if KERN == 1
+                    input[dr*width+dc] += I_vals[dr][dc];
+                    #else
                     atomic_addf(input + (dr*width+dc),I_vals[dr][dc]);
+                    #endif
                 }
             }
         }

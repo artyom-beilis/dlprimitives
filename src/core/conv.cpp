@@ -442,8 +442,9 @@ namespace core {
             if(lW * lH < 64)
                 lD = 64 / (lW * lH);
             
-            cl::NDRange wg(lD,lH,lW);
-            cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
+            cl::NDRange wg(lH,lW,lD);
+            cl::NDRange gr=gpu::round_range(gH,gW,batch*config_.channels_in,wg);
+                        
             ec.queue().enqueueNDRangeKernel(conv_,cl::NullRange,gr,wg,ec.events(),ec.event("sep_conv"));
         }
 
@@ -472,9 +473,13 @@ namespace core {
         }
         virtual void enqueue(Tensor &dx,Tensor &K,Tensor &dy,Tensor &,float factor,ExecutionContext const &ec)
         {
-            ExecutionContext ec1 = ec.generate_series_context(0,2);
-            s_.enqueue(factor,dx,ec1);
-            ExecutionContext ec2 = ec.generate_series_context(1,2);
+            int total = 1;
+            if(factor != 1.0f ) {
+                total++;
+                ExecutionContext ec1 = ec.generate_series_context(0,2);
+                s_.enqueue(factor,dx,ec1);
+            }
+            ExecutionContext ec2 = ec.generate_series_context(1,total);
             int batch = dx.shape()[0];
             int height = dx.shape()[2];
             int width = dx.shape()[3];
@@ -495,8 +500,9 @@ namespace core {
             if(lW * lH < 64)
                 lD = 64 / (lW * lH);
             
-            cl::NDRange wg(lD,lH,lW);
-            cl::NDRange gr=gpu::round_range(batch*config_.channels_in,gH,gW,wg);
+            cl::NDRange wg(lH,lW,lD);
+            cl::NDRange gr=gpu::round_range(gH,gW,batch*config_.channels_in,wg);
+            
             ec.queue().enqueueNDRangeKernel(bw_conv_data_,cl::NullRange,gr,wg,ec2.events(),ec2.event("sep_conv_bw_data"));
         }
 
