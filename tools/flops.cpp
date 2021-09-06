@@ -38,6 +38,14 @@ public:
         ref_.flops = dt == dp::float_data ? stats.flops32 : stats.flops16;
         ref_.bps = stats.bps;
         ec_ = ctx_.make_execution_context();
+        report_ = fopen("report.csv","w");
+        setvbuf(report_,nullptr,_IOLBF,0);
+        fprintf(report_,"Float GFlops,Half GFlops,GB/s,Device\n%1.1f,%1.1f,%1.2f,%s\n",
+                stats.flops32*1e-9,stats.flops16*1e-9,stats.bps*1e-9,ctx_.name().c_str());
+    }
+    ~Benchmarker()
+    {
+        fclose(report_);
     }
 
 
@@ -52,6 +60,8 @@ public:
     void run_gemm_bm(int index=-1)
     {
         printf("GEMM\n");
+        fprintf(report_,"GEMM\n"
+            "ID,Tr(A),Tr(B),M,N,K,GFlops,GFlops %%,GB/s,GB/s%%\n");
         int setups[][3] = {
             { 512,   512,  512 },
             { 1024, 1024, 1024 },
@@ -98,6 +108,12 @@ public:
                                 limited, max_per
                                 );
                     fflush(stdout);
+                    fprintf(report_,"%d,%c,%c,%d,%d,%d,%1.1f,%1.2f%%,%1.2f,%1.2f\n",
+                                setup,
+                                (ta ? 'T' : 'N'), (tb ? 'T' : 'N'),
+                                M,N,K,
+                                m.flops * 1e-9, flops_per,
+                                m.bps * 1e-9, bandw_per);
                 }
             }
         }
@@ -483,6 +499,8 @@ do{                                                          \
     void run_conv_bm(int index)
     {
         printf("Convolution\n");
+        fprintf(report_,"Convolution\n"
+            "#,Network,Operation,Batch,Kernel,Padding,Stride,Channles In,Channles Out,Groups,Size,GFlops,GFlops%%,GB/s,GB/s%%,Algorithm\n");
         ConvBM setups[] = {
             //  k   p   s   g  in out dim net 
             {  11,  2,  4,  1,  3, 64,224,"alexnet" },
@@ -601,6 +619,11 @@ do{                                                          \
                                 m.algo
                                 );
                     fflush(stdout);
+                    fprintf(report_,"%d,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%1.1f,%1.2f%%,%1.2f,%1.2f%%,%s\n",
+                                setup,bm.type,op_name[op],batch,bm.kern,bm.pad,bm.stride,bm.c_in,bm.c_out,bm.groups,bm.img_size,
+                                m.flops * 1e-9, flops_per,
+                                m.bps * 1e-9, bandw_per,
+                                m.algo);
                 }
             }
         }
@@ -614,6 +637,7 @@ private:
     Metrics ref_;
     double scale_;
     cl_ulong seed_,seq_;
+    FILE *report_;
 };
 
 
