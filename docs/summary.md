@@ -249,6 +249,29 @@ Tool and useful instruments
 |     vs opencl|         |       |    124%|    179%|   130%|        174%|    80%|137.52%|
 |     vs native|         |       |     28%|     45%|    54%|         40%|    39%| 41.34%|
 
+## Benchmarks RX 6600xt
+
+Time in ms per batch
+
+### Train
+
+|              |      gpu|  Batch| alexnet|resnet18|resnet50|  vgg16     |mobilenet\_v2|
+|--------------|---------|-------|--------|--------|-------|-------------|-------|
+|        dlprim|RX 6600xt|     16|  30.180|  61.733|190.461|       290.98| 98.854|
+|Keras/Plaidml |RX 6600xt|     16|177.546|415.727|977.615 |    3094.2|  355.140 |
+|  Caffe/OpenCL|RX 6600xt|     16|64.119  |144.032 | 780.264 |  490.80 | 349.254|
+
+### Test
+
+
+|               |     gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|
+|--------------|-------- |-------|--------|--------|-------|-------------|-------|
+|        dlprim|RX 6600xt|     16|10.816|  17.696|      48.823|      70.773|  27.083|
+|Keras/Plaidml |RX 6600xt|     16|89.684|  190.738|     273.087|     1524.9|  33.210|
+|  Caffe/OpenCL|RX 6600xt|     16|14.337|  39.371|     138.089|     159.98|  92.9304|
+
+
+
 ## Benchmarks Intel HD 530
 
 ### Train
