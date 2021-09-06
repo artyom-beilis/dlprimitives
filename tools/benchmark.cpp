@@ -1,4 +1,5 @@
 #include <dlprim/net.hpp>
+#include <dlprim/json.hpp>
 #include <dlprim/solvers/adam.hpp>
 #include <fstream>
 #include <iostream>
@@ -15,6 +16,7 @@ int main(int argc,char **argv)
         bool enable_backward = false;
         bool force_cpu_times = false;
         bool enable_adam = false;
+        int batch_override = -1;
         int warm = 5;
         int iters = 20;
         while(argc >= 2 && argv[1][0] == '-') {
@@ -28,6 +30,9 @@ int main(int argc,char **argv)
                 enable_backward = true;
             else if(flag == "-C")
                 force_cpu_times = true;
+            else if(flag.substr(0,2) == "-B" && flag.size() > 2) {
+                batch_override = atoi(flag.c_str()+2);
+            }
             else if(flag.substr(0,2) == "-i" && flag.size() > 2) {
                 iters = atoi(flag.c_str()+2);
             }
@@ -60,7 +65,17 @@ int main(int argc,char **argv)
         dp::Net net(ctx);
         if(enable_backward)
             net.mode(dp::CalculationsMode::train);
-        net.load_from_json_file(net_js);
+        if(batch_override != -1) {
+            dp::json::value v;
+            std::ifstream tmp(net_js);
+            tmp >> v;
+            for(auto &data: v["inputs"].array()) {
+                data["shape"][0] = batch_override;
+            }
+            net.load_from_json(v);
+        }
+        else 
+            net.load_from_json_file(net_js);
         net.setup();
         if(!net_h5.empty()) {
             net.load_parameters(net_h5);
