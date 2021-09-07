@@ -26,7 +26,7 @@ void flops_v1(__global float *out)
     vec1 cs = (vec1)(sin(0.56*i));
     vec1 sn = (vec1)(cos(0.56*i));
 
-    #pragma unroll(20)
+    #pragma unroll(100)
     for(int i=0;i<10000;i++) {
         vec1 xx = x*cs - (y*sn+z);
         vec1 yy = x*sn + (y*cs-z);
@@ -47,7 +47,7 @@ void flops_v2(__global float *out)
     vec2 cs = (vec2)(sin(0.56*i),sin(0.52*i));
     vec2 sn = (vec2)(cos(0.56*i),cos(0.52*i));
 
-    #pragma unroll(20)
+    #pragma unroll(100)
     for(int i=0;i<10000;i++) {
         vec2 xx = x*cs - (y*sn+z);
         vec2 yy = x*sn + (y*cs-z);
@@ -67,7 +67,7 @@ void flops_v4(__global float *out)
     vec4 cs = (vec4)(sin(0.56*i),sin(0.52*i),sin(0.5*i),sin(0.1*i));
     vec4 sn = (vec4)(cos(0.56*i),cos(0.52*i),cos(0.5*i),cos(0.1*i));
 
-    #pragma unroll(20)
+    #pragma unroll(100)
     for(int i=0;i<10000;i++) {
         vec4 xx = x*cs - (y*sn+z);
         vec4 yy = x*sn + (y*cs-z);
@@ -87,7 +87,7 @@ void flops_v8(__global float *out)
     vec8 cs = (vec8)(sin(0.56*i),sin(0.52*i),sin(0.5*i),sin(0.1*i),sin(0.561*i),sin(0.521*i),sin(0.51*i),sin(0.11*i));
     vec8 sn = (vec8)(cos(0.56*i),cos(0.52*i),cos(0.5*i),cos(0.1*i),cos(0.561*i),cos(0.521*i),cos(0.51*i),cos(0.11*i));
 
-    #pragma unroll(20)
+    #pragma unroll(100)
     for(int i=0;i<10000;i++) {
         vec8 xx = x*cs - (y*sn+z);
         vec8 yy = x*sn + (y*cs-z);
@@ -110,7 +110,7 @@ void flops_v16(__global float *out)
     vec16 sn = (vec16)(cos(0.56*i),cos(0.52*i),cos(0.5*i),cos(0.1*i),cos(0.561*i),cos(0.521*i),cos(0.51*i),cos(0.11*i),
                        cos(1.56*i),cos(1.52*i),cos(1.5*i),cos(1.1*i),cos(1.561*i),cos(1.521*i),cos(1.51*i),cos(1.11*i) );
 
-    #pragma unroll(20)
+    #pragma unroll(100)
     for(int i=0;i<10000;i++) {
         vec16 xx = x*cs - (y*sn+z);
         vec16 yy = x*sn + (y*cs-z);

@@ -644,7 +644,7 @@ private:
 FlopsStats get_flops(std::string device, double scale)
 {
     FlopsStats stats = FlopsStats();
-    int N=256*int(1024*scale);
+    int N=1024*int(1024*scale);
     dp::Context ctx(device);
     auto q = ctx.make_queue();
     std::cout << "Testing on " << ctx.name() << std::endl;
@@ -695,15 +695,15 @@ FlopsStats get_flops(std::string device, double scale)
 
                 std::cout << "- Vector size " << vs << std::endl;
                 std::cout << "-- Warming " << std::endl;
-                q.enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(N),cl::NullRange,nullptr,nullptr);
+                q.enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(N/vs),cl::NullRange,nullptr,nullptr);
                 q.finish();
                 std::cout << "-- Running " << std::flush;
                 auto start = std::chrono::high_resolution_clock::now();
-                q.enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(N),cl::NullRange,nullptr,nullptr);
+                q.enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(N/vs),cl::NullRange,nullptr,nullptr);
                 q.finish();
                 auto end = std::chrono::high_resolution_clock::now();
                 auto secs = std::chrono::duration_cast<std::chrono::duration<double> > ((end-start)).count();
-                double flops = N * 4.0 * 10000 * vs * 2; // matrix 4 mads * float4 * 1000 * N
+                double flops = N * 4.0 * 10000  * 2; // matrix 4 mads * float4 * 1000 * N
                 float gflops = (flops / secs * 1e-9);
                 std::cout << "  " << gflops << " GFlops" << std::endl;
                 peaks[half]=std::max(peaks[half],gflops);
