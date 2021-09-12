@@ -52,16 +52,6 @@ namespace dlprim {
                 loss_weights_[name] = 1.0f;
         }
     }
-#ifdef DISABLE_HDF5
-    void Net::save_parameters_to_hdf5(std::string const &)
-    {
-        throw ValidationError("Library was build without HDF5 support");
-    }
-    void Net::load_parameters_from_hdf5(std::string const &,bool)
-    {
-        throw ValidationError("Library was build without HDF5 support");
-    }
-#else
     void Net::save_parameters(std::string const &fname)
     {
         json::value header;
@@ -100,6 +90,17 @@ namespace dlprim {
             throw ValidationError("I/O error in saving to " + fname);
         }
     }
+
+#ifdef DISABLE_HDF5
+    void Net::save_parameters_to_hdf5(std::string const &)
+    {
+        throw ValidationError("Library was build without HDF5 support");
+    }
+    void Net::load_parameters_from_hdf5(std::string const &,bool)
+    {
+        throw ValidationError("Library was build without HDF5 support");
+    }
+#else
     void Net::save_parameters_to_hdf5(std::string const &fname)
     {
         try {
