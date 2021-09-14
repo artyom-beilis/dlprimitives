@@ -9,6 +9,8 @@ endif()
 
 option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/cl2.hpp" OFF)
 option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
+option(USE_HDF "Compile with HDF support" ON)
+
 if(USE_CL_HPP)
     find_path(OCL_PATH CL/cl.hpp)
     set(DLPRIM_USE_CL1_HPP 1)
@@ -32,8 +34,11 @@ if(NOT PYTHON)
 	message(FATAL_ERROR "Can't build without Python interpreter")
 endif(NOT PYTHON)
 
-find_package(HDF5)
-if(HDF5_FOUND)
+if(USE_HDF)
+    find_package(HDF5)
+endif()
+
+if(USE_HDF AND HDF5_FOUND)
     include_directories(${HDF5_INCLUDE_DIR})
 else()
     add_definitions(-DDISABLE_HDF5)
