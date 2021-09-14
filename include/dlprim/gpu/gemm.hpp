@@ -2,6 +2,7 @@
 #include <dlprim/context.hpp>
 #include <dlprim/definitions.hpp>
 namespace dlprim {
+/// GPU Related tools and classes
 namespace gpu {
 
     class GEMM {

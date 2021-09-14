@@ -4,6 +4,7 @@
 #include <cmath>
 
 namespace dlprim {
+    /// CPU related tools and classes
     namespace cpu {
         template<typename T>
         inline void apply_activation(T *p,size_t n,StandardActivations a)
