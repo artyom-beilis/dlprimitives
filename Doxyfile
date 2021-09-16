@@ -752,7 +752,8 @@ INPUT                  = include/dlprim/ \
         include/dlprim/ops \
         include/dlprim/utils \
         include/dlprim/solvers \
-        include/dlprim/core
+        include/dlprim/core \
+        docs
 
 # This tag can be used to specify the character encoding of the source files
 # that doxygen parses. Internally doxygen uses the UTF-8 encoding. Doxygen uses
@@ -778,7 +779,7 @@ FILE_PATTERNS          = *.c \
                          *.inl \
                          *.h \
                          *.hpp \
-                         *.doxy
+                         *.doxy *.md
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
@@ -1016,6 +1017,8 @@ IGNORE_PREFIX          =
 # The default value is: YES.
 
 GENERATE_HTML          = YES
+
+TOC_INCLUDE_HEADINGS  = 99
 
 # The HTML_OUTPUT tag is used to specify where the HTML docs will be put. If a
 # relative path is entered the value of OUTPUT_DIRECTORY will be put in front of
@@ -2316,3 +2319,5 @@ GENERATE_LEGEND        = YES
 # This tag requires that the tag HAVE_DOT is set to YES.
 
 DOT_CLEANUP            = YES
+
+

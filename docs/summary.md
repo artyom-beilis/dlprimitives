@@ -1,4 +1,6 @@
-## Summary of Benchmarks
+# Performance Benchmarks
+
+## Summary
 
 Summary of performance comparison of DLPrmitives to Native Pytorch (cuda+cudnn or hip+miopen) and best of existing OpenCL
 solution - Caffe OpenCL or Kerals with PlaidML. Measured prtformane difference average over 5 networks:
@@ -32,61 +34,7 @@ Tested using ResNet18, batch size is 16 224x224 images. Units: milliseconds per 
 |  rocm/keras|240.7|82.8|  76%|107%|
 |rocm/pytorch|167.4|39.2|  53%| 51%|
 
-
-
-
-
-## Details
-
-DLPrimitives implements 3 variants of convolution algorithms
-
-1. GEMM based - GEMM merged with im2col and col2im into a single kernel
-2. Wingorad - Winograd convolution for 3x3, pad=1, stride=1 kernels for AMD and NVidia GPUs
-3. Depthwise Separable - direct convolution
-
-
-### GEMM
-
-GEMM has following optimization. Matrix split into tiles each handled by a separate work group.
-Typically each work group of 256 threads group loads 2 tiles of 128x16 into local memory and than
-each thread typically calculates a 8x8 matrix. 
-
-#### Convolution
-
-When GEMM based algorithm is used GEMM applied as batched convolution and matrix rows/columns are translated to image position for load and store
-
-For backpropogation atomic operations are used for "col2im" part. So working atomics are required for backpropogation.
-
-#### Intel
-
-For Intel GPU no local memory is used and if possible subgroup sharing is used. Each thread operates on its own small tile due to performance problems with local memory
-
-#### AMD lda/ldb % 1024 == 0
-
-There is a special case when lda or ldb is multiple of 1024 some cache issues occur. For such cases tiles are reordered in z-order curve to improve cache locality
-
-#### Small M/N large K
-
-For such cases additional reduction using atomic operations over K is used.
-
-### Wingorad Convolution
-
-It is currently applied for AMD and NVidia GPUs.
-
-It is based on: 
-Yan, Da, Wei Wang, and Xiaowen Chu.
-"Optimizing batched winograd convolution on GPUs."
-Proceedings of the 25th ACM SIGPLAN symposium on
-principles and practice of parallel programming. 2020.
-
-<https://www.cse.ust.hk/~weiwa/papers/yan-ppopp20.pdf>
-
-In comparison to the paper: dlprim uses 32x8 tiles block instead of 64x8
-since it generic OpenCL implementation for different GPUs
-that can't optimize registers as efficienlty as manually written
-assembly.
-
-## Benchmark Methodology
+## Methodology
 
 Original networks are taken from pytorch and converted in train mode to ONNX. ONNX is converted to dlprimitives model or to caffe model.
 dlprimitives model (json) is also used to generate keras/plaidml model. Times for both training and testing (inference) are compared.
@@ -156,6 +104,29 @@ Tool and useful instruments
 |        dlprim|rx560|      8|  22.976|  44.121|111.317|      240.059| 46.898|       |
 |     vs opencl|     |       |    125%|    135%|   150%|         140%|    63%|122.64%|
 |     vs native|     |       |     51%|     45%|    77%|          50%|    48%| 54.19%|
+
+## Benchmarks RX 6600xt
+
+Note: rocm does not support 6600 XT yet, so no comparison to pytorch, is given
+
+### Train
+
+|              |      gpu|  Batch| alexnet|resnet18|resnet50|  vgg16     |mobilenet\_v2|
+|--------------|---------|-------|--------|--------|-------|-------------|-------|
+|        dlprim|RX 6600xt|     16|  30.180|  61.733|190.461|       290.98| 98.854|
+|Keras/Plaidml |RX 6600xt|     16|177.546|415.727|977.615 |    3094.2|  355.140 |
+|  Caffe/OpenCL|RX 6600xt|     16|64.119  |144.032 | 780.264 |  490.80 | 349.254|
+
+### Test
+
+
+|               |     gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|
+|--------------|-------- |-------|--------|--------|-------|-------------|-------|
+|        dlprim|RX 6600xt|     16|10.816|  17.696|      48.823|      70.773|  27.083|
+|Keras/Plaidml |RX 6600xt|     16|89.684|  190.738|     273.087|     1524.9|  33.210|
+|  Caffe/OpenCL|RX 6600xt|     16|14.337|  39.371|     138.089|     159.98|  92.9304|
+
+
 
 ## Benchmarks For Nvidia GTX 960
 
@@ -248,29 +219,6 @@ Tool and useful instruments
 |        dlprim|RTX 2060S|     16|  12.972|   21.64| 56.827|     112.533| 26.355|       |
 |     vs opencl|         |       |    124%|    179%|   130%|        174%|    80%|137.52%|
 |     vs native|         |       |     28%|     45%|    54%|         40%|    39%| 41.34%|
-
-## Benchmarks RX 6600xt
-
-Time in ms per batch
-
-### Train
-
-|              |      gpu|  Batch| alexnet|resnet18|resnet50|  vgg16     |mobilenet\_v2|
-|--------------|---------|-------|--------|--------|-------|-------------|-------|
-|        dlprim|RX 6600xt|     16|  30.180|  61.733|190.461|       290.98| 98.854|
-|Keras/Plaidml |RX 6600xt|     16|177.546|415.727|977.615 |    3094.2|  355.140 |
-|  Caffe/OpenCL|RX 6600xt|     16|64.119  |144.032 | 780.264 |  490.80 | 349.254|
-
-### Test
-
-
-|               |     gpu|   Batch|alexnet|resnet18|resnet50|  vgg16|mobilenet\_v2|
-|--------------|-------- |-------|--------|--------|-------|-------------|-------|
-|        dlprim|RX 6600xt|     16|10.816|  17.696|      48.823|      70.773|  27.083|
-|Keras/Plaidml |RX 6600xt|     16|89.684|  190.738|     273.087|     1524.9|  33.210|
-|  Caffe/OpenCL|RX 6600xt|     16|14.337|  39.371|     138.089|     159.98|  92.9304|
-
-
 
 ## Benchmarks Intel HD 530
 

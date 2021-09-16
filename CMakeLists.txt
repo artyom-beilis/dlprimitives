@@ -202,13 +202,17 @@ target_link_libraries(test_random dlprim)
 if(BUILD_PYDLPRIM)
     add_library(pydlprim SHARED python/python_interface.cpp)
     set_target_properties(pydlprim PROPERTIES PREFIX "" OUTPUT_NAME "_pydlprim")
+    set_target_properties(pydlprim PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python/dlprim")
+    foreach(PYNAME __init__.py netconfig.py)
+        configure_file(${CMAKE_CURRENT_SOURCE_DIR}/python/dlprim/${PYNAME} "${CMAKE_BINARY_DIR}/python/dlprim/${PYNAME}" COPYONLY)
+    endforeach()
     include_directories(${Boost_INCLUDE_DIRS})
     include_directories(${PYTHON_INCLUDE_DIRS})
     target_link_libraries(pydlprim dlprim ${Boost_NUMPY3_LIBRARY} ${Boost_PYTHON3_LIBRARY} ${PYTHON_LIBRARIES})
     file(GLOB PY_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/python/dlprim/*.py)
     install(FILES ${PY_SOURCES} DESTINATION python/dlprim)
     install(TARGETS pydlprim
-	    LIBRARY DESTINATION python)
+	    LIBRARY DESTINATION python/dlprim)
  
 endif()
 

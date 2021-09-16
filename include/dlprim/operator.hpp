@@ -23,12 +23,17 @@ namespace dlprim {
         {
         }
 
+        ///
+        /// Getter for object that is shared between operators accross the net, for example
+        /// random numbers generator
+        ///
         SharedResource &shared_resource()
         {
             DLPRIM_CHECK(shared_resource_);
             return *shared_resource_;
         }
 
+        /// Setter of the shared resource
         void shared_resource(std::shared_ptr<SharedResource> r)
         {
             shared_resource_ = r;

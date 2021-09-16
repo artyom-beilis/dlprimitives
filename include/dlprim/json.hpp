@@ -1008,7 +1008,6 @@ namespace json {
 		/// \param line_number  return a number of the line where syntax error occurred
 		/// \result returns true if the value was read successfully, otherwise returns false to indicate a syntax error.
 		///
-		/// \ver{v1_2}
 		bool load(char const *&begin,char const *end,bool full,int *line_number=0);
 
 		///
@@ -1110,25 +1109,21 @@ namespace json {
 	/// Convert UTF-8 string to JSON string, i.e. a sring foo is converted to "foo",
 	/// a string bar"baz is converted to "bar\"baz"
 	///
-	/// \ver{v1_2}
 	std::string DLPRIM_API to_json(std::string const &utf);
 	///
 	/// Convert UTF-8 string to JSON string, i.e. a sring foo is converted to "foo",
 	/// a string bar"baz is converted to "bar\"baz"
 	///
-	/// \ver{v1_2}
 	std::string DLPRIM_API to_json(char const *begin,char const *end);
 	///
 	/// Convert UTF-8 string to JSON string, i.e. a sring foo is converted to "foo",
 	/// a string bar"baz is converted to "bar\"baz"
 	///
-	/// \ver{v1_2}
 	void DLPRIM_API to_json(char const *begin,char const *end,std::ostream &out);
 	//
 	/// Convert UTF-8 string to JSON string, i.e. a sring foo is converted to "foo",
 	/// a string bar"baz is converted to "bar\"baz"
 	///
-	/// \ver{v1_2}
 	void DLPRIM_API to_json(std::string const &str,std::ostream &out);
 
 	
