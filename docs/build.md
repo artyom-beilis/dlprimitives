@@ -1,10 +1,11 @@
 # Build Instructions
+
 ## Dependencies
 
 Mandatory:
 
 - OpenCL SDK
-- Python for building
+- Python3 for building
 - cmake
 
 Recommended:
@@ -15,7 +16,6 @@ Optional:
 
 - HDF5 C++ bindings for model loading/saving in HDF5 format instead of internal
 - boost python and boost numpy - for python bindings
-
 
 
 ## Building
@@ -39,6 +39,8 @@ Some OpenCL programs use older header `CL/cl.hpp`, in order to make dlprimitives
 or
     ctest
 
+By default ctest used `0:0` GPU - 0 platform, 0 device if you want to change it to another one, lets say platofm 1 and device 0, pass parameter to cmake: `-DTEST_DEV="1:0"`
+
 
 ## Installation
 
@@ -55,7 +57,7 @@ Running benchmakrs on opencl platform:device 0:0
 
     # Inference
     ./dlprim_benchmark 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
-    # Treain
+    # Train
     ./dlprim_benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
 
 
