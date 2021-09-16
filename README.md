@@ -18,41 +18,9 @@ multiple GPU architectures.
 
 Please note this is only work in progress - first and preliminary stages.
 
-## Performance Comparison
+## Documentation 
 
-### PyTorch vs DLPrimitives
-
-Comparison of DLPrimitives vs PyTorch with cudnn/rocm and vs existing OpenCL implementation - plaidml and caffe/opencl.
-It is based on average difference over 5 networks: alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
-
-|             GPU|Batch|Train, Cuda/HIP|Test, Cuda/HIP|Train, Plaidml/Caffe-OCL|Test,  Plaidml/Caffe-OCL|
-|----------------|-----|---------------|--------------|---------------|--------------|
-|  Nvidia GTX 960|   16|            51%|        60.73%|           171%|       167.33%|
-|  Nvidia GTX 960|    8|            59%|        72.03%|           187%|       155.25%|
-| Nvidia GTX 1080|   16|            42%|        41.34%|           207%|       137.52%|
-|Nvidia RTX 2060S|   16|            49%|        57.53%|           211%|       149.48%|
-|      AMD Rx 560|   16|            53%|        56.82%|           153%|       115.63%|
-|      AMD Rx 560|    8|            55%|        54.19%|           172%|       122.64%|
-|    Intel HD 530|    8|               |              |           109%|        66.12%|
-
-### DlPrimitives vs Other Frameworks
-
-ResNet18, batch 16 224x224 images. ms per batch.  
-
-|Nvidia GTX 960|train|test|train|test|
-|--------------|-----|----|-----|----|
-|        dlprim|196.6|50.7|     |    |
-|   cudnn/caffe|211.8|65.5| 108%|129%|
-|   cudnn/keras|183.9|69.9|  94%|138%|
-| cudnn/pytorch|110.2|35.1|  56%| 69%|
-
-|  AMD RX 560|train|test|train|test|
-|------------|-----|----|-----|----|
-|      dlprim|  318|77.5|     |    |
-|  rocm/caffe|  274|79.8|  86%|103%|
-|  rocm/keras|240.7|82.8|  76%|107%|
-|rocm/pytorch|167.4|39.2|  53%| 51%|
-
+Is published under <http://dlprimitives.org/docs/>
 
 
 ## Features Matrix
