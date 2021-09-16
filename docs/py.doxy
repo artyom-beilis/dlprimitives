@@ -1,0 +1,25 @@
+/*!
+\page python_interface Python Interface
+
+# Building and Using
+
+In order to build dlprimitives with python inteface you need to have boost-python3 and boost-numpy3 installed duing build.
+
+Upon installation the file can be found under python directory. For example if you install dlprimitives to `/opt/dlprimitives` than
+the directory `/opt/dlprimitives/python` will be created and it need to be added to PYTHONPATH
+
+For example
+
+    export PYTHONPATH=/opt/dlprimitives/python
+    python3 
+    >>> import dlprim as dp
+    >>> ctx=dp.Context('0:0')
+    >>> print(ctx.name)
+    gfx1032 on AMD Accelerated Parallel Processing 
+
+# Reference Documenatation
+
+[Reference documentation](dlprim.html) is build using pydoc
+
+
+*/

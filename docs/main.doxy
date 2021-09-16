@@ -1,0 +1,38 @@
+/*!
+\mainpage 
+
+# DLPrimitives
+
+This project aims to provide cross platform OpenCL tools for deep learning and inference.
+
+Today, most of deep learning training is done on NVidia GPUs using closed source CUDA and CUDNN libraries.
+It is either challenging or virtually impossible to use AMD or Intel GPUs.
+For example: AMD provides ROCm platform, but there is no support of RDNA platforms yet (more than a year since a release),
+there is no support of APUs and no support 
+of any operating systems other than Linux.
+
+## Goals
+
+- Create an open source, cross platform deep learning primitives library similar to cuDNN or MIOpen that supports
+multiple GPU architectures.
+- Create an inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
+- Create minimalistic deep-learning framework as POC of capabilities and performance.
+- _Long Shot_: Integrate to existing large scale deep learing projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
+
+## Important Documentation Pages
+
+- \ref md_docs_build
+- \ref python_interface
+- \ref md_docs_network_json_format
+- \ref md_docs_benchmarks
+
+## Links
+
+- Main Web Site: <http://dlprimitives.org>
+- Development Blog: <http://blog.dlprimitives.org>
+- GitHub: <https://github.com/artyom-beilis/dlprimitives>
+
+Please note this is only work in progress - first and preliminary stages.
+
+
+*/
