@@ -3,7 +3,10 @@
 
 namespace dlprim {	
     namespace json { class value; }
-    class Scal;
+    namespace core { 
+        class Pooling2DBackwardBase;
+        class Pooling2DForward;
+    }
     struct PoolingBase {
         enum Mode {
             max = 0,
@@ -19,6 +22,11 @@ namespace dlprim {
         int kernel[2] = {1,1};
         int pad[2] = {0,0};
         int stride[2]={1,1};
+        //
+        // FIXME: implement me
+        //
+        //bool ceil_mode=false;
+        //
         bool count_include_pad = false;
         static Pooling2DConfig from_json(json::value const &v);
     };
@@ -83,10 +91,9 @@ namespace dlprim {
         
         Pooling2DConfig config_;
         DataType dtype_;
-        cl::Kernel kernel_;
-        cl::Kernel bwd_kernel_;
-        std::unique_ptr<Scal> scal_;
-        int wg_size_;
+
+        std::unique_ptr<core::Pooling2DForward> fwd_;
+        std::unique_ptr<core::Pooling2DBackwardBase> bwd_;
     };
 
     struct GlobalPoolingConfig : public PoolingBase {
@@ -133,16 +140,12 @@ namespace dlprim {
         void forward_cpu(Tensor &input,Tensor &output);
         void backward_cpu(Tensor &x,Tensor &dx,Tensor &dy,float factor);
         void backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ctx);
-        void setup_kernel(int sm_range);
+        size_t setup_kernel(Shape const &sp);
 
         GlobalPoolingConfig cfg_;
         DataType dtype_;
-        cl::Kernel kernel_;
-        cl::Kernel kernel_bwd_;
-        int wg_size_;
-        int items_per_wi_;
-        int sm_range_;
-        int nd_range_;
+        std::unique_ptr<core::Pooling2DForward> fwd_;
+        std::unique_ptr<core::Pooling2DBackwardBase> bwd_;
     };
     
 } // namespace

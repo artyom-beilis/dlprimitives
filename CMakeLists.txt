@@ -154,6 +154,7 @@ set(DLPRIM_CORE_SRC
         src/core/conv.cpp
         src/core/bn.cpp
         src/core/slice.cpp
+        src/core/pool.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp)
 
 set(DLPRIM_SRC 

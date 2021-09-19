@@ -5,6 +5,7 @@
 #include <math.h>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/ops/scal.hpp>
+#include <dlprim/core/pool.hpp>
 #include <my_cblas.hpp>
 
 namespace dlprim {
@@ -55,20 +56,27 @@ void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs
     ws = 0;
     if(ctx_.is_cpu_context())
         return;
-    wg_size_ = 8;
-    cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"pooling",
-                                        "WG_SIZE",wg_size_,
-                                        "POOL_H",config_.kernel[0],
-                                        "POOL_W",config_.kernel[1],
-                                        "STRIDE_H",config_.stride[0],
-                                        "STRIDE_W",config_.stride[1],
-                                        "PAD_H",config_.pad[0],
-                                        "PAD_W",config_.pad[1],
-                                        "POOL_MODE",int(config_.mode),
-                                        "COUNT_INCLUDE_PAD",int(config_.count_include_pad));
-    kernel_ = cl::Kernel(prog,"pooling");
-    bwd_kernel_ = cl::Kernel(prog,"pooling_bw");
-    scal_.reset(new Scal(ctx_,dtype_));
+    if(config_.mode == PoolingBase::max) {
+        fwd_ = std::move(core::Pooling2DForward::create_max_pooling(
+                ctx_,
+                config_.kernel,config_.pad,config_.stride,
+                dtype_));
+        bwd_ = std::move(core::MaxPooling2DBackward::create(
+                ctx_,
+                config_.kernel,config_.pad,config_.stride,
+                dtype_));
+    }
+    else {
+        fwd_ = std::move(core::Pooling2DForward::create_avg_pooling(
+                ctx_,
+                config_.kernel,config_.pad,config_.stride,config_.count_include_pad,
+                dtype_));
+        bwd_ = std::move(core::AvgPooling2DBackward::create(
+                ctx_,
+                config_.kernel,config_.pad,config_.stride,config_.count_include_pad,
+                dtype_));
+    }
+    ws =std::max(fwd_->workspace(),bwd_->workspace());
 }
 
 int Pooling2D::calc_output_size(int in_size,int dim)
@@ -91,7 +99,10 @@ void Pooling2D::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,siz
     DLPRIM_CHECK(in.size()==1);
     Shape ins = in[0];
     out.assign({calc_shape(ins)});
-    ws = 0;
+    if(ctx_.is_cpu_context())
+        ws = 0;
+    else
+        ws = std::max(fwd_->workspace(),bwd_->workspace());
 }
 
 template<typename Dtype>
@@ -251,36 +262,7 @@ void Pooling2D::backward_cpu_ave(Tensor &dxt,Tensor &dyt,float factor,Reduce rop
 
 void Pooling2D::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ex)
 {
-    int bc = dx.shape()[0]*dx.shape()[1];
-    
-    int in_h = dx.shape()[2];
-    int in_w = dx.shape()[3];
-
-    int out_h = dy.shape()[2];
-    int out_w = dy.shape()[3];
-
-    int p=0;
-
-    auto ec1 = ex.generate_series_context(0,2);
-    auto ec2 = ex.generate_series_context(1,2);
-
-    scal_->scale(factor,dx,ec1);
-   
-    bwd_kernel_.setArg(p++,bc);
-    bwd_kernel_.setArg(p++,in_h);
-    bwd_kernel_.setArg(p++,in_w);
-    bwd_kernel_.setArg(p++,out_h);
-    bwd_kernel_.setArg(p++,out_w);
-    if(config_.mode == Pooling2DConfig::max) {
-        x.set_arg(bwd_kernel_,p);
-    }
-    dy.set_arg(bwd_kernel_,p);
-    dx.set_arg(bwd_kernel_,p);
-
-    cl::NDRange wg(wg_size_,wg_size_,1);
-    cl::NDRange gr = gpu::round_range(out_h,out_w,bc,wg);
-    
-    ex.queue().enqueueNDRangeKernel(bwd_kernel_,cl::NullRange,gr,wg,ec2.events(),ec2.event("pooling_bw"));
+    bwd_->enqueue(x,dx,dy,factor,ex);
 }
 
 
@@ -332,29 +314,7 @@ void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
 
 void Pooling2D::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
 {
-    
-    int bc = in.shape()[0]*in.shape()[1];
-    
-    int in_h = in.shape()[2];
-    int in_w = in.shape()[3];
-
-    int out_h = out.shape()[2];
-    int out_w = out.shape()[3];
-
-    int p=0;
-    kernel_.setArg(p++,bc);
-    kernel_.setArg(p++,in_h);
-    kernel_.setArg(p++,in_w);
-    kernel_.setArg(p++,out_h);
-    kernel_.setArg(p++,out_w);
-    in.set_arg(kernel_,p);
-    out.set_arg(kernel_,p);
-     
-    cl::NDRange wg(wg_size_,wg_size_,1);
-    cl::NDRange gr = gpu::round_range(out_h,out_w,bc,wg);
-    
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("pooling"));
-    
+    fwd_->enqueue(in,out,ctx);
 }
 
 void Pooling2D::backward(std::vector<TensorAndGradient> &input,
@@ -405,7 +365,7 @@ void Pooling2D::backward(std::vector<TensorAndGradient> &input,
 GlobalPooling::GlobalPooling(Context &ctx,GlobalPoolingConfig const &cfg) :
     Operator(ctx),
     cfg_(cfg),
-    dtype_(float_data),wg_size_(0),items_per_wi_(0),sm_range_(-1)
+    dtype_(float_data)
 {
 }
 GlobalPooling::~GlobalPooling() {}
@@ -421,33 +381,20 @@ void GlobalPooling::setup(std::vector<TensorSpecs> const &in,std::vector<TensorS
     ws = 0;
     if(ctx_.is_cpu_context())
         return;
-    setup_kernel(in[0].shape()[2] * in[0].shape()[3]);
+    ws = setup_kernel(in_shape);
 }
 
-void GlobalPooling::setup_kernel(int sm_range)
+size_t GlobalPooling::setup_kernel(Shape const &in_shape)
 {
-    if(sm_range_ == sm_range)
-        return;
-    if(sm_range <= 64)
-        wg_size_ = 64;
-    else if(sm_range <= 128)
-        wg_size_ = 128;
-    else 
-        wg_size_ = 256;
-    items_per_wi_ = (sm_range + wg_size_ - 1) / wg_size_;
-
-    cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"global_pooling",
-                                        "POOL_MODE",int(cfg_.mode),
-                                        "WG_SIZE",wg_size_,
-                                        "ENABLE_BWD",int(mode_ == CalculationsMode::train),
-                                        "ITEMS_PER_WI",items_per_wi_
-                                        );
-    kernel_ = cl::Kernel(prog,"global_pooling");
-    if(mode_ == CalculationsMode::train)
-        kernel_bwd_ = cl::Kernel(prog,"global_pooling_bwd");
-    sm_range_ = sm_range;
-    int mpl = wg_size_ * items_per_wi_;
-    nd_range_ = (sm_range_ + mpl - 1) / mpl * wg_size_;
+    if(cfg_.mode == PoolingBase::max) {
+        fwd_ = std::move(core::Pooling2DForward::create_global_max_pooling(ctx_,in_shape,dtype_));
+        bwd_ = std::move(core::MaxPooling2DBackward::create_global(ctx_,in_shape,dtype_));
+    }
+    else {
+        fwd_ = std::move(core::Pooling2DForward::create_global_avg_pooling(ctx_,in_shape,dtype_));
+        bwd_ = std::move(core::AvgPooling2DBackward::create_global(ctx_,in_shape,dtype_));
+    }
+    return std::max(fwd_->workspace(),bwd_->workspace());
 }
 
 
@@ -459,7 +406,7 @@ void GlobalPooling::reshape(std::vector<Shape> const &in,std::vector<Shape> &out
     out.assign({Shape(in[0][0],in[0][1],1,1)});
     if(ctx_.is_cpu_context())
         return;
-    setup_kernel(in[0][2] * in[0][3]);
+    ws=setup_kernel(in[0]);
 }
 
 void GlobalPooling::forward_cpu(Tensor &input,Tensor &output)
@@ -529,41 +476,13 @@ void GlobalPooling::backward_cpu(Tensor &xt,Tensor &dxt,Tensor &dyt,float scale)
 }
 void GlobalPooling::backward_gpu(Tensor &x,Tensor &dx,Tensor &dy,float factor,ExecutionContext const &ctx)
 {
-    Shape in_shape = dx.shape();
-    int over = in_shape[2] * in_shape[3];
-    DLPRIM_CHECK(over == sm_range_);
-    int p=0;
-    kernel_bwd_.setArg(p++,int(in_shape[0]*in_shape[1]));
-    kernel_bwd_.setArg(p++,sm_range_);
-    kernel_bwd_.setArg(p++,float(1.0f / (in_shape[2]*in_shape[3])));
-    if(cfg_.mode == PoolingBase::max) {
-        x.set_arg(kernel_bwd_,p);
-    }
-    dx.set_arg(kernel_bwd_,p);
-    dy.set_arg(kernel_bwd_,p);
-    kernel_bwd_.setArg(p++,factor);
-    
-    cl::NDRange gr(in_shape[0]*in_shape[1],nd_range_);
-    cl::NDRange wg(1,wg_size_);
-    ctx.queue().enqueueNDRangeKernel(kernel_bwd_,cl::NullRange,gr,wg,ctx.events(),ctx.event("global_pooling_bwd"));
+    bwd_->enqueue(x,dx,dy,factor,ctx);
 }
 
 
 void GlobalPooling::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const &ctx)
 {
-    Shape in_shape = input.shape();
-    int over = in_shape[2] * in_shape[3];
-    DLPRIM_CHECK(over == sm_range_);
-    int p=0;
-    kernel_.setArg(p++,int(in_shape[0]*in_shape[1]));
-    kernel_.setArg(p++,sm_range_);
-    kernel_.setArg(p++,float(1.0f / (in_shape[2]*in_shape[3])));
-    input.set_arg(kernel_,p);
-    output.set_arg(kernel_,p);
-    
-    cl::NDRange gr(in_shape[0]*in_shape[1],nd_range_);
-    cl::NDRange wg(1,wg_size_);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("global_pooling"));
+    fwd_->enqueue(input,output,ctx);
 }
 
 
