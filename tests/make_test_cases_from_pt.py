@@ -376,19 +376,22 @@ def make_global_pooling():
 
 def make_batchnorm():
     report = {
-        "operator" : "BatchNorm2D",
+        "operator" : "BatchNorm",
         "tests" : []
     }
     tests = report["tests"]
-    for features,affine,extra,cpu_as_ref in \
-                  [ (5,True,{},False),
-                    (5,False,{},False),
-                    (7,True,{},False),
-                    (7,False,{},False),
-                    (30,True,dict(momentum=0.7,eps=0.01),False),
-                    (300,True,{},True),
+    for features,dims,affine,extra,cpu_as_ref in \
+                  [ (5,4,True,{},False),
+                    (5,4,False,{},False),
+                    (7,4,True,{},False),
+                    (6,3,True,{"eps":1e-2},False),
+                    (7,2,True,{"eps":1e-2},False),
+                    (6,4,False,{},False),
+                    (30,4,True,dict(momentum=0.7,eps=0.01),False),
+                    (300,4,True,{},True),
                     ]:
-        op = torch.nn.BatchNorm2d(features,eps=extra.get("eps",1e-5),momentum=extra.get('momentum',0.1),affine=affine)
+        bn = {4:torch.nn.BatchNorm2d,3:torch.nn.BatchNorm1d,2:torch.nn.BatchNorm1d}
+        op = (bn[dims])(features,eps=extra.get("eps",1e-5),momentum=extra.get('momentum',0.1),affine=affine)
         params = [op.running_mean,op.running_var] + list(op.parameters())
         if affine:
             with torch.no_grad():
@@ -432,7 +435,8 @@ def make_batchnorm():
                   (True,(32,features,64,64)),
                   (False,(32,features,64,64)),
                   (True,(32,features,64,64))]
-        for train,s in (set_b if cpu_as_ref else set_a):
+        for train,sin in (set_b if cpu_as_ref else set_a):
+            s=sin[0:dims]
             if train:
                 op.train()
             else:

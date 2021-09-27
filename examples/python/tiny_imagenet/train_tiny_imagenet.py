@@ -112,7 +112,7 @@ def add_conv_bn_relu(n,name,inp,kern,stride,features,relu):
                                                             pad=(kern - 1) // 2,
                                                             stride=stride,
                                                             bias=False))
-    n.add('BatchNorm2D',name=name+'_bn',outputs=name+'_bn')
+    n.add('BatchNorm',name=name+'_bn',outputs=name+'_bn')
     if relu:
         n.add('Activation',inputs=name+'_bn',outputs=name+'_bn',options=dict(activation='relu'))
     return name+'_bn'
@@ -133,7 +133,7 @@ def make_net(batch,deploy,img_size,classes):
     n = dp.NetConfig()
     n.add_input('data',(batch,*img_size))
     n.add('Convolution2D',name='conv0',inputs='data',options=dict(channels_out=64,kernel=5,pad=2,bias=False))
-    n.add('BatchNorm2D',name='bn0',outputs='bn0')
+    n.add('BatchNorm',name='bn0',outputs='bn0')
     n.add('Activation',name='act0',outputs='bn0',options=dict(activation='relu'))
     n.add('Pooling2D',name='pool0',outputs='pool0', options=dict(kernel=3,stride=2,pad=1))
     out  = 'pool0'

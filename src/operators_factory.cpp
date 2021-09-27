@@ -62,9 +62,9 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
-        "BatchNorm2D", 
+        "BatchNorm", 
         [](Context &ctx,json::value const &p) {
-            return new BatchNorm2D(ctx,BatchNorm2DConfig::from_json(p));
+            return new BatchNorm(ctx,BatchNormConfig::from_json(p));
         }
     },
     {

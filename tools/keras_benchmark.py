@@ -89,7 +89,7 @@ def make_model_from_dp(js):
                 blobs[out[0]] = l(prep(blobs[inp[0]]))
             else:
                 blobs[out[0]] = l(blobs[inp[0]])
-        elif tp == 'BatchNorm2D':
+        elif tp == 'BatchNorm':
             affine = op.get('affine',True)
             eps = op.get('eps',1e-5)
             momentum = op.get('momentum',0.1)

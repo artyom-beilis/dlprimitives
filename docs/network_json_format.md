@@ -146,7 +146,7 @@ Parameters:
 Note: kernel, stride, dilate, pad and output\_pad can be either single number for symmetric values or pair of integers, 1st for height dimension and second for width
 
 
-### BatchNorm2D
+### BatchNorm
 
 Parameters
 

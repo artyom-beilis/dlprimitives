@@ -8,16 +8,16 @@
 #include <iostream>
 
 namespace dlprim {
-        BatchNorm2D::BatchNorm2D(Context &ctx,BatchNorm2DConfig const &config,DataType dt) :
+        BatchNorm::BatchNorm(Context &ctx,BatchNormConfig const &config,DataType dt) :
             Operator(ctx),
             config_(config),
             dtype_(dt)
         {
         }
 
-        BatchNorm2DConfig BatchNorm2DConfig::from_json(json::value const &v) 
+        BatchNormConfig BatchNormConfig::from_json(json::value const &v) 
         {
-            BatchNorm2DConfig cfg;
+            BatchNormConfig cfg;
             cfg.features = v.get<int>("features",cfg.features);
             cfg.eps = v.get<float>("eps",cfg.eps);
             cfg.momentum = v.get<float>("momentum",cfg.momentum);
@@ -26,14 +26,14 @@ namespace dlprim {
             return cfg;
         }
 
-        BatchNorm2D::~BatchNorm2D() {}
-        void BatchNorm2D::setup(std::vector<TensorSpecs> const &in,
+        BatchNorm::~BatchNorm() {}
+        void BatchNorm::setup(std::vector<TensorSpecs> const &in,
                                 std::vector<TensorSpecs> &out,
                                 std::vector<TensorSpecs> &parameters,
                                 size_t &workspace)
         {
             DLPRIM_CHECK(in.size()==1);
-            DLPRIM_CHECK(in[0].shape().size() == 4);
+            DLPRIM_CHECK(in[0].shape().size() >= 2);
             if(config_.features == -1) {
                 config_.features = in[0].shape()[1];
             }
@@ -59,17 +59,17 @@ namespace dlprim {
                 combined_bias_ = Tensor(ctx_,std_shape,dtype_);
             }
             else {
-                bn_gpu_ = std::move(core::BatchNorm2DFwdBwd::create(ctx_,in[0].shape(),dtype_));
+                bn_gpu_ = std::move(core::BatchNormFwdBwd::create(ctx_,in[0].shape(),dtype_));
                 workspace = bn_gpu_->workspace();
             }
             setup_shape_ = in[0].shape();
         }
-        void BatchNorm2D::mode(CalculationsMode m)
+        void BatchNorm::mode(CalculationsMode m)
         {
             Operator::mode(m);
         }
         
-        void BatchNorm2D::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
+        void BatchNorm::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
         {
             set_to_zero(ctx_,e,parameters.at(0));
             set_to_constant(ctx_,e,parameters.at(1),1.0);
@@ -79,15 +79,15 @@ namespace dlprim {
             }
         }
         
-        void BatchNorm2D::reshape(std::vector<Shape> const &in,
+        void BatchNorm::reshape(std::vector<Shape> const &in,
                              std::vector<Shape> &out,size_t &ws)
         {
             out = in;
-            if(in[0][0] > setup_shape_[0] || in[0][2] != setup_shape_[2] || in[0][3]!=setup_shape_[3]) {
+            if(in[0][0] > setup_shape_[0] || in[0].size_no_batch()!=setup_shape_.size_no_batch()) {
                 setup_shape_ = in[0];
                 if(ctx_.is_opencl_context()) {
                     bn_gpu_.reset();
-                    bn_gpu_ = std::move(core::BatchNorm2DFwdBwd::create(ctx_,in[0],dtype_));
+                    bn_gpu_ = std::move(core::BatchNormFwdBwd::create(ctx_,in[0],dtype_));
                 }
             }
             if(bn_gpu_) {
@@ -99,7 +99,7 @@ namespace dlprim {
         }
 		
         
-        void BatchNorm2D::forward(std::vector<Tensor> &input,
+        void BatchNorm::forward(std::vector<Tensor> &input,
                                   std::vector<Tensor> &output,
                                   std::vector<Tensor> &parameters,
                                   Tensor &ws,
@@ -151,7 +151,7 @@ namespace dlprim {
             }
         }
 
-        void BatchNorm2D::forward_cpu(std::vector<Tensor> &input,
+        void BatchNorm::forward_cpu(std::vector<Tensor> &input,
                                   std::vector<Tensor> &output,
                                   std::vector<Tensor> &parameters,
                                   Tensor &workspace)
@@ -174,14 +174,22 @@ namespace dlprim {
             cpu_forward_data(input[0],output[0],combined_scale_,combined_bias_);
         }
 
-        void BatchNorm2D::cpu_forward_data(Tensor &x,Tensor &y,Tensor &scale,Tensor &offset)
+        int BatchNorm::plane_size(Shape const &s)
+        {
+            size_t n=1;
+            for(int i=2;i<s.size();i++)
+                n*=s[i];
+            return n;
+        }
+
+        void BatchNorm::cpu_forward_data(Tensor &x,Tensor &y,Tensor &scale,Tensor &offset)
         {
             float *xp = x.data<float>();
             float *yp = y.data<float>();
             float *a  = scale.data<float>();
             float *b  = offset.data<float>();
             int batches=x.shape()[0];
-            int rc = x.shape()[2]*x.shape()[3];
+            int rc = plane_size(x.shape());
             for(int bt=0;bt<batches;bt++) {
                 for(int f=0;f<config_.features;f++) {
                     float A=a[f];
@@ -192,7 +200,7 @@ namespace dlprim {
             }
         }
 
-        void BatchNorm2D::compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt)
+        void BatchNorm::compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt)
         {
             float *scale = combined_scale_.data<float>();
             float *bias  = combined_bias_.data<float>();
@@ -212,7 +220,7 @@ namespace dlprim {
             }
         }
 
-        void BatchNorm2D::update_sums(int M,Tensor &cm,Tensor &cv,Tensor &sm,Tensor &sv)
+        void BatchNorm::update_sums(int M,Tensor &cm,Tensor &cv,Tensor &sm,Tensor &sv)
         {
             cblas_sscal(config_.features,(1.0f - config_.momentum),sm.data<float>(),1);
             cblas_saxpy(config_.features,config_.momentum,cm.data<float>(),1,sm.data<float>(),1);
@@ -221,12 +229,12 @@ namespace dlprim {
             cblas_saxpy(config_.features,variance_factor,cv.data<float>(),1,sv.data<float>(),1);
         }
 
-        void BatchNorm2D::get_batch_stats(Tensor &x,Tensor &mean,Tensor &var)
+        void BatchNorm::get_batch_stats(Tensor &x,Tensor &mean,Tensor &var)
         {
             float *m = mean.data<float>();
             float *v = var.data<float>();
             float *img = x.data<float>();
-            size_t rc_size = x.shape()[2]*x.shape()[3];
+            size_t rc_size = plane_size(x.shape());
             int M = x.shape()[0]*rc_size;
             float factor = 1.0f / M;
             for(int f=0;f<config_.features;f++) {
@@ -248,10 +256,10 @@ namespace dlprim {
             }
         }
 
-        void BatchNorm2D::cpu_backward_data(Tensor &x,Tensor &dx,Tensor &dy,float *mean,float *var,float *dy_sum,float *dyx_sum,float *gamma_in)
+        void BatchNorm::cpu_backward_data(Tensor &x,Tensor &dx,Tensor &dy,float *mean,float *var,float *dy_sum,float *dyx_sum,float *gamma_in)
         {
             int M = x.shape().total_size() / config_.features;
-            int RC =x.shape()[2]*x.shape()[3];
+            int RC =plane_size(x.shape());
             float one_by_M = 1.0f / M;
             for(int i=0;i<config_.features;i++) {
                 float sqrtsig = std::sqrt(var[i] + config_.eps);
@@ -277,7 +285,7 @@ namespace dlprim {
         }
 
         template<bool CalcDX>
-        void BatchNorm2D::cpu_backward(Tensor &xt,Tensor *dxt,Tensor &dyt,Tensor &scale,Tensor &dscale,Tensor &dbias,float dx_factor)
+        void BatchNorm::cpu_backward(Tensor &xt,Tensor *dxt,Tensor &dyt,Tensor &scale,Tensor &dscale,Tensor &dbias,float dx_factor)
         {
             float *da = dscale.data<float>();
             float *db = dbias.data<float>();
@@ -291,7 +299,7 @@ namespace dlprim {
             }
             float *dy = dyt.data<float>();
             int batch = xt.shape()[0];
-            int rc = xt.shape()[2]*xt.shape()[3];
+            int rc = plane_size(xt.shape());
             memset(da,0,config_.features*sizeof(float));
             memset(db,0,config_.features*sizeof(float));
             for(int b=0;b<batch;b++) {
@@ -314,7 +322,7 @@ namespace dlprim {
             }
         }
 
-        void BatchNorm2D::backward( std::vector<TensorAndGradient> &input,
+        void BatchNorm::backward( std::vector<TensorAndGradient> &input,
                                     std::vector<TensorAndGradient> &output,
                                     std::vector<TensorAndGradient> &parameters,
                                     Tensor &ws,
@@ -356,7 +364,7 @@ namespace dlprim {
                 }
             }
         }
-        void BatchNorm2D::backward_cpu(
+        void BatchNorm::backward_cpu(
                                     std::vector<TensorAndGradient> &input,
                                     std::vector<TensorAndGradient> &output,
                                     std::vector<TensorAndGradient> &parameters,

@@ -96,7 +96,7 @@
         },
         {
             "name": "bn2a",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "cnv2a"
             ],

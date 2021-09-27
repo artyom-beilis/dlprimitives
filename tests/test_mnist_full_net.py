@@ -55,7 +55,7 @@ class Net2(nn.Module):
                      outputs=["cnv2a"],
                      options = dict(channels_out=8,kernel = 1,pad = 0,bias=False)),
                 dict(name="bn2a",
-                     type="BatchNorm2D",
+                     type="BatchNorm",
                      inputs=["cnv2a"],
                      outputs=["bn2a"],
                      options=dict(features=8)),

@@ -51,7 +51,7 @@
         },
         {
             "name": "BatchNormalization_1",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "123"
             ],
@@ -145,7 +145,7 @@
         },
         {
             "name": "BatchNormalization_5",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "131"
             ],
@@ -213,7 +213,7 @@
         },
         {
             "name": "BatchNormalization_8",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "138"
             ],
@@ -283,7 +283,7 @@
         },
         {
             "name": "BatchNormalization_12",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "146"
             ],
@@ -351,7 +351,7 @@
         },
         {
             "name": "BatchNormalization_15",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "153"
             ],
@@ -421,7 +421,7 @@
         },
         {
             "name": "BatchNormalization_19",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "161"
             ],
@@ -489,7 +489,7 @@
         },
         {
             "name": "BatchNormalization_22",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "168"
             ],
@@ -544,7 +544,7 @@
         },
         {
             "name": "BatchNormalization_24",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "174"
             ],
@@ -614,7 +614,7 @@
         },
         {
             "name": "BatchNormalization_28",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "182"
             ],
@@ -682,7 +682,7 @@
         },
         {
             "name": "BatchNormalization_31",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "189"
             ],
@@ -752,7 +752,7 @@
         },
         {
             "name": "BatchNormalization_35",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "197"
             ],
@@ -820,7 +820,7 @@
         },
         {
             "name": "BatchNormalization_38",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "204"
             ],
@@ -875,7 +875,7 @@
         },
         {
             "name": "BatchNormalization_40",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "210"
             ],
@@ -945,7 +945,7 @@
         },
         {
             "name": "BatchNormalization_44",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "218"
             ],
@@ -1013,7 +1013,7 @@
         },
         {
             "name": "BatchNormalization_47",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "225"
             ],
@@ -1083,7 +1083,7 @@
         },
         {
             "name": "BatchNormalization_51",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "233"
             ],
@@ -1151,7 +1151,7 @@
         },
         {
             "name": "BatchNormalization_54",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "240"
             ],
@@ -1206,7 +1206,7 @@
         },
         {
             "name": "BatchNormalization_56",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "246"
             ],
@@ -1276,7 +1276,7 @@
         },
         {
             "name": "BatchNormalization_60",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "254"
             ],
@@ -1344,7 +1344,7 @@
         },
         {
             "name": "BatchNormalization_63",
-            "type": "BatchNorm2D",
+            "type": "BatchNorm",
             "inputs": [
                 "261"
             ],

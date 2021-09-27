@@ -124,6 +124,7 @@ void compare_tensors(std::vector<dp::Tensor> &actual,std::vector<dp::Tensor> &re
             sum2 /= total;
             float variance = sum2 - sum*sum;
             float dev = std::sqrt(variance);
+            //float dev = std::sqrt(sum2);
             if(dev > 1) {
                 eps *= dev;
             }

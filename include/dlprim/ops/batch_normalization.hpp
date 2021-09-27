@@ -2,27 +2,27 @@
 #include <dlprim/operator.hpp>
 namespace dlprim {	
     namespace json { class value; }
-    namespace core { class BatchNorm2DFwdBwd; }
+    namespace core { class BatchNormFwdBwd; }
 
-    struct BatchNorm2DConfig {
+    struct BatchNormConfig {
         int features = -1;
         float eps = 1e-5f;
         float momentum = 0.1;
         bool affine = true;
         bool use_global_stats = false;
-        static BatchNorm2DConfig from_json(json::value const &v);
+        static BatchNormConfig from_json(json::value const &v);
     };
 
 
-    class BatchNorm2D : public Operator {
+    class BatchNorm : public Operator {
     public:
         
-        BatchNorm2D(Context &ctx,BatchNorm2DConfig const &config = BatchNorm2DConfig(),DataType dtype=float_data);
-        virtual ~BatchNorm2D();
+        BatchNorm(Context &ctx,BatchNormConfig const &config = BatchNormConfig(),DataType dtype=float_data);
+        virtual ~BatchNorm();
         
         virtual char const *operator_type() const
         {
-            return "BatchNorm2D";
+            return "BatchNorm";
         }
         
         virtual void initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e);
@@ -67,13 +67,14 @@ namespace dlprim {
         void compute_conv_parameters(Tensor &mean,Tensor &var,Tensor *at,Tensor *bt);
         template<bool CalcDX>
         void cpu_backward(Tensor &xt,Tensor *dxt,Tensor &dyt,Tensor &scale,Tensor &dscale,Tensor &dbias,float dx_factor);
+        static int plane_size(Shape const &s);
         
         Tensor current_mean_,current_var_;
         Tensor combined_scale_,combined_bias_;
-        BatchNorm2DConfig config_;
+        BatchNormConfig config_;
         DataType dtype_;
         Shape setup_shape_;
 
-        std::unique_ptr<core::BatchNorm2DFwdBwd> bn_gpu_;
+        std::unique_ptr<core::BatchNormFwdBwd> bn_gpu_;
     };
 } // 

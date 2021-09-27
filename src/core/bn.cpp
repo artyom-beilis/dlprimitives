@@ -3,17 +3,17 @@
 
 namespace dlprim {
 namespace core {
-    class BatchNorm2DImpl : public BatchNorm2DFwdBwd {
+    class BatchNormImpl : public BatchNormFwdBwd {
     public:
-        virtual ~BatchNorm2DImpl() {}
+        virtual ~BatchNormImpl() {}
 
-        BatchNorm2DImpl(Context &ctx,Shape const &s,DataType dtype)
+        BatchNormImpl(Context &ctx,Shape const &s,DataType dtype)
         {
             dt_ = dtype;
             DLPRIM_CHECK(dtype == float_data);
-            DLPRIM_CHECK(s.size() == 4);
-            int total = s[0] * s[2] * s[3];
+            DLPRIM_CHECK(s.size() >= 2);
             features_ = s[1];
+            int total = s.total_size() / features_;
             int second_size = (total + 255) / 256;
             ws_ = features_ * size_of_data_type(dtype) * 5; // two sums + fdy+ fdx+ off
             if(second_size < 64) {
@@ -70,6 +70,15 @@ namespace core {
             var_gamma_to_a_ = cl::Kernel(utils,"var_gamma_to_a");
             backward_test_ = cl::Kernel(utils,"backward_test");
         }
+
+        size_t get_plane_size(Shape const &s)
+        {
+            size_t n=1;
+            for(int i=2;i<s.size();i++)
+                n*=s[i];
+            return n;
+        }
+
         ///
         /// Workspace size needed for intermediate results of computations
         ///
@@ -84,7 +93,7 @@ namespace core {
             int batch = x.shape()[0];
             int channels = x.shape()[1];
             DLPRIM_CHECK(channels==features_);
-            int hw = x.shape()[2] * x.shape()[3];
+            int hw = get_plane_size(x.shape());
             int p = 0;
             sums_.setArg(p++,batch);
             sums_.setArg(p++,channels);
@@ -164,10 +173,10 @@ namespace core {
         {
             int p = 0;
             int batches = x.shape()[0];
-            int rc = x.shape()[2]*x.shape()[3];
+            int rc = get_plane_size(x.shape());
             forward_.setArg(p++,int(x.shape()[0]));
             forward_.setArg(p++,features_);
-            forward_.setArg(p++,int(x.shape()[2]*x.shape()[3]));
+            forward_.setArg(p++,int(rc));
 
             x.set_arg(forward_,p);
             y.set_arg(forward_,p);
@@ -299,7 +308,7 @@ namespace core {
             int batch = x.shape()[0];
             int channels = x.shape()[1];
             DLPRIM_CHECK(channels==features_);
-            int hw = x.shape()[2] * x.shape()[3];
+            int hw = get_plane_size(x.shape());
             int p = 0;
             dyx_sums_.setArg(p++,batch);
             dyx_sums_.setArg(p++,channels);
@@ -352,7 +361,7 @@ namespace core {
 
             Tensor  dy_factor = ws.sub_tensor_target_offset(0*features_,Shape(features_),dt_);
             int batches = dx.shape()[0];
-            int hw = dx.shape()[2]*dx.shape()[3];
+            int hw = get_plane_size(dx.shape());
             int p=0;
             var_gamma_to_a_.setArg(p++,features_);
             var_gamma_to_a_.setArg(p++,eps);
@@ -386,7 +395,7 @@ namespace core {
             Tensor dy_factor = ws.sub_tensor_target_offset(1*features_,Shape(features_),dt_);
             Tensor  b_offset = ws.sub_tensor_target_offset(2*features_,Shape(features_),dt_);
             int batches = dx.shape()[0];
-            int hw = dx.shape()[2]*dx.shape()[3];
+            int hw = get_plane_size(dx.shape());
             int total = batches*hw;
             int p=0;
             compute_backward_factors_.setArg(p++,features_);
@@ -485,9 +494,9 @@ namespace core {
         Tensor null_;
     };
 
-    std::unique_ptr<BatchNorm2DFwdBwd> BatchNorm2DFwdBwd::create(Context &ctx,Shape const &s,DataType dt)
+    std::unique_ptr<BatchNormFwdBwd> BatchNormFwdBwd::create(Context &ctx,Shape const &s,DataType dt)
     {
-        std::unique_ptr<BatchNorm2DFwdBwd> r(new BatchNorm2DImpl(ctx,s,dt));
+        std::unique_ptr<BatchNormFwdBwd> r(new BatchNormImpl(ctx,s,dt));
         return r;
     }
 

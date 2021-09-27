@@ -4,7 +4,7 @@
 namespace dlprim {
 namespace core {
     ///
-    /// Performs batch normalization computations
+    /// Performs batch normalization computations over channel #1 (when #0 is batch)
     ///
     /// Pseudo code parameters:
     ///
@@ -62,9 +62,9 @@ namespace core {
     ////
 
 
-    class BatchNorm2DFwdBwd {
+    class BatchNormFwdBwd {
     public:
-        virtual ~BatchNorm2DFwdBwd() {}
+        virtual ~BatchNormFwdBwd() {}
         
         ///
         /// Workspace size needed for intermediate results of computations
@@ -154,7 +154,7 @@ namespace core {
                                              float eps,
                                              Tensor &ws,ExecutionContext const &e) = 0;
 
-        static std::unique_ptr<BatchNorm2DFwdBwd> create(Context &ctx,Shape const &s,DataType dt=float_data);
+        static std::unique_ptr<BatchNormFwdBwd> create(Context &ctx,Shape const &s,DataType dt=float_data);
         
     };
 

@@ -120,7 +120,7 @@ def get_operators(model,inputs,params):
             eps = attrs["epsilon"]
             momentum = 1.0 - attrs['momentum']
             op = dict(name = n.name,
-                      type = 'BatchNorm2D',
+                      type = 'BatchNorm',
                       inputs = [n.input[0]],
                       outputs = [n.output[0]],
                       params = list(n.input[3:5] + n.input[1:3]),
