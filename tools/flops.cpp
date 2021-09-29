@@ -39,7 +39,11 @@ public:
         ref_.bps = stats.bps;
         ec_ = ctx_.make_execution_context();
         report_ = fopen("report.csv","w");
+		#ifndef DLPRIM_WINDOWS
         setvbuf(report_,nullptr,_IOLBF,0);
+		#else
+        setvbuf(report_,nullptr,_IONBF,0);
+		#endif
         fprintf(report_,"Float GFlops,Half GFlops,GB/s,Device\n%1.1f,%1.1f,%1.2f,%s\n",
                 stats.flops32*1e-9,stats.flops16*1e-9,stats.bps*1e-9,ctx_.name().c_str());
     }
@@ -649,7 +653,7 @@ FlopsStats get_flops(std::string device, double scale)
     auto q = ctx.make_queue();
     std::cout << "Testing on " << ctx.name() << std::endl;
     dp::Tensor t(ctx,dp::Shape(N));
-    long int mem_size = int(1024*scale)*1024l*256;
+    long long int mem_size = int(1024*scale)*1024ll*256;
     dp::Tensor halfG(ctx,dp::Shape(mem_size/4));
     int float16 = ctx.check_device_extension("cl_khr_fp16");
     std::vector<float> peaks(1+float16);
@@ -756,7 +760,7 @@ int main(int argc,char **argv)
         scale = atof(argv[2]);
     }
     FlopsStats fs = get_flops(argv[1],scale);
-#if CUDA_TEST    
+#ifdef CUDA_TEST    
     {
         int cuda_dev = -1;
         std::string ocl_dev(argv[1]);
