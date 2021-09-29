@@ -61,4 +61,7 @@ Running benchmakrs on opencl platform:device 0:0
     ./dlprim_benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
 
 
+## Windows Notes
 
+- MinGW compiler has troubles with cl2.hpp, so it is recommended to set an option `-DUSE_CL_HPP=ON`
+- Under windows the library is build as static library
