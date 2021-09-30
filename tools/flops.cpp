@@ -205,7 +205,7 @@ public:
         
         rand(A,std::sqrt(1.0/k));
         rand(B,std::sqrt(1.0/k));
-        dp::core::fill_tensor(ctx_,ec_,C,0);
+        dp::core::fill_tensor(C,0,ec_);
 
 
         time_point_type start,end;
@@ -235,7 +235,7 @@ public:
     }
     void rand(dp::Tensor &t,float sigma)
     {
-        dp::core::fill_random(ctx_,ec_,t,seed_,seq_,dp::core::rnd_normal,0,sigma);
+        dp::core::fill_random(t,seed_,seq_,dp::core::rnd_normal,0,sigma,ec_);
         seq_ += (t.shape().total_size() + 3)/4;
     }
 #endif

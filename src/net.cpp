@@ -181,7 +181,7 @@ namespace dlprim {
             // set loss diff
             for(auto const &name : output_names()) {
                 if(is_loss(name))
-                    set_to_constant(ctx_,e,tensor_diff(name),loss_weights_[name]);
+                    set_to_constant(tensor_diff(name),loss_weights_[name],e);
             }
         }
     }

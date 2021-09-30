@@ -59,9 +59,9 @@ namespace dlprim {
     {
         float k = float(config_.groups) / (config_.channels_in * config_.kernel[0] * config_.kernel[1]);
         float range = std::sqrt(k);
-        set_to_urandom(ctx_,e,parameters.at(0),shared_resource().rng_state(),-range,range);
+        set_to_urandom(parameters.at(0),shared_resource().rng_state(),-range,range,e);
         if(config_.bias)
-            set_to_urandom(ctx_,e,parameters.at(1),shared_resource().rng_state(),-range,range);
+            set_to_urandom(parameters.at(1),shared_resource().rng_state(),-range,range,e);
     }
 
     Convolution2D::Convolution2D(Context &ctx,Convolution2DConfig const &cfg) :
@@ -583,9 +583,9 @@ namespace dlprim {
     {
         float k = float(config_.groups) / (config_.channels_out * config_.kernel[0] * config_.kernel[1]);
         float range = std::sqrt(k);
-        set_to_urandom(ctx_,e,parameters.at(0),shared_resource().rng_state(),-range,range);
+        set_to_urandom(parameters.at(0),shared_resource().rng_state(),-range,range,e);
         if(config_.bias)
-            set_to_urandom(ctx_,e,parameters.at(1),shared_resource().rng_state(),-range,range);
+            set_to_urandom(parameters.at(1),shared_resource().rng_state(),-range,range,e);
     }
 
     TransposedConvolution2D::TransposedConvolution2D(Context &ctx,TransposedConvolution2DConfig const &cfg) :

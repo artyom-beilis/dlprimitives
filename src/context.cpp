@@ -5,6 +5,28 @@
 
 namespace dlprim {
     
+    Context::Context(ExecutionContext const &ec)
+    {
+        if(!ec.queue_) {
+            type_ = cpu;
+            return;
+        }
+        cl::Context ctx = ec.queue_->getInfo<CL_QUEUE_CONTEXT>();
+        cl::Device  dev = ec.queue_->getInfo<CL_QUEUE_DEVICE>();
+        cl::Platform plat(dev.getInfo<CL_DEVICE_PLATFORM>(),true);
+
+        platform_ = plat;
+        device_ = dev;
+        context_ = ctx;
+    }
+
+    Context::Context(cl::Context const &c,cl::Platform const &p,cl::Device const &d) : 
+        platform_(p),
+        device_(d),
+        context_(c),
+        type_(Context::ocl)
+    {
+    }
     
     Context::Context(std::string const &dev_id)
     {
@@ -114,13 +136,6 @@ namespace dlprim {
         }
         device_ = devices[d];
         context_ = cl::Context(device_);
-    }
-    Context::Context(cl::Context const &c,cl::Platform const &p,cl::Device const &d) : 
-        platform_(p),
-        device_(d),
-        context_(c),
-        type_(Context::ocl)
-    {
     }
 }
 

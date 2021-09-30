@@ -36,19 +36,19 @@ int main(int argc,char **argv)
         dp::Tensor t(ctx,dp::Shape(10000));
         dp::RandomState st(0xDEADBEEF);
         std::cout << "Testing zero" << std::endl;
-        dp::set_to_zero(ctx,e,t);
+        dp::set_to_zero(t,e);
         t.to_host(e);
         test_values(t,0,0.0,0,0);
         std::cout << "Testing constant" << std::endl;
-        dp::set_to_constant(ctx,e,t,1.5);
+        dp::set_to_constant(t,1.5,e);
         t.to_host(e);
         test_values(t,1.5,0.0,1.5,1.5);
         std::cout << "Testing uniform" << std::endl;
-        dp::set_to_urandom(ctx,e,t,st,0.5,2.5);
+        dp::set_to_urandom(t,st,0.5,2.5,e);
         t.to_host(e);
         test_values(t,1.5,0.5773502691896257,0.5,2.5);
         std::cout << "Testing normal" << std::endl;
-        dp::set_to_normal(ctx,e,t,st,-1.5,0.5);
+        dp::set_to_normal(t,st,-1.5,0.5,e);
         t.to_host(e);
         test_values(t,-1.5,0.5,-std::numeric_limits<float>::max(),std::numeric_limits<float>::max());
     }

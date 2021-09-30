@@ -1,5 +1,8 @@
 #include <dlprim/core/common.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+
+#include <iostream>
+
 namespace dlprim {
 namespace core {
     Scale::Scale(Context &ctx,DataType dt)
@@ -24,12 +27,20 @@ namespace core {
         cl::NDRange g=gpu::round_range(size,l);
         ec.queue().enqueueNDRangeKernel(k_,cl::NullRange,g,l,ec.events(),ec.event("sscal"));
     }
+    
+    void scale_tensor(float s,Tensor &t,ExecutionContext const &ec)
+    {
+        Context ctx(ec);
+        Scale sc(ctx,t.dtype());
+        sc.enqueue(s,t,ec);
+    }
 
     ///
     /// Set to zero tensor - OpenCL only
     ///
-    void fill_tensor(Context &ctx,ExecutionContext const &e,Tensor &t,double value)
+    void fill_tensor(Tensor &t,double value,ExecutionContext const &e)
     {
+        Context ctx(e);
         DLPRIM_CHECK(t.dtype() == float_data);
         cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"fill");
         cl::Kernel k(prog,"fill");
@@ -42,8 +53,9 @@ namespace core {
     }
 
 
-    void fill_random(Context &ctx,ExecutionContext const &e,Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2)
+    void fill_random(Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2,ExecutionContext const &e)
     {
+        Context ctx(e);
         DLPRIM_CHECK(t.dtype() == float_data);
         cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"random",
                                         "IS_UNIFORM",int(dist==rnd_uniform),

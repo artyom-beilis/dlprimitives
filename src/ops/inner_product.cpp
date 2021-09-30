@@ -30,9 +30,9 @@ namespace dlprim {
     void InnerProduct::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
     {
         float range = 1.0f / std::sqrt(1.0f * config_.inputs);
-        set_to_urandom(ctx_,e,parameters.at(0),shared_resource().rng_state(),-range,range);
+        set_to_urandom(parameters.at(0),shared_resource().rng_state(),-range,range,e);
         if(config_.bias)
-            set_to_urandom(ctx_,e,parameters.at(1),shared_resource().rng_state(),-range,range);
+            set_to_urandom(parameters.at(1),shared_resource().rng_state(),-range,range,e);
     }
     
     InnerProduct::InnerProduct(Context &ctx,InnerProductConfig const &cfg) :

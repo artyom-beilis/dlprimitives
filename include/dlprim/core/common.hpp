@@ -17,9 +17,15 @@ namespace core {
     };
 
     ///
+    /// Scale tensor by factor inplace, if s==0 fills with zero
+    /// so nan is not propagated of s==0
+    ///
+    void scale_tensor(float s,Tensor &t,ExecutionContext const &ec);
+
+    ///
     /// Set to zero tensor - OpenCL only
     ///
-    void fill_tensor(Context &ctx,ExecutionContext const &e,Tensor &t,double value);
+    void fill_tensor(Tensor &t,double value,ExecutionContext const &e);
 
     ///
     /// Type of random distribution
@@ -40,7 +46,7 @@ namespace core {
     /// \param p1 - min value for uniform and mu for normal
     /// \param p2 - max value for uniform and sigma for normal
     ///
-    void fill_random(Context &ctx,ExecutionContext const &e,Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2);
+    void fill_random(Tensor &t,cl_ulong philox_seed,cl_ulong philox_seq,RandomDistribution dist,float p1,float p2,ExecutionContext const &e);
 
    
     

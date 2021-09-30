@@ -86,6 +86,9 @@ private:
     std::vector<std::shared_ptr<Data> > events_;
 };
 
+
+class Context;
+
 ///
 /// This class is used to pass cl::Events that the kernel should wait for and/or signal event completion
 ///
@@ -151,6 +154,11 @@ public:
     {
     }
 
+    bool is_cpu_context() const
+    {
+        return queue_ == nullptr;
+    }
+
     ExecutionContext(ExecutionContext const &) = default;
     ExecutionContext &operator=(ExecutionContext const &) = default;
 
@@ -203,6 +211,7 @@ public:
         if(queue_)
             queue_->finish();
     }
+
     
     ///
     /// Get the command queue. Never call it in non-OpenCL context
@@ -279,6 +288,7 @@ private:
     std::shared_ptr<cl::CommandQueue> queue_; /// make sure copying is fast
     cl::Event *event_;
     std::vector<cl::Event> *events_;
+    friend class Context;
 };
 
 
@@ -313,6 +323,11 @@ public:
     /// Create the object from OpenCL context, platform and device..
     ///
     Context(cl::Context const &c,cl::Platform const &p,cl::Device const &d);
+
+    /// 
+    /// Create the object from queue
+    ///
+    Context(ExecutionContext const &ec);
 
     Context(Context const &) = default;
     Context &operator=(Context const &) = default;
@@ -388,8 +403,10 @@ public:
     /// Generate ExecutionContext (queue + events)
     ExecutionContext make_execution_context()
     {
-        ExecutionContext e(make_queue());
-        return e;
+        if(is_cpu_context())
+            return ExecutionContext();
+        else
+            return ExecutionContext(make_queue());
     }
 
 private:

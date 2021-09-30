@@ -6,13 +6,13 @@
 
 namespace dlprim {
 
-void set_to_zero(Context &ctx,ExecutionContext const &e,Tensor &t)
+void set_to_zero(Tensor &t,ExecutionContext const &e)
 {
-    if(ctx.is_cpu_context()) {
+    if(e.is_cpu_context()) {
         memset(t.host_data(),0,t.memory_size());
     }
     else {
-       core::fill_tensor(ctx,e,t,0);
+       core::fill_tensor(t,0,e);
     }
 }
 
@@ -27,9 +27,9 @@ namespace {
     }
 }
 
-void set_to_constant(Context &ctx,ExecutionContext const &e,Tensor &t,double value)
+void set_to_constant(Tensor &t,double value,ExecutionContext const &e)
 {
-    if(ctx.is_cpu_context()) {
+    if(e.is_cpu_context()) {
         switch(t.dtype()) {
         case float_data: fill_value<float>(t,static_cast<float>(value)); break;
         case int32_data: fill_value<int>(t,static_cast<float>(value)); break;
@@ -38,7 +38,7 @@ void set_to_constant(Context &ctx,ExecutionContext const &e,Tensor &t,double val
         }
     }
     else {
-        core::fill_tensor(ctx,e,t,value);
+        core::fill_tensor(t,value,e);
     }
 }
 
@@ -108,34 +108,34 @@ void get_seed_seq(size_t total,RandomState &state,RandomState::seed_type &seed,R
     seq  = state.sequence_bump(rounds);
 
 }
-void set_to_urandom(Context &ctx,ExecutionContext const &e,Tensor &t,RandomState &state,float minv,float maxv)
+void set_to_urandom(Tensor &t,RandomState &state,float minv,float maxv,ExecutionContext const &e)
 {
     RandomState::seed_type seed;
     RandomState::sequence_type seq;
     get_seed_seq(t.shape().total_size(),state,seed,seq);
-    if(ctx.is_cpu_context()) {
+    if(e.is_cpu_context()) {
         UrandomConverter c(minv,maxv);
         cpu_random_set(t,seed,seq,c);
     }
     else {
-        core::fill_random(ctx,e,t,seed,seq,core::rnd_uniform,minv,maxv);
+        core::fill_random(t,seed,seq,core::rnd_uniform,minv,maxv,e);
     }
 }
 
 ///
 /// set t values to normal distribution with mean and sigma), seed is updated
 ///
-void set_to_normal(Context &ctx,ExecutionContext const &e,Tensor &t,RandomState &state,float mean,float sigma)
+void set_to_normal(Tensor &t,RandomState &state,float mean,float sigma,ExecutionContext const &e)
 {
     RandomState::seed_type seed;
     RandomState::sequence_type seq;
     get_seed_seq(t.shape().total_size(),state,seed,seq);
-    if(ctx.is_cpu_context()) {
+    if(e.is_cpu_context()) {
         NormalConverter c(mean,sigma);
         cpu_random_set(t,seed,seq,c);
     }
     else {
-        core::fill_random(ctx,e,t,seed,seq,core::rnd_normal,mean,sigma);
+        core::fill_random(t,seed,seq,core::rnd_normal,mean,sigma,e);
     }
 }
 

@@ -71,11 +71,11 @@ namespace dlprim {
         
         void BatchNorm::initialize_params(std::vector<Tensor> &parameters,ExecutionContext const &e)
         {
-            set_to_zero(ctx_,e,parameters.at(0));
-            set_to_constant(ctx_,e,parameters.at(1),1.0);
+            set_to_zero(parameters.at(0),e);
+            set_to_constant(parameters.at(1),1.0,e);
             if(config_.affine) {
-                set_to_constant(ctx_,e,parameters.at(2),1.0);
-                set_to_zero(ctx_,e,parameters.at(3));
+                set_to_constant(parameters.at(2),1.0,e);
+                set_to_zero(parameters.at(3),e);
             }
         }
         
