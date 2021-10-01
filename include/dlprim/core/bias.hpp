@@ -30,6 +30,6 @@ namespace core {
     ///
     /// Add bias to t over dimentsion 1: t[:,i,:,:] = b[i]
     ///
-    void add_bias(Context &ctx,ExecutionContext const &e,Tensor &t,Tensor &b);
+    void add_bias(Tensor &t,Tensor &b,ExecutionContext const &e);
 } // core
 } // dlprim

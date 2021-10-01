@@ -792,7 +792,7 @@ namespace dlprim {
             int p = 0;
             conv_fwd_->enqueue(out[0],W,in[0],ws,0.0,ectx.generate_series_context(p++,total));
             if(bias) {
-                core::add_bias(ctx_,ectx.generate_series_context(p++,total),out[0],*bias);
+                core::add_bias(out[0],*bias,ectx.generate_series_context(p++,total));
             }
         }
         if(activation_) {

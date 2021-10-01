@@ -252,8 +252,10 @@ namespace core {
         return r;
     }
 
-    void add_bias(Context &ctx,ExecutionContext const &e,Tensor &t,Tensor &bias)
+    void add_bias(Tensor &t,Tensor &bias,ExecutionContext const &e)
     {
+        Context ctx(e);
+
         DLPRIM_CHECK(t.dtype() == float_data);
         DLPRIM_CHECK(t.shape().size() >= 2);
         DLPRIM_CHECK(t.shape()[1] == bias.shape().total_size());
