@@ -45,6 +45,7 @@ int main(int argc,char **argv)
     }
     dp::Context ctx(argv[1]);
     dp::Net net(ctx);
+    std::cout << "Testing for " << ctx.name() << std::endl;
     net.mode(dp::CalculationsMode::train);
     net.load_from_json_file(argv[2]);
     net.setup();
