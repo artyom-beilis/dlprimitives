@@ -13,7 +13,10 @@ namespace dlprim {
         }
         cl::Context ctx = ec.queue_->getInfo<CL_QUEUE_CONTEXT>();
         cl::Device  dev = ec.queue_->getInfo<CL_QUEUE_DEVICE>();
-        cl::Platform plat(dev.getInfo<CL_DEVICE_PLATFORM>(),true);
+        // there is no clRetainPlatform this you can construct cl::Platform without true/false flag
+        // in fact cl.hpp does not have true/false parameter but cl2.hpp has - but 
+        // it is stub that does nothing
+        cl::Platform plat(dev.getInfo<CL_DEVICE_PLATFORM>());
 
         platform_ = plat;
         device_ = dev;
