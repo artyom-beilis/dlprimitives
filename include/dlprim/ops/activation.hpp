@@ -44,14 +44,10 @@ namespace dlprim {
         static std::unique_ptr<Activation> get_bwd_op(Context &ctx,StandardActivations act,TensorSpecs spec);
         
     private:
-   		void forward_gpu(Tensor &a,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &a,Tensor &output);
         void backward_cpu(Tensor &y,Tensor &dy,Tensor &dx,float beta);
-        void backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,float beta,ExecutionContext const &ctx);
         ActivationConfig config_;
         DataType dtype_;
-        cl::Kernel kernel_;
-        cl::Kernel bwd_kernel_;
     };
 } // namespace
  

@@ -1,5 +1,6 @@
 #include <dlprim/ops/activation.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <dlprim/core/activation.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
@@ -33,14 +34,6 @@ void Activation::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpec
     out.assign({in[0]});
     p.clear();
     ws = 0;
-    if(ctx_.is_cpu_context())
-        return;
-    cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"activation",
-                                        "ACTIVATION",int(config_.activation));
-    kernel_ = cl::Kernel(prog,"activation");
-    if(mode_ == CalculationsMode::predict)
-        return;
-    bwd_kernel_ = cl::Kernel(prog,"activation_diff");
 }
 
 void Activation::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
@@ -63,7 +56,7 @@ void Activation::forward(std::vector<Tensor> &input,std::vector<Tensor> &output,
         forward_cpu(input[0],output[0]);
     }
     else {
-        forward_gpu(input[0],output[0],e);
+        core::activation_forward(input[0],output[0],config_.activation,e);
     }
 }
 
@@ -84,7 +77,7 @@ void Activation::backward(std::vector<TensorAndGradient> &input,
         backward_cpu(output[0].data,output[0].diff,input[0].diff,accum);
     }
     else {
-        backward_gpu(output[0].data,output[0].diff,input[0].diff,accum,e);
+        core::activation_backward(input[0].diff,output[0].diff,output[0].data,config_.activation,accum,e);
     }
 }
 
@@ -107,36 +100,6 @@ void Activation::backward_cpu(Tensor &y,Tensor &dy,Tensor &dx,float beta)
     float *p_dy=dy.data<float>();
     float *p_dx=dx.data<float>();
     cpu::apply_activation_diff(size,p_y,p_dy,p_dx,beta,config_.activation);
-}
-
-void Activation::forward_gpu(Tensor &in,Tensor &out,ExecutionContext const &ctx)
-{
-    int p=0;
-    int size = in.shape().total_size();
-    kernel_.setArg(p++,size);
-    in.set_arg(kernel_,p);
-    out.set_arg(kernel_,p);
-    
-    cl::NDRange wg(256);
-    cl::NDRange gr=gpu::round_range(size,wg);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("activation"));
-    
-}
-
-void Activation::backward_gpu(Tensor &y,Tensor &dy,Tensor &dx,float beta,ExecutionContext const &ctx)
-{
-    int p=0;
-    int size = y.shape().total_size();
-    bwd_kernel_.setArg(p++,size);
-    y.set_arg(bwd_kernel_,p);
-    dy.set_arg(bwd_kernel_,p);
-    dx.set_arg(bwd_kernel_,p);
-    bwd_kernel_.setArg(p++,beta);
-    
-    cl::NDRange wg(256);
-    cl::NDRange gr=gpu::round_range(size,wg);
-    ctx.queue().enqueueNDRangeKernel(bwd_kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("activation_diff"));
-    
 }
 
 
