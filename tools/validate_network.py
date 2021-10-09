@@ -1,4 +1,5 @@
 import torch
+
 import torchvision
 import json
 import os
@@ -14,7 +15,7 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
     else:
         use_solver = False
         model.eval()
-    inp = torch.randn(batch,3,224,224).to(device)
+    inp_cpu = torch.randn(batch,3,224,224)
     total_time = 0
     total_fw = 0
     total_bw = 0
@@ -25,23 +26,25 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
         sm = torch.nn.LogSoftmax(dim=1)
         nll = torch.nn.NLLLoss()
         lbl = torch.randint(1000,size=(batch,)).to(device)
-    else:
-        sm = torch.nn.Softmax(dim=1)
     if use_solver:
         optimizer = torch.optim.Adam(model.parameters())
     for it in range(-warm,iters):
         start = time.time()
+        inp = inp_cpu.to(device)
         if use_solver:
             optimizer.zero_grad()
-        res = sm(model(inp))
-        loss = torch.sum(res).detach().item()
+        res = model(inp)
         if train:
+            res = sm(res)
+            loss = torch.sum(res).detach().item()
             tmp = time.time()
             l=nll(res,lbl)
             l.backward()
             if use_solver:
                 optimizer.step()
             torch.cuda.synchronize()
+        else:
+            res.to('cpu')
         end = time.time()
         msg = ''
         if it == -warm:
@@ -101,10 +104,11 @@ def predict_on_images(model,images,device,config):
         off  = -np.array(mean) * fact
         dr = (h - th) // 2
         dc = (w - tw) // 2
-        image = torch.zeros((1,3,th,tw),dtype=torch.float32,device=device)
+        image = torch.zeros((1,3,th,tw),dtype=torch.float32)
         for k in range(3):
             image[0,k,:,:] = torch.from_numpy(npimg[dr:dr+th,dc:dc+tw,k] * fact[k] + off[k])
-        res = model(image)
+        image = image.to(device)
+        res = model(image).to('cpu')
         index = torch.argmax(res[0]).item()
         csv.append([path,str(index),classes[index]] + ['%8.6f' % v for v in res[0].tolist()])
     with open('report.csv','w') as f:
@@ -117,8 +121,8 @@ def predict_on_images(model,images,device,config):
 
 
 def get_config():
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    with open(base_path + '/imagenet_predict_config.json','r') as f:
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(base_path + '/examples/cpp/imagenet_predict_config.json','r') as f:
         cfg = json.load(f)
     return cfg
 
@@ -157,4 +161,6 @@ if __name__ == '__main__':
     p.add_argument('--iters',default=20,type=int)
     p.add_argument('images',nargs='*')
     r = p.parse_args()
+    if r.device.find('opencl')==0:
+        torch.ops.load_library("build/libpt_ocl.so")
     main(r)
