@@ -21,6 +21,7 @@ namespace dlprim {
         platform_ = plat;
         device_ = dev;
         context_ = ctx;
+        type_ = Context::ocl;
     }
 
     Context::Context(cl::Context const &c,cl::Platform const &p,cl::Device const &d) : 
