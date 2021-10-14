@@ -86,13 +86,13 @@ void SoftmaxWithLoss::setup_kernel(int sm_range)
 {
     if(!setup_kernel_params(sm_range))
         return;
-    cl::Program const &prog_fwd = gpu::Cache::instance().get_program(ctx_,"softmax",
+    cl::Program const &prog_fwd = gpu::Cache::instance().get_program(ctx_,"softmax_with_loss",
                                                             "WG_SIZE",wg_size_,
                                                             "ITEMS_PER_WI",items_per_wi_,
                                                             "itype",itype_,
                                                             "CALC_LOSS",1);
     kernel_ = cl::Kernel(prog_fwd,"softmax");
-    cl::Program const &prog_bwd = gpu::Cache::instance().get_program(ctx_,"softmax",
+    cl::Program const &prog_bwd = gpu::Cache::instance().get_program(ctx_,"softmax_with_loss",
                                                 "WG_SIZE",wg_size_,
                                                 "ITEMS_PER_WI",items_per_wi_,
                                                 "itype",itype_,
@@ -258,6 +258,63 @@ void Softmax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, st
     }
     else {
         core::softmax_forward(input[0],output[0],cfg_.log,ctx);
+    }
+}
+
+void Softmax::backward_cpu(Tensor &tdx,Tensor &ty,Tensor &tdy,float accum)
+{
+    int batch = tdx.shape()[0];
+    int chan = tdx.shape()[1];
+    float *dx = tdx.data<float>();
+    float const *dy =tdy.data<float>();
+    float const *y = ty.data<float>();
+    if(accum == 0)
+        memset(dx,0,tdx.memory_size());
+    else
+        cblas_sscal(tdx.shape().total_size(),accum,dx,1);
+
+    if(cfg_.log) {
+        for(int b=0;b<batch;b++) {
+            float sum_dy = 0;
+            for(int c=0;c<chan;c++) {
+                sum_dy += dy[b*chan+c];
+            }
+            for(int c=0;c<chan;c++) {
+                dx[b*chan + c] += dy[b*chan + c] - expf(y[b*chan + c]) * sum_dy;
+            }
+        }
+    }
+    else {
+        for(int b=0;b<batch;b++) {
+            float sum_ydy = 0;
+            for(int c=0;c<chan;c++) {
+                sum_ydy += y[b*chan + c] * dy[b*chan+c];
+            }
+            for(int c=0;c<chan;c++) {
+                dx[b*chan + c] += (dy[b*chan + c] - sum_ydy) * y[b*chan + c];
+            }
+        }
+    }
+}
+
+void Softmax::backward( std::vector<TensorAndGradient> &input,
+                        std::vector<TensorAndGradient> &output,
+                        std::vector<TensorAndGradient> &,
+                        Tensor &,
+                        ExecutionContext const &e)
+{
+    if(!input.at(0).requires_gradient)
+        return;
+    Tensor dx = input[0].diff;
+    float accum = input[0].accumulate_gradient;
+    Tensor dy = output.at(0).diff;
+    Tensor y  = output.at(0).data;
+
+    if(ctx_.is_cpu_context()) {
+        backward_cpu(dx,y,dy,accum);
+    }
+    else {
+        core::softmax_backward(dx,y,dy,cfg_.log,accum,e);
     }
 }
 

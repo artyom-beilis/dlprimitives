@@ -8,3 +8,16 @@ Main module for dlprim library, imports all classes from two modules:
 from ._pydlprim import *
 from .netconfig import *
 
+
+def _all_of(mod):
+    try:
+        yield from mod.__all__
+        return
+    except AttributeError:
+        pass
+    for item in dir(mod):
+        if not item.startswith('_'):
+            yield item
+
+__all__ = [*_all_of(_pydlprim), *_all_of(netconfig)]
+

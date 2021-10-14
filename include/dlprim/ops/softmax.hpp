@@ -47,8 +47,16 @@ namespace dlprim {
                              Tensor &workspace,
                              ExecutionContext const &ctx);
 
+        virtual void backward(  std::vector<TensorAndGradient> &input,
+                                std::vector<TensorAndGradient> &output,
+                                std::vector<TensorAndGradient> &,
+                                Tensor &,
+                                ExecutionContext const &e);
+
+
     private:
         void forward_cpu(Tensor &input,Tensor &output);
+        void backward_cpu(Tensor &dx,Tensor &y,Tensor &dy,float accum);
         SoftmaxConfig cfg_;
         DataType dtype_;
     };

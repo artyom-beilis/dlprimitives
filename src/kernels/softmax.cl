@@ -27,18 +27,8 @@
 __kernel 
 __attribute__((reqd_work_group_size(1,WG_SIZE,1)))
 void softmax(int batch,int channels,
-             __global dtype *in,ulong  data_offset,
-#if CALC_LOSS==2
-             __global dtype *in_diff,ulong  in_diff_offset,
-#endif
-#if CALC_LOSS>=1
-             __global itype *label,ulong  label_offset,             
-#endif
-             __global dtype *out,ulong  out_offset
-#if CALC_LOSS==2
-            ,dtype factor
-#endif            
-             )
+             __global dtype const *in,ulong  data_offset,
+             __global dtype *out,ulong  out_offset)
 {
     in += data_offset;
     out += out_offset;
@@ -51,18 +41,12 @@ void softmax(int batch,int channels,
     int c = get_global_id(1) * ITEMS_PER_WI;
 
     in += b * channels;
-#if CALC_LOSS >= 1
-    label += label_offset + b;
-    #if CALC_LOSS == 2
-    in_diff += b * channels + in_diff_offset;
-    #endif
-#else
     out += b * channels;
-#endif
     
     REDUCE_PREPARE(WG_SIZE,dtype);
 
     dtype val = -DTYPE_MAX;
+
     #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
         dtype values[ITEMS_PER_WI];
         #pragma unroll
@@ -101,10 +85,8 @@ void softmax(int batch,int channels,
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c+i < channels) {
                 dtype tmp = exp(in[c+i] - maxv);
-                #if CALC_LOSS == 0
                 #if LOG_SM == 0
                 out[c+i] = tmp;
-                #endif
                 #endif
                 sum += tmp;
             }
@@ -112,7 +94,6 @@ void softmax(int batch,int channels,
     #endif
     my_work_group_reduce_add(sum);
 
-#if CALC_LOSS == 0
     #if LOG_SM == 0
     val = (dtype)1 / sum;
     #else
@@ -141,35 +122,70 @@ void softmax(int batch,int channels,
             }
         }
     #endif
-#elif CALC_LOSS == 1
-    if(get_local_id(1) == 0) {
-        int index = *label;
-        dtype loss = 0;
-        if(0 <= index && index < channels)
-            loss = -(in[index] - maxv - log(sum));
-        atomic_addf(out,loss / batch);
-    }
-#elif CALC_LOSS == 2
-    val = (dtype)1 / sum;
-    int index = *label;
-    dtype gr;
-    dtype loss = *out / batch;
+}
+
+
+__kernel 
+__attribute__((reqd_work_group_size(1,WG_SIZE,1)))
+void softmax_backward(int batch,int channels,
+             __global dtype *in,ulong  data_offset,
+             __global dtype const *out,ulong  out_offset,
+             __global dtype const *out_diff,ulong  out_diff_offset,
+             dtype factor
+             )
+{
+    in += data_offset;
+    out += out_offset;
+    out_diff += out_diff_offset;
     
-    #pragma unroll(8)
+    int b = get_global_id(0);
+
+    if(b >= batch)
+        return;
+
+    int c = get_global_id(1) * ITEMS_PER_WI;
+
+    in += b * channels;
+    out += b * channels;
+    out_diff += b * channels;
+    
+    dtype sum = 0;
+    REDUCE_PREPARE(WG_SIZE,dtype);
+
+    #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
+    #pragma unroll(ITEMS_PER_WI)
+    #else
+    #pragma unroll(LOCAL_ITEMS_LIMIT)
+    #endif
     for(int i=0;i<ITEMS_PER_WI;i++) {
-        if(c + i < channels) {
-            #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
-            dtype sm_val = values[i];
+        if(c+i < channels) {
+            #if LOG_SM == 1
+            sum += out_diff[c+i];
             #else
-            dtype sm_val = exp(in[c+i]-maxv);
+            sum += out_diff[c+i] * out[c+i];
             #endif
-            gr = loss *( sm_val * val - (int)(index ==  c + i));
-            if(factor == 0)
-                in_diff[c+i] = gr;
-            else
-                in_diff[c+i] = in_diff[c+i] * factor + gr;
         }
     }
-#endif
+
+    my_work_group_reduce_add(sum);
+
+    #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
+    #pragma unroll(ITEMS_PER_WI)
+    #else
+    #pragma unroll(LOCAL_ITEMS_LIMIT)
+    #endif
+    for(int i=0;i<ITEMS_PER_WI;i++) {
+        if(c + i < channels) {
+            #if LOG_SM == 1
+            float dxval = out_diff[c+i] - exp(out[c+i]) * sum;
+            #else
+            float dxval = (out_diff[c+i] - sum) * out[c+i]; 
+            #endif
+            if(factor == 0)
+                in[c+i] = dxval;
+            else
+                in[c+i] = factor * in[c+i] + dxval;
+        }
+    }
 }
 

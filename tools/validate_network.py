@@ -15,7 +15,10 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
     else:
         use_solver = False
         model.eval()
-    inp_cpu = torch.randn(batch,3,224,224)
+    #inp_cpu = torch.randn(batch,3,224,224)
+    shape = (batch,3,224,224)
+    inp_cpu = torch.empty(shape,pin_memory=True,dtype=torch.float32)
+    torch.randn(shape,out=inp_cpu)
     total_time = 0
     total_fw = 0
     total_bw = 0

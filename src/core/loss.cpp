@@ -42,6 +42,50 @@ namespace core {
         e.queue().enqueueNDRangeKernel(kernel,cl::NullRange,gr,wg,e.events(),e.event("softmax"));
     }
 
+    void softmax_backward(Tensor &dx,Tensor &y,Tensor &dy,bool log_softmax,float factor,ExecutionContext const &e)
+    {
+        DLPRIM_CHECK(dx.shape().size() == 2);
+        DLPRIM_CHECK(dx.dtype() == float_data);
+        DLPRIM_CHECK(dy.shape() == dx.shape());
+        DLPRIM_CHECK(dy.dtype() == dx.dtype());
+        DLPRIM_CHECK(y.shape() == dx.shape());
+        DLPRIM_CHECK(y.dtype() == dx.dtype());
+
+        int sm_range=dx.shape()[1];
+
+        int wg_size;
+        if(sm_range <= 64)
+            wg_size = 64;
+        else if(sm_range <= 128)
+            wg_size = 128;
+        else 
+            wg_size = 256;
+        
+        int items_per_wi = (sm_range + wg_size - 1) / wg_size;
+
+        int mpl = wg_size * items_per_wi;
+        int nd_range = (sm_range + mpl - 1) / mpl * wg_size;
+        Context ctx(e);
+
+        cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"softmax",
+                            "WG_SIZE",wg_size,
+                            "ITEMS_PER_WI",items_per_wi,
+                            "LOG_SM",int(log_softmax));
+        cl::Kernel kernel(prog,"softmax_backward");
+        Shape in_shape = dx.shape();
+        int p = 0;
+        kernel.setArg(p++,int(in_shape[0]));
+        kernel.setArg(p++,sm_range);
+        dx.set_arg(kernel,p);
+        y.set_arg(kernel,p);
+        dy.set_arg(kernel,p);
+        kernel.setArg(p++,factor);
+
+        cl::NDRange gr(in_shape[0],nd_range);
+        cl::NDRange wg(1,wg_size);
+        e.queue().enqueueNDRangeKernel(kernel,cl::NullRange,gr,wg,e.events(),e.event("softmax"));
+    }
+
     ///
     /// Compute forward Negative log likelehood loss x should be log of prob
     ///

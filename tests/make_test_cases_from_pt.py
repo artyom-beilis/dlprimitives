@@ -93,10 +93,12 @@ def make_log_softmax():
     return make_softmax(True)
 
 def make_softmax(log=False):
+    train = True #log
     report = {
         "operator" : "Softmax",
         "tests" : [
             {
+                "train" : train,
                 "options" : {"log":log},
                 "setup_tensors" : [ {"shape":[10,50]} ],
                 "output_tensors" : [ {"shape":[10,50]} ],
@@ -118,9 +120,15 @@ def make_softmax(log=False):
             }
             if b <= 5 and f <= 32:
                 inp = torch.randn(b,f)
+                inp.requires_grad = train
                 out = sm(inp)
                 case["in_tensors"] = [inp.reshape((-1,)).tolist()]
                 case["out_tensors"] = [out.reshape((-1,)).tolist()]
+                if train:
+                    dout = torch.randn(out.shape)
+                    out.backward(dout,retain_graph=True)
+                    case["out_diffs"] = [dout.reshape((-1,)).tolist()]
+                    case["in_diffs"] = [inp.grad.reshape((-1)).tolist()]
             else:
                 case["use_cpu_reference"]=True
             if f > 1000:
