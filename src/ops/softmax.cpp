@@ -1,6 +1,7 @@
 #include <dlprim/ops/softmax.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 #include <dlprim/ops/scal.hpp>
+#include <dlprim/core/loss.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <math.h>
@@ -28,9 +29,10 @@ bool SoftmaxBase::setup_kernel_params(int sm_range)
 }
 
 
-SoftmaxConfig SoftmaxConfig::from_json(json::value const &) 
+SoftmaxConfig SoftmaxConfig::from_json(json::value const &v) 
 { 
     SoftmaxConfig cfg;
+    cfg.log = v.get<bool>("log",cfg.log);
     return cfg;
 }
 
@@ -38,8 +40,9 @@ SoftmaxConfig SoftmaxConfig::from_json(json::value const &)
 Softmax::~Softmax() {}
 SoftmaxWithLoss::~SoftmaxWithLoss() {}
 
-Softmax::Softmax(Context &ctx,SoftmaxConfig const &) : 
+Softmax::Softmax(Context &ctx,SoftmaxConfig const &cfg) : 
     Operator(ctx),
+    cfg_(cfg),
     dtype_(float_data)
 {
 }
@@ -58,9 +61,6 @@ void Softmax::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> 
     out = in;
     par.clear();
     ws = 0;
-    if(ctx_.is_cpu_context())
-        return;
-    setup_kernel(in[0].shape()[1]);
 }
 void SoftmaxWithLoss::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,std::vector<TensorSpecs> &par,size_t &ws)
 {
@@ -80,15 +80,6 @@ void SoftmaxWithLoss::setup(std::vector<TensorSpecs> const &in,std::vector<Tenso
     if(ctx_.is_cpu_context())
         return;
     setup_kernel(in[0].shape()[1]);
-}
-
-void Softmax::setup_kernel(int sm_range)
-{
-    if(!setup_kernel_params(sm_range))
-        return;
-    
-    cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"softmax","WG_SIZE",wg_size_,"ITEMS_PER_WI",items_per_wi_);
-    kernel_ = cl::Kernel(prog,"softmax");
 }
 
 void SoftmaxWithLoss::setup_kernel(int sm_range)
@@ -117,9 +108,6 @@ void Softmax::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_
     DLPRIM_CHECK(in[0].size() == 2);
     out = in;
     ws = 0;
-    if(ctx_.is_cpu_context())
-        return;
-    setup_kernel(in[0][1]);
 }
 
 
@@ -201,11 +189,20 @@ void Softmax::forward_cpu(Tensor &input,Tensor &output)
         for(int j=1;j<int(in_shape[1]);j++)
             maxv = std::max(in[j],maxv);
         float sum = 0.0f;
-        for(int j=0;j<int(in_shape[1]);j++) 
-            sum += out[j] = expf(in[j] - maxv);
-        float factor = 1.0f/sum;
-        for(int j=0;j<int(in_shape[1]);j++) 
-            out[j] *= factor;
+        if(cfg_.log) {
+            for(int j=0;j<int(in_shape[1]);j++) 
+                sum += expf(in[j] - maxv);
+            float factor = -logf(sum);
+            for(int j=0;j<int(in_shape[1]);j++) 
+                out[j] = in[j] - maxv + factor;
+        }
+        else {
+            for(int j=0;j<int(in_shape[1]);j++) 
+                sum += out[j] = expf(in[j] - maxv);
+            float factor = 1.0f/sum;
+            for(int j=0;j<int(in_shape[1]);j++) 
+                out[j] *= factor;
+        }
         in += in_shape[1];
         out+= in_shape[1];
     }
@@ -248,21 +245,6 @@ void SoftmaxWithLoss::backward_gpu_loss(Tensor &input,Tensor &diff, Tensor &labe
     ctx.queue().enqueueNDRangeKernel(kernel_bwd_,cl::NullRange,gr,wg,ctx.events(),ctx.event("softmax_with_loss_bwd"));
 }
 
-void Softmax::forward_gpu(Tensor &input, Tensor &output, ExecutionContext const &ctx)
-{
-    Shape in_shape = input.shape();
-    DLPRIM_CHECK(int(in_shape[1]) == sm_range_);
-    int p = 0;
-    kernel_.setArg(p++,int(in_shape[0]));
-    kernel_.setArg(p++,sm_range_);
-    input.set_arg(kernel_,p);
-    output.set_arg(kernel_,p);
-    
-    cl::NDRange gr(in_shape[0],nd_range_);
-    cl::NDRange wg(1,wg_size_);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("softmax"));
-}
-
 void Softmax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &, Tensor &,ExecutionContext const &ctx)
 {
     DLPRIM_CHECK(input.size()==1);
@@ -275,7 +257,7 @@ void Softmax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, st
         forward_cpu(input[0],output[0]);
     }
     else {
-        forward_gpu(input[0],output[0],ctx);
+        core::softmax_forward(input[0],output[0],cfg_.log,ctx);
     }
 }
 

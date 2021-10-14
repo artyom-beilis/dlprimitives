@@ -14,6 +14,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     { 
+        "NLLLoss", 
+        [](Context &ctx,json::value const &p) {
+            return new NLLLoss(ctx,NLLLossConfig::from_json(p));
+        }
+    },
+    { 
         "SoftmaxWithLoss", 
         [](Context &ctx,json::value const &p) {
             return new SoftmaxWithLoss(ctx,SoftmaxConfig::from_json(p));

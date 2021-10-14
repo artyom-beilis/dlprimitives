@@ -6,6 +6,7 @@ namespace dlprim {
     class Scal;
 
     struct SoftmaxConfig {
+        bool log=false;
         static SoftmaxConfig from_json(json::value const &v);
     };
 
@@ -47,14 +48,10 @@ namespace dlprim {
                              ExecutionContext const &ctx);
 
     private:
-   		void forward_gpu(Tensor &input,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &input,Tensor &output);
-        void setup_kernel(int sm_range);
+        SoftmaxConfig cfg_;
         DataType dtype_;
-        cl::Kernel kernel_;
     };
-
-
 
     class SoftmaxWithLoss : public Operator, public SoftmaxBase {
     public:

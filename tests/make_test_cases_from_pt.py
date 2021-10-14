@@ -43,14 +43,61 @@ def make_softmax_loss():
             cases.append(case)
     return report
 
+def make_nll_loss():
+    report = {
+        "operator" : "NLLLoss",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for reduction in ['none','mean','sum']:
+        cases = []
+        test =  {
+            "train" : True,
+            "options" : {'reduce':reduction},
+            "setup_tensors" : [ {"shape":[10,50]}, {"shape":[10],"requires_grad" : False} ],
+            "output_tensors" : [ {"shape": ([1] if reduction != 'none' else [10])} ],
+            "workspace": 0,
+            "cases" : cases
+        }
+        tests.append(test)
+        print("-",reduction)
+        loss = torch.nn.NLLLoss(reduction=reduction)
+        for b in [1,2,5,10,50]:
+            for f in [2,5,31,32,33,63,64,65]:
+                case = {
+                    "in_shapes"  : [[b,f],[b]],
+                    "out_shapes" : [[1] if reduction != 'none' else [b]],
+                }
+                inp = torch.randn(b,f,requires_grad=True)
+                lbl = torch.randint(f,size=(b,))
+                out = loss(inp,lbl)
+                with torch.no_grad():
+                    dl  = torch.rand(*case['out_shapes'][0]) * 0.5 + 0.5
+                    if reduction != 'none':
+                        val = dl.item();
+                        dl_print= [dl.item()]
+                        dl=torch.tensor(val)
+                    else:
+                        dl_print = dl.reshape((-1,)).tolist()
+                out.backward(dl,retain_graph=True);
+                case["in_tensors"] = [inp.reshape((-1,)).tolist(),lbl.reshape((-1,)).tolist()]
+                case["out_tensors"] = [out.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dl.reshape((-1,)).tolist()]
+                case["in_diffs"] = [inp.grad.reshape((-1,)).tolist(),False]
+                cases.append(case)
+    return report
 
 
-def make_softmax():
+
+def make_log_softmax():
+    return make_softmax(True)
+
+def make_softmax(log=False):
     report = {
         "operator" : "Softmax",
         "tests" : [
             {
-                "options" : {},
+                "options" : {"log":log},
                 "setup_tensors" : [ {"shape":[10,50]} ],
                 "output_tensors" : [ {"shape":[10,50]} ],
                 "workspace": 0,
@@ -59,7 +106,10 @@ def make_softmax():
         ]
     }
     cases = report["tests"][0]["cases"]
-    sm = torch.nn.Softmax(dim=1)
+    if log:
+        sm = torch.nn.LogSoftmax(dim=1)
+    else:
+        sm = torch.nn.Softmax(dim=1)
     for b in [1,2,5,10,50,100,120]:
         for f in [1,5,31,32,33,63,64,65,100,1000,2000]:
             case = {
@@ -781,7 +831,9 @@ def gen(name,func):
 if __name__ == "__main__":
     cases  = { 
         "softmax" : make_softmax,
+        "log_softmax" : make_log_softmax,
         "softmax_loss" : make_softmax_loss,
+        "nll_loss" : make_nll_loss,
         "elementwise"  : make_eltwise,
         "pooling2d" : make_pooling2d,
         "global_pooling" : make_global_pooling,

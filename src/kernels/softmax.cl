@@ -9,6 +9,10 @@
 #define ITEMS_PER_WI 1
 #endif
 
+#ifndef LOG_SM
+#define LOG_SM 0
+#endif
+
 #ifndef CALC_LOSS
 #define CALC_LOSS 0
 #endif
@@ -86,7 +90,11 @@ void softmax(int batch,int channels,
         #pragma unroll
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c+i < channels) {
+                #if LOG_SM == 1
+                sum += exp(values[i] - maxv);
+                #else
                 sum += values[i] = exp(values[i] - maxv);
+                #endif
             }
         }
     #else
@@ -94,7 +102,9 @@ void softmax(int batch,int channels,
             if(c+i < channels) {
                 dtype tmp = exp(in[c+i] - maxv);
                 #if CALC_LOSS == 0
+                #if LOG_SM == 0
                 out[c+i] = tmp;
+                #endif
                 #endif
                 sum += tmp;
             }
@@ -103,19 +113,31 @@ void softmax(int batch,int channels,
     my_work_group_reduce_add(sum);
 
 #if CALC_LOSS == 0
+    #if LOG_SM == 0
     val = (dtype)1 / sum;
+    #else
+    val = -log(sum);
+    #endif
 
     #if ITEMS_PER_WI <= LOCAL_ITEMS_LIMIT
         #pragma unroll
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c + i < channels) {
+                #if LOG_SM == 1
+                out[c+i] = values[i] - maxv + val;
+                #else
                 out[c+i] = values[i] * val;
+                #endif
             }
         }
     #else
         for(int i=0;i<ITEMS_PER_WI;i++) {
             if(c + i < channels) {
+                #if LOG_SM == 1
+                out[c+i] = in[c+1] - maxv + val;
+                #else
                 out[c+i] *= val;
+                #endif
             }
         }
     #endif

@@ -155,6 +155,7 @@ set(DLPRIM_CORE_SRC
         src/core/bn.cpp
         src/core/slice.cpp
         src/core/pool.cpp
+        src/core/loss.cpp
         src/core/activation.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp)
 
@@ -174,6 +175,7 @@ set(DLPRIM_SRC
         src/ops/axpby.cpp
         src/ops/scal.cpp
         src/ops/concat.cpp
+        src/ops/nll_loss.cpp
         src/ops/initialization.cpp
         ${EXTRA_SRC}
         )

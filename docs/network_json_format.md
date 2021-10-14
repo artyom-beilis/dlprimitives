@@ -67,9 +67,25 @@ For example:
 
 ## Supported Operators and Options
 
-### Softmax and SoftmaxWithLoss
+### SoftmaxWithLoss
 
 No parameters at this point
+
+### NLLLoss
+
+Negative Likelihood Log Loss. Expects log of probability as input.
+
+Parameters:
+
+- `reduce` - reduction, default `mean`, one of `none`, `mean` or `sum` - the reduction on output values.
+
+
+### Softmax
+
+Parameters:
+
+- `log` - boolean, default false. Output a log of the softmax value rather than original value, better for numerical stability
+
 
 ### Activation
 

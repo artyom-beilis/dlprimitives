@@ -27,7 +27,8 @@ Is published under <http://dlprimitives.org/docs/>
 
 |Operator               |Features                               | Computation       |
 |-----------------------|---------------------------------------|-------------------|
-|Softmax                |                                       | Fwd               |
+|Softmax, LogSoftmax    |                                       | Fwd               |
+|NLLLoss                |                                       | Fwd,Bwd           |
 |SoftmaxWithLoss        |                                       | Fwd,Bwd           |
 |Elementwise            | ax+by, max(ax,by), ax\*y              | Fwd,Bwd           |
 |Concat                 |                                       | Fwd,Bwd           |
