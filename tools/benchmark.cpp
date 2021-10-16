@@ -137,8 +137,10 @@ int main(int argc,char **argv)
             if(timing)
                 timing->reset();
             auto start = std::chrono::high_resolution_clock::now();
-            if(solver)
+            if(solver) {
+                dp::ExecGuard g(q,"solver_zero");
                 solver->zero_grad(net,q);
+            }
             auto bw_point = start;
             for(size_t j=0;j<data.size();j++) {
                 dp::ExecGuard g(q,"to_device");
@@ -159,8 +161,10 @@ int main(int argc,char **argv)
                     }
                 }
                 net.backward(q,force_cpu_times);
-                if(solver)
+                if(solver) {
+                    dp::ExecGuard g(q,"solver_apply");
                     solver->apply(net,q);
+                }
                 
                 if(!ctx.is_cpu_context())
                     q.queue().finish();

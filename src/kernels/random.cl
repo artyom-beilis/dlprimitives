@@ -94,6 +94,12 @@ __kernel void fill(ulong total,__global float *p,ulong p_offset,ulong seed,ulong
 #if IS_UNIFORM == 1
     r = r * (float4)(v2-v1) + (float4)(v1);
 #endif
+#if IS_BERNOULLI == 1
+    r.s0 = r.s0 < v1 ? 1:0;
+    r.s1 = r.s1 < v1 ? 1:0;
+    r.s2 = r.s2 < v1 ? 1:0;
+    r.s3 = r.s3 < v1 ? 1:0;
+#endif    
 #if IS_NORMAL == 1
     r.lo = normal_pair(r.lo);
     r.hi = normal_pair(r.hi);

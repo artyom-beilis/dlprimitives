@@ -77,6 +77,24 @@ public:
     float scale_,offset_;
 };
 
+class BernoulliConverter {
+public:
+    BernoulliConverter(float p) : p_(p)
+    {
+    }
+    template<typename T>
+    void convert(T &vec)
+    {
+        for(auto &val : vec) {
+            val = val < p_ ? 1 : 0;
+        }
+    }
+    float p_;
+};
+
+
+
+
 class NormalConverter {
 public:
     NormalConverter(float mu,float sigma)
@@ -108,6 +126,7 @@ void get_seed_seq(size_t total,RandomState &state,RandomState::seed_type &seed,R
     seq  = state.sequence_bump(rounds);
 
 }
+
 void set_to_urandom(Tensor &t,RandomState &state,float minv,float maxv,ExecutionContext const &e)
 {
     RandomState::seed_type seed;
@@ -121,6 +140,21 @@ void set_to_urandom(Tensor &t,RandomState &state,float minv,float maxv,Execution
         core::fill_random(t,seed,seq,core::rnd_uniform,minv,maxv,e);
     }
 }
+
+void set_to_bernoulli(Tensor &t,RandomState &state,float p,ExecutionContext const &e)
+{
+    RandomState::seed_type seed;
+    RandomState::sequence_type seq;
+    get_seed_seq(t.shape().total_size(),state,seed,seq);
+    if(e.is_cpu_context()) {
+        BernoulliConverter c(p);
+        cpu_random_set(t,seed,seq,c);
+    }
+    else {
+        core::fill_random(t,seed,seq,core::rnd_bernoulli,p,0,e);
+    }
+}
+
 
 ///
 /// set t values to normal distribution with mean and sigma), seed is updated

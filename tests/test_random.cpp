@@ -51,6 +51,10 @@ int main(int argc,char **argv)
         dp::set_to_normal(t,st,-1.5,0.5,e);
         t.to_host(e);
         test_values(t,-1.5,0.5,-std::numeric_limits<float>::max(),std::numeric_limits<float>::max());
+        std::cout << "Testing bernoulli" << std::endl;
+        dp::set_to_bernoulli(t,st,0.75,e);
+        t.to_host(e);
+        test_values(t,0.75,std::sqrt(0.75*0.25),0,1);
     }
     catch(std::exception const &e) {
         std::cerr << e.what() << std::endl;

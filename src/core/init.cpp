@@ -59,7 +59,9 @@ namespace core {
         DLPRIM_CHECK(t.dtype() == float_data);
         cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"random",
                                         "IS_UNIFORM",int(dist==rnd_uniform),
-                                        "IS_NORMAL",int(dist==rnd_normal));
+                                        "IS_NORMAL",int(dist==rnd_normal),
+                                        "IS_BERNOULLI",int(dist==rnd_bernoulli)
+                                        );
         cl::Kernel k(prog,"fill");
         cl_ulong total = t.shape().total_size();
         int p=0;

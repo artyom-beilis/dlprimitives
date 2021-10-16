@@ -16,6 +16,7 @@ namespace core {
         cl::Kernel k_;
     };
 
+    void add_tensors(Tensor &a,Tensor &b,Tensor &sum,ExecutionContext const &ec);
     ///
     /// Scale tensor by factor inplace, if s==0 fills with zero
     /// so nan is not propagated of s==0
@@ -32,7 +33,8 @@ namespace core {
     ///
     enum RandomDistribution {
         rnd_uniform = 0,
-        rnd_normal  = 1
+        rnd_normal  = 1,
+        rnd_bernoulli = 2
     };
     ///
     /// Fill tensor with random numbers using provided distribution

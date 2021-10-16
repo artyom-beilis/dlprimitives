@@ -10,6 +10,13 @@ import numpy as np
 import sys
 
 def benchmark_model(model,batch,device,warm,iters,train,use_solver):
+
+    def _sync():
+        if device.find('opencl')==0:
+            torch.zeros((1,)).to(device)
+        elif device.find('cuda')==0:
+            torch.cuda.synchronize()
+
     if train:
         model.train()
     else:
@@ -17,37 +24,59 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
         model.eval()
     #inp_cpu = torch.randn(batch,3,224,224)
     shape = (batch,3,224,224)
-    inp_cpu = torch.empty(shape,pin_memory=True,dtype=torch.float32)
+    inp_cpu = torch.empty(shape,dtype=torch.float32)
     torch.randn(shape,out=inp_cpu)
     total_time = 0
+    total_io = 0
     total_fw = 0
     total_bw = 0
+    total_zero = 0
+    total_update = 0
     total_batches = 0
     total_items = 0
     print("Warming up")
     if train:
         sm = torch.nn.LogSoftmax(dim=1)
         nll = torch.nn.NLLLoss()
-        lbl = torch.randint(1000,size=(batch,)).to(device)
+        lbl_cpu = torch.randint(1000,size=(batch,))
     if use_solver:
         optimizer = torch.optim.Adam(model.parameters())
     for it in range(-warm,iters):
         start = time.time()
-        inp = inp_cpu.to(device)
         if use_solver:
             optimizer.zero_grad()
+            _sync()
+            zero_point = time.time()
+        else:
+            zero_point = start
+
+        inp = inp_cpu.to(device)
+        if train:
+            lbl = lbl_cpu.to(device)
+
+        _sync()
+        io_point = time.time()
         res = model(inp)
         if train:
             res = sm(res)
-            loss = torch.sum(res).detach().item()
-            tmp = time.time()
             l=nll(res,lbl)
+            _sync()
+            fwd_end = time.time()
             l.backward()
+            _sync()
+            bwd_end = time.time();
             if use_solver:
                 optimizer.step()
-            torch.cuda.synchronize()
+                _sync()
+                solver_end = time.time()
+            else:
+                solver_end = bwd_end
         else:
-            res.to('cpu')
+            res.to('cpu') 
+            _sync()
+            fwd_end = time.time()
+            solver_end = fwd_end
+            bwd_end = fwd_end
         end = time.time()
         msg = ''
         if it == -warm:
@@ -60,12 +89,19 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
             total_items += batch
             total_batches += 1
             if train:
-                total_fw += tmp  - start
-                total_bw += end - tmp
+                total_fw += fwd_end - start
+                total_bw += end - fwd_end
+                total_io += io_point - zero_point
+                total_zero += zero_point - start
+                total_update += solver_end - bwd_end
     print("Time per item  %1.3f ms" %(total_time / total_items *1e3))
     if train:
         print("Time fwd batch  %1.3f ms" %(total_fw / total_batches *1e3))
         print("Time bwd batch  %1.3f ms" %(total_bw / total_batches *1e3))
+        print("Time io  batch  %1.3f ms" %(total_io / total_batches *1e3))
+        print("Time zro batch  %1.3f ms" %(total_zero / total_batches *1e3))
+        print("Time opt batch  %1.3f ms" %(total_update  / total_batches *1e3))
+
     print("Time per batch %1.3f ms" %(total_time / total_batches *1e3))
 
 def export_model(model,batch,path,opset,ir,train):

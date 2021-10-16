@@ -29,16 +29,25 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
     auto ks = kernel_sources.find(source);
     if(ks == kernel_sources.end())
         throw ValidationError("Unknow program source " + source);
-    cl::Program prg(ctx.context(),ks->second);
+    std::string const &source_text = ks->second;
+    std::ostringstream prepend;
     std::ostringstream ss;
+    bool combine = false;
     std::string ocl_version = ctx.platform().getInfo<CL_PLATFORM_VERSION>();
     if(ocl_version.substr(7,1) >= "2") 
 	    ss << "-cl-std=CL2.0 ";
     for(size_t i=0;i<params.size();i++) {
         if(i > 0)
             ss<<" ";
-        ss << "-D" << params[i].name <<"=" <<params[i].value;
+        if(params[i].name.c_str()[0]=='#') {
+            prepend << "#define " << params[i].name.c_str() + 1 << " " << params[i].value << "\n";
+            combine=true;
+        }
+        else {
+            ss << "-D" << params[i].name <<"=" <<params[i].value;
+        }
     }
+    cl::Program prg(ctx.context(),(combine ? prepend.str() + source_text : source_text) );
     try {
         prg.build(std::vector<cl::Device>{ctx.device()},ss.str().c_str());
     }

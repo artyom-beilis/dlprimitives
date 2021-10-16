@@ -22,5 +22,9 @@ namespace dlprim {
     /// set t values to normal distribution with mean and sigma), seed is updated
     ///
     void set_to_normal(Tensor &t,RandomState &state,float mean,float sigma,ExecutionContext const &e);
+    ///
+    /// set t values to bernully distribution with mean and sigma), seed is updated
+    ///
+    void set_to_bernoulli(Tensor &t,RandomState &state,float p,ExecutionContext const &e);
     
 }
