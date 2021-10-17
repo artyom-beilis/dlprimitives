@@ -14,8 +14,9 @@ namespace core {
     ///
     void pointwise_operation(std::vector<Tensor> xs,
                              std::vector<Tensor> ys,
-                             std::vector<float>  ws,
+                             std::vector<double>  ws,
                              std::string const &code,
                              ExecutionContext const &ec);
+
 } // core
 } // dlprim

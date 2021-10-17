@@ -14,6 +14,7 @@ if 'KERAS_BACKEND' in os.environ:
     from keras.utils import to_categorical
     from keras import backend
 else:
+    import tensorflow as tf
     import tensorflow.keras as kr
     from tensorflow.keras.models import Sequential
     import tensorflow.keras.layers as layers
@@ -178,6 +179,12 @@ if __name__ == "__main__":
     p.add_argument('--warm',default=5,type=int)
     p.add_argument('--iters',default=20,type=int)
     p.add_argument('--classes',default=1000,type=int)
+    p.add_argument('--device',default=None)
     r = p.parse_args()
-    run(r.model,r.batch,r.warm,r.iters,r.classes)
+    if r.device is None:
+        run(r.model,r.batch,r.warm,r.iters,r.classes)
+    else:
+        with tf.device(r.device):
+            run(r.model,r.batch,r.warm,r.iters,r.classes)
+            
 

@@ -156,7 +156,7 @@ public:
 
     bool is_cpu_context() const
     {
-        return queue_ == nullptr;
+        return !queue_;
     }
 
     ExecutionContext(ExecutionContext const &) = default;
@@ -401,12 +401,12 @@ public:
     }
 
     /// Generate ExecutionContext (queue + events)
-    ExecutionContext make_execution_context()
+    ExecutionContext make_execution_context(cl_command_queue_properties props=0)
     {
         if(is_cpu_context())
             return ExecutionContext();
         else
-            return ExecutionContext(make_queue());
+            return ExecutionContext(make_queue(props));
     }
 
 private:

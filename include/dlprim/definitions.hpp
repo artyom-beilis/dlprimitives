@@ -148,6 +148,28 @@ namespace dlprim {
         }
     
     }
+    inline std::string data_type_to_opencl_type(DataType dt,bool io_type=false)
+    {
+        switch(dt) {
+        case double_data: return "double";
+        case int64_data: return "long";
+        case uint64_data: return "ulong";
+
+        case float_data: return "float";
+        case int32_data: return "int";
+        case uint32_data: return "uint";
+
+        case half_data: return "half";
+        case bfloat16_data: return (io_type ? "ushort" : "float" );
+        case int16_data: return "short";
+        case uint16_data: return "ushort";
+
+        case int8_data: return "char";
+        case uint8_data: return "uchar";
+        default:
+            throw NotImplementedError("Unsupported data type");
+        }
+    }
 
     constexpr int size_of_data_type(DataType d)
     {
@@ -155,7 +177,7 @@ namespace dlprim {
     }
 
     /// Maximal number of dimensions in tensor
-    static constexpr int max_tensor_dim = 4;
+    static constexpr int max_tensor_dim = 5;
 
     /// internal flag
 	constexpr int forward_data = 1;

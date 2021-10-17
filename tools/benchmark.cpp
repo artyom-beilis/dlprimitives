@@ -102,9 +102,8 @@ int main(int argc,char **argv)
             solver.reset(new dp::solvers::Adam(ctx));
         }
 
-        cl::CommandQueue queue=ctx.make_queue((enable_profiling && !force_cpu_times)? CL_QUEUE_PROFILING_ENABLE : 0);
+        dp::ExecutionContext q=ctx.make_execution_context((enable_profiling && !force_cpu_times)? CL_QUEUE_PROFILING_ENABLE : 0);
         std::shared_ptr<dp::TimingData> timing;
-        dp::ExecutionContext q(queue);
         if(enable_profiling) {
             timing.reset(new dp::TimingData);
             timing->cpu_only = force_cpu_times;
@@ -166,8 +165,7 @@ int main(int argc,char **argv)
                     solver->apply(net,q);
                 }
                 
-                if(!ctx.is_cpu_context())
-                    q.queue().finish();
+                q.finish();
             }
             auto stop = std::chrono::high_resolution_clock::now();
             auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();

@@ -158,6 +158,7 @@ set(DLPRIM_CORE_SRC
         src/core/pointwise.cpp
         src/core/loss.cpp
         src/core/activation.cpp
+        src/core/util.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp)
 
 set(DLPRIM_SRC 
@@ -201,7 +202,10 @@ set_target_properties(dlprim PROPERTIES
 			PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
 
 add_executable(test_context tests/test_context.cpp)
+add_executable(test_util tests/test_util.cpp)
+
 target_link_libraries(test_context dlprim_core)
+target_link_libraries(test_util dlprim_core)
 
 add_executable(test_from_template tests/test_from_template.cpp)
 add_executable(test_net tests/test_net.cpp)
