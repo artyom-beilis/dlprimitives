@@ -340,7 +340,7 @@ namespace dlprim {
                             training,
                             input[0].data,output[0].diff,
                             mean,var,
-                            parameters.at(2).data,parameters.at(3).data,
+                            parameters.at(2).data,
                             (input[0].requires_gradient ? &input[0].diff : nullptr),
                             input[0].accumulate_gradient,
                             (parameters[2].requires_gradient ? &parameters[2].diff : nullptr),

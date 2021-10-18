@@ -27,7 +27,7 @@ namespace core {
     ///     enqueue_forward_affine(x,y, gamma,beta, mean, var,ws);
     ///
     ///     // Backward pass
-    ///     enqueue_backward_affine(true,x,dy,mean,var,gamma,beta,&dx,&dgamma,&dbeta,ws);
+    ///     enqueue_backward_affine(true,x,dy,mean,var,gamma,&dx,&dgamma,&dbeta,ws);
     ///  \endcode
     ///
     ///   Affine, Test (fixed batch)
@@ -36,7 +36,7 @@ namespace core {
     ///     enqueue_forward_affine(x,y, gamma,beta, running_mean, running_var,ws);
     ///
     ///     // Backward pass
-    ///     enqueue_backward_affine(false,x,dy,running_mean,runnig_var,gamma,beta,&dx,&dgamma,&dbeta,ws);
+    ///     enqueue_backward_affine(false,x,dy,running_mean,runnig_var,gamma,&dx,&dgamma,&dbeta,ws);
     ///  \endcode
     ///
     ///   Without affine, Train
@@ -130,7 +130,7 @@ namespace core {
         virtual void enqueue_backward_affine(bool training_mode,
                                              Tensor &x,Tensor &dy,
                                              Tensor &mean,Tensor &var,
-                                             Tensor &gamma,Tensor &beta,
+                                             Tensor &gamma,
                                              Tensor *dx,float fx_factor,
                                              Tensor *dgamma,float dgamma_factor,
                                              Tensor *dbeta,float dbeta_factor,

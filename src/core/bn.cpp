@@ -261,7 +261,7 @@ namespace core {
         /// training_mode - assumes that mean/var were calculated on batches of X - they need to be kept from forward stage
         ///   otherwise mean/var considered constant values
         ///
-        /// gamma/beta affine transofrmation after BN
+        /// gamma affine transofrmation after BN
         ///
         /// dy - top gradient for backpropogation
         /// dx - calculate backpropogation on X
@@ -272,7 +272,7 @@ namespace core {
         virtual void enqueue_backward_affine(bool training_mode,
                                              Tensor &x,Tensor &dy,
                                              Tensor &mean,Tensor &var,
-                                             Tensor &gamma,Tensor &beta,
+                                             Tensor &gamma,
                                              Tensor *dx,float dx_factor,
                                              Tensor *dgamma,float dgamma_factor,
                                              Tensor *dbeta,float dbeta_factor,
