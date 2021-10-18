@@ -18,6 +18,19 @@ multiple GPU architectures.
 
 Please note this is only work in progress - first and preliminary stages.
 
+## Initial Framework Integration
+
+Integration with existing frameworks:
+
+-   Pytorch, (almost) out-of-tree OpenCL backend project:
+
+    <https://github.com/artyom-beilis/pytorch_dlprim>
+    
+-   Caffe-OpenCL, performance improvements by using dlprimitives: 
+    
+    <https://github.com/artyom-beilis/caffe/tree/opencl_dlprim>
+
+
 ## Documentation 
 
 Is published under <http://dlprimitives.org/docs/>
@@ -44,10 +57,6 @@ Is published under <http://dlprimitives.org/docs/>
 |Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
 
 Solvers: SGD, Adam
-
-## Initial Framework Integration
-
-Pytorch: <https://github.com/artyom-beilis/pytorch_dlprim>
 
 ## Validated Networks
 
