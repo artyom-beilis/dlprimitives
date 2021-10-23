@@ -4,7 +4,26 @@
 #include <iostream>
 #include "test.hpp"
 
+
 namespace dp = dlprim;
+
+void test_shape()
+{
+    std::cout << "Tesh Shape" << std::endl;
+    dp::Shape s(2,3,4);
+    TEST(s.unsqueeze(0) == dp::Shape(1,2,3,4));
+    TEST(s.unsqueeze(3) == dp::Shape(2,3,4,1));
+    TEST(s.unsqueeze(1) == dp::Shape(2,1,3,4));
+    TEST(s.unsqueeze(-1) == dp::Shape(2,3,4,1));
+
+    TEST(dp::broadcast(dp::Shape(2,3,4),dp::Shape(3,4)) == dp::Shape(2,3,4));
+    TEST(dp::broadcast(dp::Shape(1,3,4),dp::Shape(5,3,1)) == dp::Shape(5,3,4));
+
+    TEST(dp::Shape(3,4).broadcast_strides(dp::Shape(2,3,4)) == dp::Shape(0,4,1));
+    TEST(dp::Shape(3,1,1).broadcast_strides(dp::Shape(8,3,32,32)) == dp::Shape(0,1,0,0));
+    TEST(dp::Shape(5,1).broadcast_strides(dp::Shape(5,5)) == dp::Shape(1,0));
+}
+
 int main(int argc,char **argv)
 {
     if(argc!=2) {
@@ -12,6 +31,8 @@ int main(int argc,char **argv)
         return 1;
     }
     try {
+
+        std::cout << "Basic context" << std::endl; 
 
         dp::Context ctx(argv[1]);
         std::cout << ctx.name() << std::endl;
@@ -48,6 +69,8 @@ int main(int argc,char **argv)
             TEST(p[i] == std::max(0.0,-5.0 + i));
         }
         std::cout << "Ok" << std::endl;
+
+        test_shape();
     }
     catch(std::exception const &e) {
         std::cerr <<"Failed:"<< e.what() << std::endl;

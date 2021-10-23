@@ -2,8 +2,13 @@
 #include <array>
 #include <dlprim/definitions.hpp>
 #include <ostream>
+#include <sstream>
 
 namespace dlprim {
+
+    class Shape;
+    inline std::ostream &operator<<(std::ostream &o,Shape const &s);
+
 
     ///
     /// Tensor shape
@@ -108,10 +113,58 @@ namespace dlprim {
             }
             return Shape(d0,d1,d2);
         }
+
+        ///
+        /// Add dimention=1 at axis location, for example for Shape(2,3).unsqueeze(0) == Shape(1,2,3)
+        ///
+        Shape unsqueeze(int axis) const
+        {
+            if(axis < 0)
+                axis = axis + size_ + 1;
+            DLPRIM_CHECK(0 <= axis && axis<=size_);
+            DLPRIM_CHECK(size_+1 <= max_tensor_dim);
+            Shape r;
+            for(int i=0;i<axis;i++)
+                r.shape_[i] = shape_[i];
+            r.shape_[axis] = 1;
+            for(int i=axis;i<size_;i++)
+                r.shape_[i+1] = shape_[i];
+            r.size_ = size_ + 1;
+            return r;
+        }
+
+        Shape broadcast_strides(Shape const &target) const
+        {
+            DLPRIM_CHECK(size() <= target.size());
+            Shape strides = target;
+            size_t stride = 1;
+            for(int i=strides.size()-1,pos=size_ - 1;i>=0;i--,pos--) {
+                if(pos >= 0) {
+                    if(shape_[pos] == target[i]) {
+                        strides[i] = stride;
+                        stride *= target[i];
+                    }
+                    else if(shape_[pos] == 1) {
+                        strides[i] = 0;
+                    }
+                    else {
+                        std::ostringstream ss;
+                        ss << "Can't broadcast " << *this << " to " << target;
+                        throw ValidationError(ss.str());
+                    }
+                }
+                else {
+                    strides[i] = 0;
+                }
+            }
+            return strides;
+        }
+
     private:
         std::array<size_t,max_tensor_dim> shape_;
         int size_;
     };
+
 
     inline std::ostream &operator<<(std::ostream &o,Shape const &s)
     {
@@ -124,5 +177,33 @@ namespace dlprim {
         o << ')';
         return o;
     }
+
+    /// calculate numpy style broadcast shape
+    inline Shape broadcast(Shape const &ain,Shape const &bin)
+    {
+        Shape a=ain,b=bin;
+        while(a.size() < b.size())
+            a=a.unsqueeze(0);
+        while(b.size() < a.size())
+            b=b.unsqueeze(0);
+
+        Shape r=a;
+        for(int i=0;i<a.size();i++) {
+            if(a[i] == b[i])
+                r[i]=a[i];
+            else if(a[i] == 1)
+                r[i]=b[i];
+            else if(b[i] == 1)
+                r[i]=a[i];
+            else {
+                std::ostringstream ss;
+                ss << "Non broadcatable shapes" << ain << " and " << bin;
+                throw ValidationError(ss.str());
+            }
+        }
+        return r;
+    }
+
+
 };
 /// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4

@@ -3,6 +3,7 @@
 #include <dlprim/json.hpp>
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
+#include <dlprim/core/pointwise.hpp>
 #include <math.h>
 
 #include <my_cblas.hpp>
@@ -43,8 +44,7 @@ void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpe
     DLPRIM_CHECK(in.size()==2);
     DLPRIM_CHECK(in[0].dtype() == dtype_);
     DLPRIM_CHECK(in[1].dtype() == dtype_);
-    DLPRIM_CHECK(in[0].shape() == in[1].shape());
-    out.assign({in[0]});
+    out.assign({broadcast(in[0].shape(),in[1].shape())});
     p.clear();
     ws = 0;
     if(ctx_.is_cpu_context())
@@ -59,7 +59,7 @@ void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpe
 void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==2);
-    DLPRIM_CHECK(in[0] == in[1]);
+    out.assign({broadcast(in[0],in[1])});
     out.assign({in[0]});
     ws = 0;
 }
@@ -69,8 +69,7 @@ void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output
     DLPRIM_CHECK(input.size()==2);
     DLPRIM_CHECK(output.size()==1); 
     
-    DLPRIM_CHECK(input[0].shape() == input[1].shape());
-    DLPRIM_CHECK(output[0].shape() == input[0].shape());
+    DLPRIM_CHECK(output[0].shape() == broadcast(input[0].shape(),input[1].shape()));
     
     DLPRIM_CHECK(input[0].dtype() == dtype_);
     DLPRIM_CHECK(input[1].dtype() == dtype_);
@@ -307,6 +306,28 @@ void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
 
 void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext const &ctx)
 {
+    std::string op;
+    switch(config_.op) {
+    case ElementwiseConfig::elementwise_sum:
+        op="y0=x0*w0+x1*w1;\n";
+        break;
+    case ElementwiseConfig::elementwise_prod:
+        op="y0=x0*x1*w0*w1;\n";
+        break;
+    case ElementwiseConfig::elementwise_max:
+        op="y0=max(x0*w0,x1*w1);\n";
+        break;
+    default:
+        throw ValidationError("Invalid activation values");
+    }
+
+    std::ostringstream code;
+    code << op;
+    if(config_.activation != StandardActivations::identity) {
+        code << "y0 = " << activation_equation(config_.activation,"y0") << ";\n";
+    }
+    core::pointwise_operation_broadcast({a,b},{c},{config_.coeff[0],config_.coeff[1]},code.str(),ctx);
+  /*  
     int p=0;
     int size = a.shape().total_size();
     kernel_.setArg(p++,size);
@@ -318,7 +339,7 @@ void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext con
     
     cl::NDRange gr((size + 255) / 256 * 256);
     cl::NDRange wg(256);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("eltwise"));
+    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("eltwise"));*/
     
 }
 

@@ -1,5 +1,6 @@
 #include  <dlprim/gpu/program_cache.hpp>
 #include <sstream>
+#include <iostream>
 
 namespace dlprim {
 namespace gpu {
@@ -47,7 +48,8 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
             ss << "-D" << params[i].name <<"=" <<params[i].value;
         }
     }
-    cl::Program prg(ctx.context(),(combine ? prepend.str() + source_text : source_text) );
+    std::string const &code = (combine ? prepend.str() + source_text : source_text);
+    cl::Program prg(ctx.context(),code );
     try {
         prg.build(std::vector<cl::Device>{ctx.device()},ss.str().c_str());
     }
@@ -61,6 +63,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
             log += "\n";
             log += cl_log[i].second;
         }
+        std::cerr << code << std::endl;
         throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + log.substr(0,1024),log);
     }
     #else

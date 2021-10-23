@@ -153,7 +153,8 @@ def make_eltwise():
                              ("relu",torch.nn.ReLU()) ]:
                     cases=[]
                     test = {
-                        "train":True,
+                        #"train":True,
+                        "train":False,
                         "options" : {
                             "operation":op,
                             "activation": act,
@@ -167,13 +168,19 @@ def make_eltwise():
                     }
                     tests.append(test)
                     final_op = lambda x,y: mact(mop(c1*x,c2*y))
-                    for shape in [[5,2],[32,6,16,16],[128,256,16,16],[10023]]:
-                        case = dict(in_shapes = [ shape, shape] ,out_shapes = [shape])
-                        if np.prod(shape) < 100:
-                            a = torch.randn(*shape,requires_grad=True)
-                            b = torch.randn(*shape,requires_grad=True)
+                    for s1,s2 in [([5,2],[5,2]),
+                                  ([5,2],[5,1]),
+                                  ([5,2],[2]),
+                                  ([32,6,16,16],[32,6,16,16]),
+                                  ([32,1,16,16],[6,16,1]),
+                                  ([32,6,16,16],[6,1,1])]:
+                                  #([128,256,16,16]),[10023]]:
+                        if np.prod(s1) < 100 and np.prod(s2) < 100 :
+                            a = torch.randn(*s1,requires_grad=True)
+                            b = torch.randn(*s2,requires_grad=True)
                             c = final_op(a,b)
-                            dc = torch.randn(*shape)
+                            case = dict(in_shapes = [ s1, s2 ] ,out_shapes = [list(c.shape)])
+                            dc = torch.randn(*c.shape)
                             c.backward(dc,retain_graph=True)
                             case["in_tensors"] = [a.reshape((-1,)).tolist(),b.reshape((-1,)).tolist()]
                             case["out_tensors"] = [c.reshape((-1,)).tolist()]

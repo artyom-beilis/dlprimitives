@@ -31,6 +31,22 @@ namespace dlprim {
         }
         throw ValidationError("Internal error invalid cativation");
     }
+    std::string activation_equation(StandardActivations act,std::string const &variable)
+    {
+        switch(act) {
+        case StandardActivations::identity:
+            return "(" + variable + ")";
+        case StandardActivations::relu:
+            return "(max(("+variable + "),(dtype)(0)))";
+        case StandardActivations::tanh:
+            return "(tanh((" + variable + ")))";
+        case StandardActivations::sigmoid:
+            return "((dtype)(1) / ((dtype)(1) + exp(-("+variable+"))))";
+        case StandardActivations::relu6:
+            return "(min(max((" + variable + "),(dtype)(0)),(dtype)(6)))";
+        }
+        throw ValidationError("Internal error invalid cativation");
+    }
 } // dlprim
 
 
