@@ -16,8 +16,12 @@ void test_shape()
     TEST(s.unsqueeze(1) == dp::Shape(2,1,3,4));
     TEST(s.unsqueeze(-1) == dp::Shape(2,3,4,1));
 
+    std::cout << "Broadcasting" << std::endl;
     TEST(dp::broadcast(dp::Shape(2,3,4),dp::Shape(3,4)) == dp::Shape(2,3,4));
     TEST(dp::broadcast(dp::Shape(1,3,4),dp::Shape(5,3,1)) == dp::Shape(5,3,4));
+    TEST(dp::broadcast(dp::Shape(1,3,1),dp::Shape(2,3,4)) == dp::Shape(2,3,4));
+    
+    std::cout << "Strides" << std::endl;
 
     TEST(dp::Shape(3,4).broadcast_strides(dp::Shape(2,3,4)) == dp::Shape(0,4,1));
     TEST(dp::Shape(3,1,1).broadcast_strides(dp::Shape(8,3,32,32)) == dp::Shape(0,1,0,0));

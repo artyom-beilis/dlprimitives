@@ -57,6 +57,17 @@ namespace dlprim {
         struct SumTraits;
         struct MaxTraits;
         struct ProdTraits;
+
+        template<int index>
+        struct StridePos;
+
+        template<int dim,typename F>
+        void loop_strides_dim(Shape s,float *a,Shape a_strides,float *b,Shape b_strides,float *c,F const &func);
+
+        template<typename F>
+        void loop_strides(Shape s,float *a,Shape a_strides,float *b,Shape b_strides,float *c,F const &func);
+
+
         
         template<typename Traits>
         void backward_cpu(Tensor &a,Tensor &da,

@@ -60,7 +60,6 @@ void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,s
 {
     DLPRIM_CHECK(in.size()==2);
     out.assign({broadcast(in[0],in[1])});
-    out.assign({in[0]});
     ws = 0;
 }
 
@@ -266,42 +265,169 @@ void Elementwise::backward_gpu( Tensor &a,Tensor &da,
 }
 
 
+template<>
+struct Elementwise::StridePos<1> {
+    static size_t calc(Shape const &index,Shape const &stride)
+    {
+        return index[0]*stride[0];
+    }
+    template<typename F>
+    static void loop(Shape s,F &f)
+    {
+        Shape index(0);
+        for(index[0]=0;index[0]<s[0];index[0]++) {
+            f(index);
+        }
+    }
+};
 
+template<>
+struct Elementwise::StridePos<2> {
+    static size_t calc(Shape const &index,Shape const &stride)
+    {
+        return index[0]*stride[0]+index[1]*stride[1];
+    }
+    template<typename F>
+    static void loop(Shape s,F &f)
+    {
+        Shape index(0,0);
+        for(index[0]=0;index[0]<s[0];index[0]++) {
+            for(index[1]=0;index[1]<s[1];index[1]++) {
+                f(index);
+            }
+        }
+    }
+};
 
+template<>
+struct Elementwise::StridePos<3> {
+    static size_t calc(Shape const &index,Shape const &stride)
+    {
+        return index[0]*stride[0]+index[1]*stride[1]+index[2]*stride[2];
+    }
+    template<typename F>
+    static void loop(Shape s,F &f)
+    {
+        Shape index(0,0,0);
+        for(index[0]=0;index[0]<s[0];index[0]++) {
+            for(index[1]=0;index[1]<s[1];index[1]++) {
+                for(index[2]=0;index[2]<s[2];index[2]++) {
+                    f(index);
+                }
+            }
+        }
+    }
+};
+
+template<>
+struct Elementwise::StridePos<4> {
+    static size_t calc(Shape const &index,Shape const &stride)
+    {
+        return index[0]*stride[0]+index[1]*stride[1]+index[2]*stride[2]+index[3]*stride[3];
+    }
+    template<typename F>
+    static void loop(Shape s,F &f)
+    {
+        Shape index(0,0,0);
+        for(index[0]=0;index[0]<s[0];index[0]++) {
+            for(index[1]=0;index[1]<s[1];index[1]++) {
+                for(index[2]=0;index[2]<s[2];index[2]++) {
+                    for(index[3]=0;index[3]<s[3];index[3]++) {
+                        f(index);
+                    }
+                }
+            }
+        }
+    }
+};
+
+template<>
+struct Elementwise::StridePos<5> {
+    static size_t calc(Shape const &index,Shape const &stride)
+    {
+        return index[0]*stride[0]+index[1]*stride[1]+index[2]*stride[2]+index[3]*stride[3]+index[4]*stride[4];
+    }
+    template<typename F>
+    static void loop(Shape s,F &f)
+    {
+        Shape index(0,0,0);
+        for(index[0]=0;index[0]<s[0];index[0]++) {
+            for(index[1]=0;index[1]<s[1];index[1]++) {
+                for(index[2]=0;index[2]<s[2];index[2]++) {
+                    for(index[3]=0;index[3]<s[3];index[3]++) {
+                        for(index[4]=0;index[4]<s[4];index[4]++) {
+                            f(index);
+                        }
+                    }
+                }
+            }
+        }
+    }
+};
+
+template<int dim,typename F>
+void Elementwise::loop_strides_dim(Shape s,float *a,Shape a_strides,float *b,Shape b_strides,float *c,F const &func)
+{
+    auto f = [&](Shape const &index) {
+        float x0 = a[StridePos<dim>::calc(index,a_strides)];
+        float x1 = b[StridePos<dim>::calc(index,b_strides)];
+        float y0 = func(x0,x1);
+        *c++ = y0;
+    };
+    StridePos<dim>::loop(s,f);
+}
+
+template<typename F>
+void Elementwise::loop_strides(Shape s,float *a,Shape a_strides,float *b,Shape b_strides,float *c,F const &func)
+{
+    switch(s.size()) {
+    case 1: loop_strides_dim<1>(s,a,a_strides,b,b_strides,c,func); return;
+    case 2: loop_strides_dim<2>(s,a,a_strides,b,b_strides,c,func); return;
+    case 3: loop_strides_dim<3>(s,a,a_strides,b,b_strides,c,func); return;
+    case 4: loop_strides_dim<4>(s,a,a_strides,b,b_strides,c,func); return;
+    case 5: loop_strides_dim<5>(s,a,a_strides,b,b_strides,c,func); return;
+    }
+    throw ValidationError("Invalid shape size from broadcasting");
+}
 
 
 void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
 {
-    size_t size = a.shape().total_size();
+    size_t size = c.shape().total_size();
     float *ap=a.data<float>();
     float *bp=b.data<float>();
     float *cp=c.data<float>();
+    Shape as = a.shape().broadcast_strides(c.shape());
+    Shape bs = b.shape().broadcast_strides(c.shape());
     switch(config_.op) {
     case ElementwiseConfig::elementwise_sum:
         {
             float c0 = config_.coeff[0];
             float c1 = config_.coeff[1];
-            for(size_t i=0;i<size;i++) 
-                cp[i] = c0 * ap[i] + c1 * bp[i];
+            loop_strides(c.shape(),ap,as,bp,bs,cp,[=](float x0,float x1) {
+                return x0*c0 + x1*c1;
+            });
         }
         break;
     case ElementwiseConfig::elementwise_prod:
         {
-            float c = config_.coeff[0] * config_.coeff[1];
-            for(size_t i=0;i<size;i++) 
-                cp[i] = c * ap[i] * bp[i];
+            float w = config_.coeff[0] * config_.coeff[1];
+            loop_strides(c.shape(),ap,as,bp,bs,cp,[=](float x0,float x1) {
+                return x0*x1*w;
+            });
         }
         break;
     case ElementwiseConfig::elementwise_max:
         {
-            float c1 = config_.coeff[0];
-            float c2 = config_.coeff[1];
-            for(size_t i=0;i<size;i++) 
-                cp[i] = std::max(c1 * ap[i], c2 * bp[i]);
+            float c0 = config_.coeff[0];
+            float c1 = config_.coeff[1];
+            loop_strides(c.shape(),ap,as,bp,bs,cp,[=](float x0,float x1) {
+                return std::max(x0*c0,x1*c1);
+            });
         }
         break;
     }
-    cpu::apply_activation(cp,size,config_.activation);
+    cpu::apply_activation(c.data<float>(),size,config_.activation);
 }
 
 void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext const &ctx)

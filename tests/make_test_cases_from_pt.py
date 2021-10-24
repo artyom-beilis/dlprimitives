@@ -171,11 +171,30 @@ def make_eltwise():
                     for s1,s2 in [([5,2],[5,2]),
                                   ([5,2],[5,1]),
                                   ([5,2],[2]),
+                                  ([2,3,4],[2,3,4]),
+                                  ([2,3,4],[4]),
+                                  ([2,3,4],[3,1]),
+                                  ([2,3,4],[2,1,1]),
+                                  ([1,3,1],[2,3,4]),
+
+                                  ([2,3,4,5],[2,3,4,5]),
+                                  ([2,3,4,5],[4,1]),
+                                  ([2,3,4,5],[3,1,1]),
+                                  ([2,3,4,5],[2,1,1,1]),
+                                  ([3,1,5],[2,3,4,5]),
+
+                                  ([2,3,4,5,6],[2,3,4,5,6]),
+                                  ([2,3,4,5,6],[4,1,1]),
+                                  ([2,3,4,5,6],[3,1,1,1]),
+                                  ([2,3,4,5,6],[2,1,1,1,1]),
+                                  ([3,1,1,1],[2,3,4,5,6]),
+
                                   ([32,6,16,16],[32,6,16,16]),
                                   ([32,1,16,16],[6,16,1]),
                                   ([32,6,16,16],[6,1,1])]:
                                   #([128,256,16,16]),[10023]]:
-                        if np.prod(s1) < 100 and np.prod(s2) < 100 :
+                        if np.prod(s1) < 1000 and np.prod(s2) < 1000:
+                            print("- generating test for ",s1,s2);
                             a = torch.randn(*s1,requires_grad=True)
                             b = torch.randn(*s2,requires_grad=True)
                             c = final_op(a,b)
@@ -184,9 +203,10 @@ def make_eltwise():
                             c.backward(dc,retain_graph=True)
                             case["in_tensors"] = [a.reshape((-1,)).tolist(),b.reshape((-1,)).tolist()]
                             case["out_tensors"] = [c.reshape((-1,)).tolist()]
-                            case["out_diffs"] = [dc.reshape((-1,)).tolist()]
-                            case["in_diffs"] = [a.grad.reshape((-1)).tolist(),b.grad.reshape((-1)).tolist()]
+                            #case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+                            #case["in_diffs"] = [a.grad.reshape((-1)).tolist(),b.grad.reshape((-1)).tolist()]
                         else:
+                            print("- cpu test for ",s1,s2);
                             case["use_cpu_reference"]=True
                         cases.append(case)
     return report
