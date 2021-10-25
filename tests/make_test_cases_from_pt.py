@@ -153,8 +153,7 @@ def make_eltwise():
                              ("relu",torch.nn.ReLU()) ]:
                     cases=[]
                     test = {
-                        #"train":True,
-                        "train":False,
+                        "train":True,
                         "options" : {
                             "operation":op,
                             "activation": act,
@@ -203,8 +202,8 @@ def make_eltwise():
                             c.backward(dc,retain_graph=True)
                             case["in_tensors"] = [a.reshape((-1,)).tolist(),b.reshape((-1,)).tolist()]
                             case["out_tensors"] = [c.reshape((-1,)).tolist()]
-                            #case["out_diffs"] = [dc.reshape((-1,)).tolist()]
-                            #case["in_diffs"] = [a.grad.reshape((-1)).tolist(),b.grad.reshape((-1)).tolist()]
+                            case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+                            case["in_diffs"] = [a.grad.reshape((-1)).tolist(),b.grad.reshape((-1)).tolist()]
                         else:
                             print("- cpu test for ",s1,s2);
                             case["use_cpu_reference"]=True

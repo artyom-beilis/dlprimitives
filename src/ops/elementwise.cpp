@@ -81,95 +81,6 @@ void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output
     }
 }
 
-struct Elementwise::SumTraits 
-{
-    static void left(float &,float &da,float &,float &,float &dc,float c1,float)
-    {
-        da += c1*dc;
-    }
-    static void right(float &,float &,float &,float &db,float &dc,float ,float c2)
-    {
-        db += c2*dc;
-    }
-};
-
-struct Elementwise::ProdTraits 
-{
-    static void left(float &,float &da,float &b,float &,float &dc,float c1,float c2)
-    {
-        da += c1*c2*b*dc;
-    }
-    static void right(float &a,float &,float &,float &db,float &dc,float c1,float c2)
-    {
-        db += c1*c2*a*dc;
-    }
-};
-
-struct Elementwise::MaxTraits 
-{
-    static void left(float &a,float &da,float &b,float &,float &dc,float c1,float c2)
-    {
-        if(a*c1 >= b*c2) {
-            da += c1*dc;
-        }
-    }
-    static void right(float &a,float &,float &b,float &db,float &dc,float c1,float c2)
-    {
-        if(a*c1 < b*c2) {
-            db += c2*dc;
-        }
-    }
-};
-
-template<typename Traits>
-void Elementwise::backward_cpu( Tensor &at,Tensor &dat,
-                                Tensor &bt,Tensor &dbt,
-                                Tensor &ct,Tensor &dct,
-                                bool left,bool right,
-                                float beta_a,float beta_b)
-{
-    size_t size = at.shape().total_size();
-    
-    float *a = at.data<float>();
-    float *b = bt.data<float>();
-    float *c = ct.data<float>();
-    float *da = dat.data<float>();
-    float *db = dbt.data<float>();
-    float *dc = dct.data<float>();
-
-    cpu::apply_activation_diff(size,c,dc,dc,config_.activation);
-
-    if(beta_a == 0)
-        memset(da,0,sizeof(float)*size);
-    else
-        cblas_sscal(size,beta_a,da,1);
-
-    if(beta_b == 0)
-        memset(db,0,sizeof(float)*size);
-    else
-        cblas_sscal(size,beta_b,db,1);
-
-    float c1 = config_.coeff[0];
-    float c2 = config_.coeff[1];
-
-    if(left && right) {
-        for(size_t i=0;i<size;i++) {
-            Traits::left(a[i],da[i],b[i],db[i],dc[i],c1,c2);
-            Traits::right(a[i],da[i],b[i],db[i],dc[i],c1,c2);
-        }
-    }
-    else if(left) {
-        for(size_t i=0;i<size;i++) {
-            Traits::left(a[i],da[i],b[i],db[i],dc[i],c1,c2);
-        }
-    }
-    else if(right) {
-        for(size_t i=0;i<size;i++) {
-            Traits::right(a[i],da[i],b[i],db[i],dc[i],c1,c2);
-        }
-    }
-}
-
 void Elementwise::backward(std::vector<TensorAndGradient> &input,
                           std::vector<TensorAndGradient> &output,
                           std::vector<TensorAndGradient> &,
@@ -179,15 +90,13 @@ void Elementwise::backward(std::vector<TensorAndGradient> &input,
     DLPRIM_CHECK(input.size()==2);
     DLPRIM_CHECK(output.size()==1); 
     
-    DLPRIM_CHECK(input[0].diff.shape() == input[1].diff.shape());
-    DLPRIM_CHECK(output[0].diff.shape() == input[0].diff.shape());
+    DLPRIM_CHECK(broadcast(input[0].data.shape(),input[1].data.shape())==output[0].data.shape());
     
-    DLPRIM_CHECK(input[0].diff.dtype() == dtype_);
-    DLPRIM_CHECK(input[1].diff.dtype() == dtype_);
-    DLPRIM_CHECK(output[0].diff.dtype() == dtype_);
+    DLPRIM_CHECK(input[0].data.dtype() == dtype_);
+    DLPRIM_CHECK(input[1].data.dtype() == dtype_);
+    DLPRIM_CHECK(output[0].data.dtype() == dtype_);
 
-    DLPRIM_CHECK(input[0].diff.shape() == input[1].diff.shape());
-    DLPRIM_CHECK(output[0].diff.shape() == input[0].diff.shape());
+    DLPRIM_CHECK(broadcast(input[0].diff.shape(),input[1].diff.shape())==output[0].diff.shape());
     
     DLPRIM_CHECK(input[0].diff.dtype() == dtype_);
     DLPRIM_CHECK(input[1].diff.dtype() == dtype_);
@@ -196,28 +105,11 @@ void Elementwise::backward(std::vector<TensorAndGradient> &input,
     if(!input[0].requires_gradient && !input[1].requires_gradient)
         return;
     if(ctx_.is_cpu_context()) {
-        switch(config_.op) {
-        case ElementwiseConfig::elementwise_sum:
-            backward_cpu<SumTraits>(input[0].data,input[0].diff,
-                                    input[1].data,input[1].diff,
-                                    output[0].data,output[0].diff,
-                                    input[0].requires_gradient,input[1].requires_gradient,
-                                    input[0].accumulate_gradient,input[1].accumulate_gradient);
-            break;
-        case ElementwiseConfig::elementwise_prod:
-            backward_cpu<ProdTraits>(input[0].data,input[0].diff,
-                                    input[1].data,input[1].diff,
-                                    output[0].data,output[0].diff,
-                                    input[0].requires_gradient,input[1].requires_gradient,
-                                    input[0].accumulate_gradient,input[1].accumulate_gradient);
-            break;
-        case ElementwiseConfig::elementwise_max:
-            backward_cpu<MaxTraits>(input[0].data,input[0].diff,
-                                    input[1].data,input[1].diff,
-                                    output[0].data,output[0].diff,
-                                    input[0].requires_gradient,input[1].requires_gradient,
-                                    input[0].accumulate_gradient,input[1].accumulate_gradient);
-        }
+        backward_cpu(input[0].data,input[0].diff,
+                     input[1].data,input[1].diff,
+                     output[0].data,output[0].diff,
+                     input[0].requires_gradient,input[1].requires_gradient,
+                     input[0].accumulate_gradient,input[1].accumulate_gradient);
     }
     else {
         backward_gpu(input[0].data,input[0].diff,
@@ -391,6 +283,92 @@ void Elementwise::loop_strides(Shape s,float *a,Shape a_strides,float *b,Shape b
 }
 
 
+template<int dim,typename F,typename R>
+void Elementwise::loops_reduce_dim(Shape s,float *a,Shape as,float *r, Shape rs,F const &func,R const &reduce)
+{
+    auto f = [&](Shape const &index) {
+        float x0 = a[StridePos<dim>::calc(index,as)];
+        float y0 = func(x0);
+        size_t pos = StridePos<dim>::calc(index,rs);
+        r[pos] = reduce(r[pos],y0);
+    };
+    StridePos<dim>::loop(s,f);
+}
+
+template<typename F,typename R>
+void Elementwise::loops_reduce(Shape s,float *a,Shape as,float *r,Shape rs,F const &func,R const &reduce)
+{
+    switch(s.size()) {
+    case 1: loops_reduce_dim<1>(s,a,as,r,rs,func,reduce); return;
+    case 2: loops_reduce_dim<2>(s,a,as,r,rs,func,reduce); return;
+    case 3: loops_reduce_dim<3>(s,a,as,r,rs,func,reduce); return;
+    case 4: loops_reduce_dim<4>(s,a,as,r,rs,func,reduce); return;
+    case 5: loops_reduce_dim<5>(s,a,as,r,rs,func,reduce); return;
+    }
+    throw ValidationError("Invalid shape size from broadcasting");
+}
+
+
+
+
+
+template<int dim,typename F,typename R>
+void Elementwise::loops_reduce_dim(Shape s,float *a,Shape as,float *b,Shape bs,float *r, Shape rs,F const &func,R const &reduce)
+{
+    auto f = [&](Shape const &index) {
+        float x0 = a[StridePos<dim>::calc(index,as)];
+        float x1 = b[StridePos<dim>::calc(index,bs)];
+        float y0 = func(x0,x1);
+        size_t pos = StridePos<dim>::calc(index,rs);
+        r[pos] = reduce(r[pos],y0);
+    };
+    StridePos<dim>::loop(s,f);
+}
+
+template<typename F,typename R>
+void Elementwise::loops_reduce(Shape s,float *a,Shape as,float *b,Shape bs,float *r,Shape rs,F const &func,R const &reduce)
+{
+    switch(s.size()) {
+    case 1: loops_reduce_dim<1>(s,a,as,b,bs,r,rs,func,reduce); return;
+    case 2: loops_reduce_dim<2>(s,a,as,b,bs,r,rs,func,reduce); return;
+    case 3: loops_reduce_dim<3>(s,a,as,b,bs,r,rs,func,reduce); return;
+    case 4: loops_reduce_dim<4>(s,a,as,b,bs,r,rs,func,reduce); return;
+    case 5: loops_reduce_dim<5>(s,a,as,b,bs,r,rs,func,reduce); return;
+    }
+    throw ValidationError("Invalid shape size from broadcasting");
+}
+
+template<int dim,typename F,typename R>
+void Elementwise::loops_reduce_dim(Shape s,float *a,Shape as,float *b,Shape bs,float *c,Shape cs,float *r, Shape rs,F const &func,R const &reduce)
+{
+    auto f = [&](Shape const &index) {
+        float x0 = a[StridePos<dim>::calc(index,as)];
+        float x1 = b[StridePos<dim>::calc(index,bs)];
+        float x2 = c[StridePos<dim>::calc(index,cs)];
+        float y0 = func(x0,x1,x2);
+        size_t pos = StridePos<dim>::calc(index,rs);
+        r[pos] = reduce(r[pos],y0);
+    };
+    StridePos<dim>::loop(s,f);
+}
+
+template<typename F,typename R>
+void Elementwise::loops_reduce(Shape s,float *a,Shape as,float *b,Shape bs,float *c,Shape cs,float *r,Shape rs,F const &func,R const &reduce)
+{
+    switch(s.size()) {
+    case 1: loops_reduce_dim<1>(s,a,as,b,bs,c,cs,r,rs,func,reduce); return;
+    case 2: loops_reduce_dim<2>(s,a,as,b,bs,c,cs,r,rs,func,reduce); return;
+    case 3: loops_reduce_dim<3>(s,a,as,b,bs,c,cs,r,rs,func,reduce); return;
+    case 4: loops_reduce_dim<4>(s,a,as,b,bs,c,cs,r,rs,func,reduce); return;
+    case 5: loops_reduce_dim<5>(s,a,as,b,bs,c,cs,r,rs,func,reduce); return;
+    }
+    throw ValidationError("Invalid shape size from broadcasting");
+}
+
+
+
+
+
 void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
 {
     size_t size = c.shape().total_size();
@@ -453,20 +431,86 @@ void Elementwise::forward_gpu(Tensor &a,Tensor &b,Tensor &c,ExecutionContext con
         code << "y0 = " << activation_equation(config_.activation,"y0") << ";\n";
     }
     core::pointwise_operation_broadcast({a,b},{c},{config_.coeff[0],config_.coeff[1]},code.str(),ctx);
-  /*  
-    int p=0;
-    int size = a.shape().total_size();
-    kernel_.setArg(p++,size);
-    a.set_arg(kernel_,p);
-    b.set_arg(kernel_,p);
-    c.set_arg(kernel_,p);
-    kernel_.setArg(p++,config_.coeff[0]);
-    kernel_.setArg(p++,config_.coeff[1]);
-    
-    cl::NDRange gr((size + 255) / 256 * 256);
-    cl::NDRange wg(256);
-    ctx.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,gr,wg,ctx.events(),ctx.event("eltwise"));*/
     
 }
+
+
+void Elementwise::backward_cpu( Tensor &at,Tensor &dat,
+                                Tensor &bt,Tensor &dbt,
+                                Tensor &ct,Tensor &dct,
+                                bool left,bool right,
+                                float beta_a,float beta_b)
+{
+    float *a = at.data<float>();
+    float *b = bt.data<float>();
+    float *c = ct.data<float>();
+    float *da = dat.data<float>();
+    float *db = dbt.data<float>();
+    float *dc = dct.data<float>();
+
+    cpu::apply_activation_diff(ct.shape().total_size(),c,dc,dc,config_.activation);
+
+    Shape res_shape = ct.shape();
+
+    Shape as = at.shape().broadcast_strides(res_shape);
+    Shape bs = bt.shape().broadcast_strides(res_shape);
+    Shape cs = ct.shape().broadcast_strides(res_shape);
+
+    float c1 = config_.coeff[0];
+    float c2 = config_.coeff[1];
+    float c12 = c1*c2;
+
+    if(left) {
+        if(beta_a == 0)
+            memset(da,0,sizeof(float)*at.shape().total_size());
+        else
+            cblas_sscal(at.shape().total_size(),beta_a,da,1);
+
+        switch(config_.op) {
+        case ElementwiseConfig::elementwise_sum:
+            loops_reduce(res_shape,dc,cs,da,as,
+                        [&](float dy) { return dy * c1; },
+                        [&](float a, float b) { return a+b; });
+            break;
+        case ElementwiseConfig::elementwise_prod:
+            loops_reduce(res_shape,dc,cs,b,bs,da,as,
+                        [&](float dC,float  B) { return c12*B*dC; },
+                        [&](float a, float b) { return a+b; });
+            break;
+        case ElementwiseConfig::elementwise_max:
+            loops_reduce(res_shape,a,as,b,bs,dc,cs,da,as,
+                        [&](float a,float b,float dc) { return a*c1 >= b*c2 ? c1 * dc : 0; },
+                        [&](float a, float b) { return a+b; });
+            break;
+        }
+    }
+
+    if(right) {
+        if(beta_b == 0)
+            memset(db,0,sizeof(float)*bt.shape().total_size());
+        else
+            cblas_sscal(bt.shape().total_size(),beta_b,db,1);
+        switch(config_.op) {
+        case ElementwiseConfig::elementwise_sum:
+            loops_reduce(res_shape,dc,cs,db,bs,
+                        [&](float dy) { return dy * c2; },
+                        [&](float a, float b) { return a+b; });
+            break;
+        case ElementwiseConfig::elementwise_prod:
+            loops_reduce(res_shape,dc,cs,a,as,db,bs,
+                        [&](float dC,float  A) { return c12*A*dC; },
+                        [&](float a, float b) { return a+b; });
+            break;
+        case ElementwiseConfig::elementwise_max:
+            loops_reduce(res_shape,a,as,b,bs,dc,cs,db,bs,
+                        [&](float a,float b,float dc) { return a*c1 < b*c2 ? c2 * dc : 0; },
+                        [&](float a, float b) { return a+b; });
+            break;
+        }
+    }
+}
+
+
+
 
 }

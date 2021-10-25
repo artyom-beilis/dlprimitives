@@ -54,10 +54,6 @@ namespace dlprim {
    		void forward_gpu(Tensor &a,Tensor &b,Tensor &output,ExecutionContext const &ctx);
         void forward_cpu(Tensor &a,Tensor &b,Tensor &output);
 
-        struct SumTraits;
-        struct MaxTraits;
-        struct ProdTraits;
-
         template<int index>
         struct StridePos;
 
@@ -67,9 +63,24 @@ namespace dlprim {
         template<typename F>
         void loop_strides(Shape s,float *a,Shape a_strides,float *b,Shape b_strides,float *c,F const &func);
 
+        template<typename F,typename R>
+        void loops_reduce(Shape s,float *a,Shape as,float *r,Shape rs,F const &func,R const &reduce);
+        template<typename F,typename R>
+        void loops_reduce(Shape s,float *a,Shape as,float *b,Shape bs,float *r,Shape rs,F const &func,R const &reduce);
+        template<typename F,typename R>
+        void loops_reduce(Shape s,float *a,Shape as,float *b,Shape bs,float *c,Shape cs,float *r,Shape rs,F const &func,R const &reduce);
+
+
+        template<int dim,typename F,typename R>
+        void loops_reduce_dim(Shape s,float *a,Shape as,float *r,Shape rs,F const &func,R const &reduce);
+        template<int dim,typename F,typename R>
+        void loops_reduce_dim(Shape s,float *a,Shape as,float *b,Shape bs,float *r,Shape rs,F const &func,R const &reduce);
+        template<int dim,typename F,typename R>
+        void loops_reduce_dim(Shape s,float *a,Shape as,float *b,Shape bs,float *c,Shape cs,float *r,Shape rs,F const &func,R const &reduce);
+
+
 
         
-        template<typename Traits>
         void backward_cpu(Tensor &a,Tensor &da,
                           Tensor &b,Tensor &db,
                           Tensor &c,Tensor &dc,
