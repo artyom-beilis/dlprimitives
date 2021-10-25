@@ -149,6 +149,7 @@ set(DLPRIM_CORE_SRC
         src/program_cache.cpp
         src/gemm.cpp
         src/random.cpp
+        src/shape.cpp
         src/core/ip.cpp
         src/core/init.cpp
         src/core/conv.cpp

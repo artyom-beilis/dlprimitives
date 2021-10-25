@@ -65,7 +65,6 @@ inline bool valid_pos(Shape pos,Shape limits)
 
 }
 
-
 __kernel void exec(Shape limit   PARAMS)
 {
     Shape index = get_pos(limit);
@@ -76,4 +75,5 @@ __kernel void exec(Shape limit   PARAMS)
     CALC
     SAVES
 }
+
 

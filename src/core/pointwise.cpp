@@ -134,21 +134,24 @@ namespace core {
         DLPRIM_CHECK(!xs.empty());
         DLPRIM_CHECK(!ys.empty());
 
+        std::vector<Shape> shapes(xs.size() + ys.size());
+        for(size_t i=0;i<xs.size();i++)
+            shapes[i] = xs[i].shape();
+        for(size_t j=0;j<ys.size();j++)
+            shapes[j+xs.size()] = ys[j].shape();
+
+        shrink_broadcast_ranges(shapes);
+
         DataType target_type = ys[0].dtype();
         Context ctx(e);
-        Shape ref = xs[0].shape();
-        for(size_t i=1;i<xs.size();i++) {
-            ref = broadcast(ref,xs[i].shape());
-        }
-
-        
+        Shape ref = shapes[xs.size()]; // ys[0]
         for(size_t i=0;i<ys.size();i++) {
-            DLPRIM_CHECK(ys[i].shape()  == ref);
+            DLPRIM_CHECK(shapes[i + xs.size()] == ref);
         }
 
         std::vector<Shape> strides(xs.size());
         for(size_t i=0;i<xs.size();i++) {
-            strides[i] = xs[i].shape().broadcast_strides(ref);
+            strides[i] = shapes[i].broadcast_strides(ref);
         }
 
         std::ostringstream params,loads,saves;
@@ -163,6 +166,7 @@ namespace core {
             loads<<type << " y"<<i<<";\\\n";
             saves<<"py"<<i<<"[get_direct_offset(index,limit,py"<<i<<"_offset)]=y"<<i<<";\\\n";
         }
+        loads << "typedef " << data_type_to_opencl_type(target_type) <<  " target_type;\\\n";
 
         for(size_t i=0;i<ws.size();i++) {
             params<<", "<<data_type_to_opencl_type(target_type) << " w" <<i;

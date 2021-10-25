@@ -1,5 +1,9 @@
+#ifndef CUSTOM_REDUCE
+#define CUSTOM_REDUCE 0
+#endif
+
 #define my_get_local_wg_id() ((get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0))
-#if __OPENCL_VERSION__ >= 200
+#if __OPENCL_VERSION__ >= 200 && !CUSTOM_REDUCE
 #define REDUCE_PREPARE(WG_SIZE,dtype) do {} while(0)
 #define my_work_group_reduce_add(val) do { val = work_group_reduce_add(val); } while(0)
 #define my_work_group_reduce_max(val) do { val = work_group_reduce_max(val); } while(0)

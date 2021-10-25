@@ -26,6 +26,44 @@ void test_shape()
     TEST(dp::Shape(3,4).broadcast_strides(dp::Shape(2,3,4)) == dp::Shape(0,4,1));
     TEST(dp::Shape(3,1,1).broadcast_strides(dp::Shape(8,3,32,32)) == dp::Shape(0,1,0,0));
     TEST(dp::Shape(5,1).broadcast_strides(dp::Shape(5,5)) == dp::Shape(1,0));
+
+    std::cout << "Shrink" << std::endl;
+    std::vector<dp::Shape> src,tgt;
+    
+    src={dp::Shape(2,3,4),dp::Shape(2,1,1)};
+    tgt={dp::Shape(2,12),dp::Shape(2,1)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
+
+    src={dp::Shape(2,3,4),dp::Shape(2,3,4)};
+    tgt={dp::Shape(24),dp::Shape(24)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
+
+    src={dp::Shape(2,3,4),dp::Shape(1)};
+    tgt={dp::Shape(24),dp::Shape(1)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
+
+    src={dp::Shape(2,3,4),dp::Shape(3,1)};
+    tgt={dp::Shape(2,3,4),dp::Shape(1,3,1)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
+
+    src={dp::Shape(2,3,4,5),dp::Shape(3,1,1)};
+    tgt={dp::Shape(2,3,20),dp::Shape(1,3,1)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
+
+    src={dp::Shape(2,3,4,5),dp::Shape(1,3,4,1)};
+    tgt={dp::Shape(2,12,5),dp::Shape(1,12,1)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
+
+    src={dp::Shape(5),dp::Shape(5)};
+    tgt={dp::Shape(5),dp::Shape(5)};
+    dp::shrink_broadcast_ranges(src);
+    TEST(src==tgt);
 }
 
 int main(int argc,char **argv)

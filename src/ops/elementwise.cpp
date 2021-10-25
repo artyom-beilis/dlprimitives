@@ -375,14 +375,19 @@ void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
     float *ap=a.data<float>();
     float *bp=b.data<float>();
     float *cp=c.data<float>();
-    Shape as = a.shape().broadcast_strides(c.shape());
-    Shape bs = b.shape().broadcast_strides(c.shape());
+
+    std::vector<Shape> shrank = {a.shape(),b.shape()};
+    shrink_broadcast_ranges(shrank);
+    Shape shrank_c = broadcast(shrank[0],shrank[1]);
+
+    Shape as = shrank[0].broadcast_strides(shrank_c);
+    Shape bs = shrank[1].broadcast_strides(shrank_c);
     switch(config_.op) {
     case ElementwiseConfig::elementwise_sum:
         {
             float c0 = config_.coeff[0];
             float c1 = config_.coeff[1];
-            loop_strides(c.shape(),ap,as,bp,bs,cp,[=](float x0,float x1) {
+            loop_strides(shrank_c,ap,as,bp,bs,cp,[=](float x0,float x1) {
                 return x0*c0 + x1*c1;
             });
         }
@@ -390,7 +395,7 @@ void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
     case ElementwiseConfig::elementwise_prod:
         {
             float w = config_.coeff[0] * config_.coeff[1];
-            loop_strides(c.shape(),ap,as,bp,bs,cp,[=](float x0,float x1) {
+            loop_strides(shrank_c,ap,as,bp,bs,cp,[=](float x0,float x1) {
                 return x0*x1*w;
             });
         }
@@ -399,7 +404,7 @@ void Elementwise::forward_cpu(Tensor &a,Tensor &b,Tensor &c)
         {
             float c0 = config_.coeff[0];
             float c1 = config_.coeff[1];
-            loop_strides(c.shape(),ap,as,bp,bs,cp,[=](float x0,float x1) {
+            loop_strides(shrank_c,ap,as,bp,bs,cp,[=](float x0,float x1) {
                 return std::max(x0*c0,x1*c1);
             });
         }
@@ -450,11 +455,14 @@ void Elementwise::backward_cpu( Tensor &at,Tensor &dat,
 
     cpu::apply_activation_diff(ct.shape().total_size(),c,dc,dc,config_.activation);
 
-    Shape res_shape = ct.shape();
+    std::vector<Shape> shrank = {at.shape(),bt.shape(),ct.shape()};
+    shrink_broadcast_ranges(shrank);
+    Shape res_shape = shrank[2];
 
-    Shape as = at.shape().broadcast_strides(res_shape);
-    Shape bs = bt.shape().broadcast_strides(res_shape);
-    Shape cs = ct.shape().broadcast_strides(res_shape);
+    Shape as = shrank[0].broadcast_strides(res_shape);
+    Shape bs = shrank[1].broadcast_strides(res_shape);
+    Shape cs = shrank[2].broadcast_strides(res_shape);
+
 
     float c1 = config_.coeff[0];
     float c2 = config_.coeff[1];
