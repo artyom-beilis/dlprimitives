@@ -30,5 +30,75 @@ namespace core {
                                         std::string const &code,
                                         ExecutionContext const &e);
 
+    ///
+    /// Perform pointwise operation with both boradcasting and reduction
+    ///
+    /// Calculation is performed over a shape that xs and ys tensors are boradcaasted to.
+    ///
+    /// For example xs have shapes: (64,10,5) and (64,10,1) and ys has shape (10,1) they all
+    /// broadcast to 64,10,5 and reduction is performed over dimentsions 0 and 2
+    ///
+    /// All ys tensors need to have same shape and be boradcastable to total shape
+    ///
+    /// Optional parameters can be provided that avalible in code as w0... wN, Final ys are computed as `ys[i] = alpha[i] * reduced_result + beta[i] * ys[i]`
+    ///
+    class PointwiseOperationBroadcastReduce {
+    public:
+        
+        virtual ~PointwiseOperationBroadcastReduce() {}
+        ///
+        /// Get size of workspace in bytes needed
+        ///
+        virtual size_t workspace() = 0;
+        ///
+        /// Perform coputations
+        ///
+        /// \param xs - vector of input tensor
+        /// \param ys - vector of output tenors
+        //  \param parameters - the weight paramerters, size should match weights_count
+        /// \param alpha - scale for ys, must match size of ys
+        /// \param beta - scale for summation of previous ys, must match size of ys
+        ///
+        ///
+        virtual enqueue(std::vector<Tensor> xs,
+                        std::vector<Tensor> ys,
+                        Tensor &workspace,
+                        std::vector<double> parameters,
+                        std::vector<double> alpha,
+                        std::vector<double> beta,
+                        ExecutionContext const &e) = 0;
+
+        ///
+        /// Create objects:
+        ///
+        /// \param xs - vector of input tensor specs - such tensors are expected to be given to enqueue
+        /// \param ys - vector of output tenorr specs - such tensors are expectred to be give to enqueue
+        //  \param weights_count - size of parameters vector in enqueue
+        /// \param weights_type - type of weights parameters as provided
+        ///
+        /// \param compute_code - OpenCL code to compute values. You can use x0, x1, ... xN as input values for each x for xs
+        /// y0,.., yN for each output and w0,...,wN for each weight. For example "y0 = x0 + w0 * x1;"
+        ///
+        /// \param reduce_init - initalization of reduction variables `reduce_yN` for example "reduce_y0 = 0;" or "reduce_y0=-FLT_MAX;"
+        /// \param reduce - code for sum reduction "reduce_y0 += y0" or max reduction "reduce_y0 = max(reduce_y0,y0)"
+        ///
+        static std::unique_ptr<PointwiseOperationBroadcastReduce> create(
+                        std::vector<TensorSpecs> xs,
+                        std::vector<TensorSpecs> ys,
+                        int weights_count,DataType weights_type,
+                        std::string const &compute_code,
+                        std::string const &reduce_init,
+                        std::string const &reduce);
+
+    };
+
+    void pointwise_operation_broadcast_reduce(  std::vector<Tensor> xs,
+                                                std::vector<Tensor> ys,
+                                                std::vector<double>  ws,
+                                                std::string const &compute,
+                                                std::string const &reduce_init,
+                                                std::string const &reduce,
+                                                ExecutionContext const &e);
+
 } // core
 } // dlprim

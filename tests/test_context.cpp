@@ -4,67 +4,7 @@
 #include <iostream>
 #include "test.hpp"
 
-
 namespace dp = dlprim;
-
-void test_shape()
-{
-    std::cout << "Tesh Shape" << std::endl;
-    dp::Shape s(2,3,4);
-    TEST(s.unsqueeze(0) == dp::Shape(1,2,3,4));
-    TEST(s.unsqueeze(3) == dp::Shape(2,3,4,1));
-    TEST(s.unsqueeze(1) == dp::Shape(2,1,3,4));
-    TEST(s.unsqueeze(-1) == dp::Shape(2,3,4,1));
-
-    std::cout << "Broadcasting" << std::endl;
-    TEST(dp::broadcast(dp::Shape(2,3,4),dp::Shape(3,4)) == dp::Shape(2,3,4));
-    TEST(dp::broadcast(dp::Shape(1,3,4),dp::Shape(5,3,1)) == dp::Shape(5,3,4));
-    TEST(dp::broadcast(dp::Shape(1,3,1),dp::Shape(2,3,4)) == dp::Shape(2,3,4));
-    
-    std::cout << "Strides" << std::endl;
-
-    TEST(dp::Shape(3,4).broadcast_strides(dp::Shape(2,3,4)) == dp::Shape(0,4,1));
-    TEST(dp::Shape(3,1,1).broadcast_strides(dp::Shape(8,3,32,32)) == dp::Shape(0,1,0,0));
-    TEST(dp::Shape(5,1).broadcast_strides(dp::Shape(5,5)) == dp::Shape(1,0));
-
-    std::cout << "Shrink" << std::endl;
-    std::vector<dp::Shape> src,tgt;
-    
-    src={dp::Shape(2,3,4),dp::Shape(2,1,1)};
-    tgt={dp::Shape(2,12),dp::Shape(2,1)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-
-    src={dp::Shape(2,3,4),dp::Shape(2,3,4)};
-    tgt={dp::Shape(24),dp::Shape(24)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-
-    src={dp::Shape(2,3,4),dp::Shape(1)};
-    tgt={dp::Shape(24),dp::Shape(1)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-
-    src={dp::Shape(2,3,4),dp::Shape(3,1)};
-    tgt={dp::Shape(2,3,4),dp::Shape(1,3,1)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-
-    src={dp::Shape(2,3,4,5),dp::Shape(3,1,1)};
-    tgt={dp::Shape(2,3,20),dp::Shape(1,3,1)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-
-    src={dp::Shape(2,3,4,5),dp::Shape(1,3,4,1)};
-    tgt={dp::Shape(2,12,5),dp::Shape(1,12,1)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-
-    src={dp::Shape(5),dp::Shape(5)};
-    tgt={dp::Shape(5),dp::Shape(5)};
-    dp::shrink_broadcast_ranges(src);
-    TEST(src==tgt);
-}
 
 int main(int argc,char **argv)
 {
@@ -111,8 +51,6 @@ int main(int argc,char **argv)
             TEST(p[i] == std::max(0.0,-5.0 + i));
         }
         std::cout << "Ok" << std::endl;
-
-        test_shape();
     }
     catch(std::exception const &e) {
         std::cerr <<"Failed:"<< e.what() << std::endl;

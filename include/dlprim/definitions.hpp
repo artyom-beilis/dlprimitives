@@ -95,6 +95,27 @@ namespace dlprim {
 
     template<>
     struct TypeTraits<float> { static constexpr DataType data_type = float_data; };
+
+    template<>
+    struct TypeTraits<uint16_t> { static constexpr DataType data_type = uint16_data; };
+
+    template<>
+    struct TypeTraits<int16_t> { static constexpr DataType data_type = int16_data; };
+
+    template<>
+    struct TypeTraits<uint8_t> { static constexpr DataType data_type = uint8_data; };
+
+    template<>
+    struct TypeTraits<int8_t> { static constexpr DataType data_type = int8_data; };
+
+
+    template<>
+    struct TypeTraits<uint64_t> { static constexpr DataType data_type = uint64_data; };
+
+    template<>
+    struct TypeTraits<int64_t> { static constexpr DataType data_type = int64_data; };
+
+
     template<>
     struct TypeTraits<double> { static constexpr DataType data_type = double_data; };
 

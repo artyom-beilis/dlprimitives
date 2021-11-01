@@ -22,6 +22,7 @@ namespace dlprim {
         Shape(size_t b,size_t c): shape_({b,c}),size_(2) {}
         Shape(size_t b,size_t c,size_t h): shape_({b,c,h}),size_(3) {}
         Shape(size_t b,size_t c,size_t h,size_t w): shape_({b,c,h,w}),size_(4) {}
+        Shape(size_t b,size_t c,size_t d,size_t h,size_t w): shape_({b,c,d,h,w}),size_(5) {}
        
         ///
         /// Initialize from pair of iterators
