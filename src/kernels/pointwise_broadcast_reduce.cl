@@ -14,6 +14,14 @@
 #error "Need at least 1 dim for reduction"
 #endif
 
+#ifndef SMALL_REDUCTION
+#define SMALL_REDUCTION 0
+#endif
+
+#ifndef TWO_STAGE_REDUCTION
+#define TWO_STAGE_REDUCTION 0
+#endif
+
 
 typedef struct __attribute__ ((packed)) Shape {
     ulong s[DIMS];
@@ -120,7 +128,7 @@ inline bool valid_pos(Shape pos,Shape limits)
 }
 
 #define PARAM_INPUT(type,I) ,__global type const *px##I,ulong px##I##_offset,Shape xstrides##I
-#define PARAM_OUTPUT(type,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I
+#define PARAM_OUTPUT(type,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I,type alpha##I,type beta##I
 #define PAPAM_WEIGHT(type,I) ,type w##I
 
 
@@ -133,20 +141,50 @@ inline bool valid_pos(Shape pos,Shape limits)
 
 #define my_get_local_wg_id() ((get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0))
 
+#if SMALL_REDUCTION == 1
+#define REDUCE_INIT(type,I) type reduce_y##I,y##I;
+#else
 #define REDUCE_INIT(type,I) \
     __local type my_reduce_##I[WG_SIZE]; \
     type reduce_y##I,y##I; 
+#endif    
 
 #define SAVE_REDUCE(I) my_reduce_##I[lid] = reduce_y##I;
 #define LOAD_REDUCE(I) reduce_y##I = my_reduce_##I[lid]; y##I = my_reduce_##I[nxt];
 
-#define LOAD_REDUCED_SAVE_GLOBAL(I) y##I = my_reduce_##I[0]; py##I[get_base_offset(index,ystrides##I,py##I##_offset)] = y##I;
+#if SMALL_REDUCTION == 1
+#define LOAD_REDUCED_SAVE_GLOBAL(I) \
+do { \
+    py##I += get_base_offset(index,ystrides##I,py##I##_offset); \
+    reduce_y##I *= alpha##I; \
+    if(beta##I)  \
+        *py##I = beta##I * *py##I + reduce_y##I; \
+    else \
+        *py##I = reduce_y##I; \
+}while(0)
+#else
+#define LOAD_REDUCED_SAVE_GLOBAL(I) \
+do { \
+    y##I = alpha##I * my_reduce_##I[0]; \
+    py##I += get_base_offset(index,ystrides##I,py##I##_offset); \
+    if(beta##I) \
+        *py##I = beta##I * *py##I + y##I; \
+    else \
+        *py##I = y##I; \
+} while(0)
+#endif
 
 
 __kernel 
+#if SMALL_REDUCTION == 0
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
+#endif
 void exec(Shape limit 
-                   PARAMS)
+                   PARAMS
+#if TWO_STAGE_REDUCTION == 1
+                   ,ulong reduce_stride
+#endif                                      
+                   )
 
 {
     Shape index0 = get_pos(limit);
@@ -166,6 +204,8 @@ void exec(Shape limit
 #endif
     }
 
+    #if SMALL_REDUCTION == 0
+
     int lid = my_get_local_wg_id(); 
 
     SAVE_REDUCE_ALL
@@ -183,6 +223,12 @@ void exec(Shape limit
     if(lid == 0 && valid_pos(index0,limit)) {
         LOAD_REDUCED_SAVE_GLOBAL_ALL
     }
+
+    #else
+    if(valid_pos(index0,limit)) {
+        LOAD_REDUCED_SAVE_GLOBAL_ALL
+    }
+    #endif
 }
 
 

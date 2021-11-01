@@ -60,13 +60,13 @@ namespace core {
         /// \param beta - scale for summation of previous ys, must match size of ys
         ///
         ///
-        virtual enqueue(std::vector<Tensor> xs,
-                        std::vector<Tensor> ys,
-                        Tensor &workspace,
-                        std::vector<double> parameters,
-                        std::vector<double> alpha,
-                        std::vector<double> beta,
-                        ExecutionContext const &e) = 0;
+        virtual void enqueue(std::vector<Tensor> xs,
+                             std::vector<Tensor> ys,
+                             Tensor &workspace,
+                             std::vector<double> parameters,
+                             std::vector<double> alpha,
+                             std::vector<double> beta,
+                             ExecutionContext const &e) = 0;
 
         ///
         /// Create objects:
@@ -83,6 +83,7 @@ namespace core {
         /// \param reduce - code for sum reduction "reduce_y0 += y0" or max reduction "reduce_y0 = max(reduce_y0,y0)"
         ///
         static std::unique_ptr<PointwiseOperationBroadcastReduce> create(
+                        Context &ctx,
                         std::vector<TensorSpecs> xs,
                         std::vector<TensorSpecs> ys,
                         int weights_count,DataType weights_type,

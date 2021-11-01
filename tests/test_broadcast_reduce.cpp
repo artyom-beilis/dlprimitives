@@ -91,6 +91,32 @@ bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q)
     return res;
 }
 
+
+template<typename Type>
+void test_pointwise(dp::ExecutionContext const &q)
+{
+    using dp::core::pointwise_operation;
+    dp::Context ctx(q);
+    {
+        auto a=make_tensor<Type>(q,dp::Shape(3,2),{1,2,3,4,5,6});
+        auto b=make_tensor<Type>(q,dp::Shape(3,2),{5,6,7,8,9,10});
+        auto ref=make_tensor<Type>(q,dp::Shape(3,2),{6,8,10,12,14,16});
+        dp::Tensor c(ctx,dp::Shape(3,2),a.dtype());
+        std::cout << a <<"+"<<b<<"->"<<c<<std::endl;
+        pointwise_operation({a,b},{c},{},"y0=x0+x1;",q);
+        TEST(equal(c,ref,q));
+    }
+    {
+        auto a=make_tensor<Type>(q,dp::Shape(3,2),{1,2,3,4,5,6});
+        auto b=make_tensor<Type>(q,dp::Shape(3,2),{5,6,7,8,9,10});
+        auto ref=make_tensor<Type>(q,dp::Shape(3,2),{-4,-4,-4,-4,-4,-4});
+        dp::Tensor c(ctx,dp::Shape(3,2),a.dtype());
+        std::cout << a <<"+"<<b<<"->"<<c<<std::endl;
+        pointwise_operation({a,b},{c},{-1},"y0=x0+w0*x1;",q);
+        TEST(equal(c,ref,q));
+    }
+}
+
 template<typename Type>
 void test_broadcast(dp::ExecutionContext const &q)
 {
@@ -327,6 +353,11 @@ int main(int argc,char **argv)
         dp::ExecutionContext q = ctx.make_execution_context();
         std::cout << ctx.name() << std::endl;
 
+        std::cout << "Pointwise" << std::endl;
+        test_pointwise<float>(q);
+        test_pointwise<int>(q);
+        test_pointwise<int64_t>(q);
+        test_pointwise<int16_t>(q);
         std::cout << "Broadcast" << std::endl;
         test_broadcast<float>(q);
         test_broadcast<int>(q);
