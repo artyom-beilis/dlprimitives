@@ -212,6 +212,19 @@ void test_reduce(dp::ExecutionContext const &q)
         TEST(equal(c,ref,q));
     }
     {
+        auto a=make_tensor<Type>(q,dp::Shape(2,2),{1,2,7,3});
+        auto ref0=make_tensor<Type>(q,dp::Shape(1,2),{7, 3});
+        auto ref1=make_tensor<Type>(q,dp::Shape(1,2),{1, 1});
+        dp::Tensor c0(ctx,dp::Shape(1,2),a.dtype());
+        dp::Tensor c1(ctx,dp::Shape(1,2),a.dtype());
+        std::cout << a <<"+"<<"->"<<c0 << "x" << c1<<","<<c1<<std::endl;
+        pointwise_operation_broadcast_reduce({a},{c0,c1},{},
+                    "y0=x0; y1=reduce_item;",
+                    "reduce_y0 = -100; reduce_y1 = -1;" ,"if(y0 > reduce_y0) { reduce_y0 = y0; reduce_y1 = y1; }",q);
+        TEST(equal(c0,ref0,q));
+        TEST(equal(c1,ref1,q));
+    }
+    {
         auto a=make_tensor<Type>(q,dp::Shape(1,2),{0,1});
         auto b=make_tensor<Type>(q,dp::Shape(2,1),{0,1});
         auto ref0=make_tensor<Type>(q,dp::Shape(2,1),{1,15});

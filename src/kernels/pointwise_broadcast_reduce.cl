@@ -75,10 +75,9 @@ void next_pos(Shape limits,Shape *pos)
 
 }
 
-inline Shape get_pos(Shape limits)
+inline Shape get_pos(Shape limits,ulong reduce_item)
 {
     Shape r;
-    ulong reduce_item = get_global_id(0) * ITEMS_PER_WI;
 #if REDUCE_DIMS == 1
     r.s[0] = reduce_item;
 #elif REDUCE_DIMS == 2
@@ -187,7 +186,8 @@ void exec(Shape limit
                    )
 
 {
-    Shape index0 = get_pos(limit);
+    ulong reduce_item = get_global_id(0) * ITEMS_PER_WI;
+    Shape index0 = get_pos(limit,reduce_item);
     Shape index = index0;
     PREPARE_LOAD_INPUT_ALL
     REDUCE_INIT_ALL
@@ -201,6 +201,7 @@ void exec(Shape limit
         }
 #if ITEMS_PER_WI > 1
         next_pos(limit,&index);
+        reduce_item ++;
 #endif
     }
 
