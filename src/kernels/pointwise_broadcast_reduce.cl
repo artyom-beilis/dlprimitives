@@ -115,6 +115,16 @@ inline Shape get_pos(Shape limits,ulong reduce_item)
     return r;
 }
 
+inline bool valid_save_pos(Shape pos,Shape limits)
+{
+    #pragma unroll
+    for(int i=REDUCE_DIMS;i<DIMS;i++)
+        if(pos.s[i] >= limits.s[i])
+            return 0;
+    return 1;
+
+}
+
 
 inline bool valid_pos(Shape pos,Shape limits)
 {
@@ -127,7 +137,11 @@ inline bool valid_pos(Shape pos,Shape limits)
 }
 
 #define PARAM_INPUT(type,I) ,__global type const *px##I,ulong px##I##_offset,Shape xstrides##I
+#if TWO_STAGE_REDUCTION == 1
+#define PARAM_OUTPUT(type,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I
+#else
 #define PARAM_OUTPUT(type,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I,type alpha##I,type beta##I
+#endif
 #define PAPAM_WEIGHT(type,I) ,type w##I
 
 
@@ -161,7 +175,7 @@ do { \
     else \
         *py##I = reduce_y##I; \
 }while(0)
-#else
+#elif TWO_STAGE_REDUCTION == 0
 #define LOAD_REDUCED_SAVE_GLOBAL(I) \
 do { \
     y##I = alpha##I * my_reduce_##I[0]; \
@@ -170,6 +184,13 @@ do { \
         *py##I = beta##I * *py##I + y##I; \
     else \
         *py##I = y##I; \
+} while(0)
+#else //TWO_STAGE_REDUCTION == 1
+#define LOAD_REDUCED_SAVE_GLOBAL(I) \
+do { \
+    py##I += py##I##_offset + get_group_id(0); \
+    py##I += reduce_stride * get_base_offset(index,ystrides##I,0); \
+    *py##I = my_reduce_##I[0]; \
 } while(0)
 #endif
 
@@ -207,7 +228,7 @@ void exec(Shape limit
 
     #if SMALL_REDUCTION == 0
 
-    int lid = my_get_local_wg_id(); 
+    int lid = get_local_id(0); 
 
     SAVE_REDUCE_ALL
     
@@ -221,12 +242,14 @@ void exec(Shape limit
         } 
         barrier(CLK_LOCAL_MEM_FENCE); 
     } 
-    if(lid == 0 && valid_pos(index0,limit)) {
-        LOAD_REDUCED_SAVE_GLOBAL_ALL
+    if(lid == 0) {
+        if(valid_save_pos(index0,limit)) {
+            LOAD_REDUCED_SAVE_GLOBAL_ALL
+        }
     }
 
     #else
-    if(valid_pos(index0,limit)) {
+    if(valid_save_pos(index0,limit)) {
         LOAD_REDUCED_SAVE_GLOBAL_ALL
     }
     #endif

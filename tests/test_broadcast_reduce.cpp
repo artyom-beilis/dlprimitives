@@ -78,14 +78,22 @@ dp::Tensor make_tensor(dp::ExecutionContext const &q,dp::Shape s,std::vector<T> 
 
 bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q)
 {
-    if(a.shape() != b.shape() || a.dtype() != b.dtype())
+    if(a.shape() != b.shape() || a.dtype() != b.dtype()) {
         return false;
+    }
     a.to_host(q);
     b.to_host(q);
     bool res = memcmp(a.host_data(),b.host_data(),a.memory_size())==0;
-    if(!res && a.dtype() == dlprim::float_data) {
-        for(size_t i=0;i<a.shape().total_size();i++) {
-            std::cout << i << ": " << a.data<float>()[i] << " " << b.data<float>()[i] << std::endl;
+    if(!res) {
+        if(a.dtype() == dlprim::float_data) {
+            for(size_t i=0;i<a.shape().total_size();i++) {
+                std::cout << i << ": " << a.data<float>()[i] << " " << b.data<float>()[i] << std::endl;
+            }
+        }
+        else if(a.dtype() == dlprim::int64_data) {
+            for(size_t i=0;i<a.shape().total_size();i++) {
+                std::cout << i << ": " << a.data<int64_t>()[i] << " " << b.data<int64_t>()[i] << std::endl;
+            }
         }
     }
     return res;
@@ -186,12 +194,40 @@ void test_broadcast(dp::ExecutionContext const &q)
     }
 }
 
+void pointwise_operation_broadcast_reduce(  std::vector<dp::Tensor> xs,
+                                            std::vector<dp::Tensor> ys,
+                                            std::vector<double>  ws,
+                                            std::string const &compute,
+                                            std::string const &reduce_init,
+                                            std::string const &reduce,
+                                            dp::ExecutionContext const &e)
+{
+    using namespace dlprim;
+    Context ctx(e);
+    std::vector<TensorSpecs> xspec,yspec;
+    std::vector<double> alpha,beta;
+    for(auto const &x:xs) {
+        xspec.push_back(x.specs());
+    }
+    for(auto const &y:ys) {
+        yspec.push_back(y.specs());
+        alpha.push_back(1.0);
+        beta.push_back(0.0);
+    }
+    
+    auto op = dlprim::core::PointwiseOperationBroadcastReduce::create(
+                        ctx,xspec,yspec,
+                        ws.size(),ys[0].dtype(),compute,reduce_init,reduce);
+    Tensor workspace;
+    if(op->workspace() > 0)
+        workspace = Tensor(ctx,Shape(op->workspace()),uint8_data);
+    op->enqueue(xs,ys,workspace,ws,alpha,beta,e);
+}
 
 template<typename Type>
 void test_reduce(dp::ExecutionContext const &q)
 {
 
-    using dp::core::pointwise_operation_broadcast_reduce;
     dp::Context ctx(q);
     {
         auto a=make_tensor<Type>(q,dp::Shape(1),{1});
@@ -289,6 +325,50 @@ void test_reduce(dp::ExecutionContext const &q)
                 dp::Shape(2,1,3,1,2),{ 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50});
 
     }
+    for(size_t size : std::vector<int>({5,101,201,512,1001,2011,5099,10012,50243,100017})) {
+        int C=200;
+        dp::Shape as(C,size);
+        dp::Shape rs(C,1);
+        std::vector<Type> av(as.total_size());
+        std::vector<Type> r0(rs.total_size());
+        std::vector<std::int64_t> r1(rs.total_size());
+        size_t pos = 0;
+        for(int c=0;c<C;c++) {
+            for(size_t j=0;j<size;j++) {
+                av.at(pos) = pos % 17;
+                r0.at(c) += pos % 17 * 5;
+                r1.at(c) += -(pos % 17) * 4;
+                pos++;
+            }
+        }
+        auto a=make_tensor<Type>(q,as,av);
+        auto ref0=make_tensor<Type>(q,rs,r0);
+        auto ref1=make_tensor<std::int64_t>(q,rs,r1);
+        dp::Tensor c0(ctx,rs,a.dtype());
+        dp::Tensor c1(ctx,rs,ref1.dtype());
+        std::cout << a <<"->"<<c0 << "&" << c1<<std::endl;
+
+        auto op = dp::core::PointwiseOperationBroadcastReduce::create(
+            ctx,{a.specs()},{c0.specs(),c1.specs()},
+            0,dp::float_data,
+            "y0=x0; y1=-x0;",
+            "reduce_y0 = 0; reduce_y1 = 0;" ,
+            "reduce_y0 += y0; reduce_y1 += y1;");
+        dp::Tensor ws;
+        if(op->workspace() > 0)
+            ws = dp::Tensor(ctx,dp::Shape(op->workspace()),dp::uint8_data);
+
+        op->enqueue({a},{c0,c1},ws,{},{1,2},{0,0},q);
+        op->enqueue({a},{c0,c1},ws,{},{1,2},{4,1},q);
+
+        std::cerr <<c1 << " " <<ref1 << std::endl;
+
+/*        pointwise_operation_broadcast_reduce({a},{c0,c1},{},"y0=x0; y1=-x0;",
+                                                        "reduce_y0 = 0; reduce_y1 = 0;" ,
+                                                        "reduce_y0 += y0; reduce_y1 += y1;",q);*/
+        TEST(equal(c0,ref0,q));
+        TEST(equal(c1,ref1,q));
+    }
     for(int b : std::vector<int>{2,5,64}) {
         for(int hw : std::vector<int>{7,20,37}) {
             int C=500;
@@ -344,6 +424,7 @@ void test_reduce(dp::ExecutionContext const &q)
             TEST(equal(c,ref,q));
         }
     }
+
 }
 
 

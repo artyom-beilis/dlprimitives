@@ -93,13 +93,5 @@ namespace core {
 
     };
 
-    void pointwise_operation_broadcast_reduce(  std::vector<Tensor> xs,
-                                                std::vector<Tensor> ys,
-                                                std::vector<double>  ws,
-                                                std::string const &compute,
-                                                std::string const &reduce_init,
-                                                std::string const &reduce,
-                                                ExecutionContext const &e);
-
 } // core
 } // dlprim
