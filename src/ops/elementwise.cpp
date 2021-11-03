@@ -29,19 +29,188 @@ ElementwiseConfig ElementwiseConfig::from_json(json::value const &v)
 
 Elementwise::Elementwise(Context &ctx,ElementwiseConfig config) :
     Operator(ctx),
-    config_(config),
-    dtype_(float_data)
+    config_(config)
 {
-    DLPRIM_CHECK(dtype_ == float_data);
 }
 
 Elementwise::~Elementwise()
 {
 }
 
+void Elementwise::setup_bwd_gpu(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,size_t &ws)
+{
+    bool same_bwd = in[0] == in[1];
+    TensorSpecs y_spec = out[0];
+    TensorSpecs l_spec = in[0];
+    TensorSpecs r_spec = in[1];
+    std::string reduce_init = "reduce_y0 = 0;";
+    std::string reduce_both_init = reduce_init + " reduce_y1 = 0;";
+    std::string reduce = "reduce_y0 += y0;";
+    std::string reduce_both = reduce + " reduce_y1 += y1;";
+    std::string activation = "x1=" + activation_backward_equation(config_.activation,"x1","x0") + ";\n";
+    bwd_both_.reset();
+
+    switch(config_.op) {
+    case ElementwiseConfig::elementwise_sum:
+        bwd_l_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                        ctx_,
+                        {y_spec,y_spec},{l_spec},1,y_spec.dtype(),
+                        activation + 
+                        "y0 = x1 * w0;",reduce_init,reduce));
+
+        bwd_r_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                        ctx_,
+                        {y_spec,y_spec},{r_spec},1,y_spec.dtype(),
+                        activation + 
+                        "y0 = x1 * w0;",reduce_init,reduce));
+
+        if(same_bwd) {
+            bwd_both_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                            ctx_,
+                            {y_spec,y_spec},{l_spec,r_spec},2,y_spec.dtype(),
+                            activation + 
+                            "y0 = x1 * w0; y1=x1 * w1;",reduce_both_init,reduce_both));
+        }
+
+        break;
+    case ElementwiseConfig::elementwise_prod:
+        bwd_l_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                        ctx_,
+                        {y_spec,y_spec,r_spec},{l_spec},1,y_spec.dtype(),
+                        activation + 
+                        "y0 = x1 * w0 * x2;",reduce_init,reduce));
+
+        bwd_r_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                        ctx_,
+                        {y_spec,y_spec,l_spec},{r_spec},1,y_spec.dtype(),
+                        activation + 
+                        "y0 = x1 * w0 * x2;",reduce_init,reduce));
+        if(same_bwd) {
+            bwd_both_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                            ctx_,
+                            {y_spec,y_spec,l_spec,r_spec},{l_spec,r_spec},1,y_spec.dtype(),
+                            activation + 
+                            "y0 = x1 * x3 * w0; y1=x1 * x2 * w0;",reduce_both_init,reduce_both));
+        }
+        break;
+    case ElementwiseConfig::elementwise_max:
+        bwd_l_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                        ctx_,
+                        {y_spec,y_spec,l_spec,r_spec},{l_spec},2,y_spec.dtype(),
+                        activation + 
+                        "y0 = x2 * w0 >= x3 * w1 ? w0 * x1 : 0 ;",reduce_init,reduce));
+
+        bwd_r_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                        ctx_,
+                        {y_spec,y_spec,l_spec,r_spec},{r_spec},2,y_spec.dtype(),
+                        activation + 
+                        "y0 = x2 * w0 <  x3 * w1 ? w1 * x1 : 0 ;",reduce_init,reduce));
+
+        if(same_bwd) {
+            bwd_both_ = std::move(core::PointwiseOperationBroadcastReduce::create(
+                            ctx_,
+                            {y_spec,y_spec,l_spec,r_spec},{l_spec,r_spec},2,y_spec.dtype(),
+                            activation + 
+                            R"xx(
+                                y0 = y1 = 0;  
+                                if(x2 * w0 >=  x3 * w1) {
+                                    y0 = w0 * x1; 
+                                }
+                                else  {
+                                    y1 = w1 * x1;
+                                }
+                            )xx",
+                            reduce_both_init,reduce_both));
+        }
+
+    }
+    ws = std::max(bwd_l_->workspace(),bwd_r_->workspace());
+    if(same_bwd) {
+        ws = std::max(ws,bwd_both_->workspace());
+    }
+}
+
+void Elementwise::backward_gpu( Tensor &a,Tensor &da,
+                                Tensor &b,Tensor &db,
+                                Tensor &c,Tensor &dc,
+                                Tensor &ws,
+                                bool left,bool right,
+                                float beta_a,float beta_b,
+                                ExecutionContext const &e)
+
+{
+    ExecutionContext ec_l,ec_r;
+    if(left && right) {
+        ec_l = e.generate_series_context(0,2);
+        ec_r = e.generate_series_context(1,2);
+    }
+    else {
+        ec_l = ec_r = e;
+    }
+    if(bwd_both_ && left && right) {
+        switch(config_.op) {
+        case ElementwiseConfig::elementwise_sum:
+                bwd_both_->enqueue({c,dc},{da,db},ws,
+                                   {config_.coeff[0],config_.coeff[1]},
+                                   {1,1},{beta_a,beta_b},e);
+            break;
+        case ElementwiseConfig::elementwise_prod:
+                bwd_both_->enqueue({c,dc,a,b},{da,db},ws,
+                                   {config_.coeff[0]*config_.coeff[1]},
+                                   {1,1},{beta_a,beta_b},e);
+            break;
+        case ElementwiseConfig::elementwise_max:
+                bwd_both_->enqueue({c,dc,a,b},{da,db},ws,
+                                   {config_.coeff[0],config_.coeff[1]},
+                                   {1,1},{beta_a,beta_b},e);
+        }
+        return;
+    }
+    
+    if(left){
+        switch(config_.op) {
+        case ElementwiseConfig::elementwise_sum:
+                bwd_l_->enqueue({c,dc},{da},ws,
+                                   {config_.coeff[0]},
+                                   {1},{beta_a},ec_l);
+            break;
+        case ElementwiseConfig::elementwise_prod:
+                bwd_l_->enqueue({c,dc,b},{da},ws,
+                                   {config_.coeff[0]*config_.coeff[1]},
+                                   {1},{beta_a},ec_l);
+            break;
+        case ElementwiseConfig::elementwise_max:
+                bwd_l_->enqueue({c,dc,a,b},{da},ws,
+                                   {config_.coeff[0],config_.coeff[1]},
+                                   {1},{beta_a},ec_l);
+        }
+    }
+    
+    if(right) {
+        switch(config_.op) {
+        case ElementwiseConfig::elementwise_sum:
+                bwd_r_->enqueue({c,dc},{db},ws,
+                                   {config_.coeff[1]},
+                                   {1},{beta_b},ec_r);
+            break;
+        case ElementwiseConfig::elementwise_prod:
+                bwd_r_->enqueue({c,dc,a},{db},ws,
+                                   {config_.coeff[0]*config_.coeff[1]},
+                                   {1},{beta_b},ec_r);
+            break;
+        case ElementwiseConfig::elementwise_max:
+                bwd_r_->enqueue({c,dc,a,b},{db},ws,
+                                   {config_.coeff[0],config_.coeff[1]},
+                                   {1},{beta_b},ec_r);
+        }
+    }
+}
+
+
 void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,std::vector<TensorSpecs> &p,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==2);
+    dtype_ = in[0].dtype();
     DLPRIM_CHECK(in[0].dtype() == dtype_);
     DLPRIM_CHECK(in[1].dtype() == dtype_);
     out.assign({broadcast(in[0].shape(),in[1].shape())});
@@ -49,11 +218,8 @@ void Elementwise::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpe
     ws = 0;
     if(ctx_.is_cpu_context())
         return;
-    cl::Program const &prog = gpu::Cache::instance().get_program(ctx_,"eltwise",
-                                        "ACTIVATION",int(config_.activation),
-                                        "ELTOP",int(config_.op));
-    kernel_ = cl::Kernel(prog,"eltwise");
-    kernel_bwd_ = cl::Kernel(prog,"eltwise_bwd");
+    
+    setup_bwd_gpu(in,out,ws);
 }
 
 void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
@@ -61,6 +227,12 @@ void Elementwise::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,s
     DLPRIM_CHECK(in.size()==2);
     out.assign({broadcast(in[0],in[1])});
     ws = 0;
+    if(ctx_.is_cpu_context())
+        return;
+
+    std::vector<TensorSpecs> ins={TensorSpecs(in[0],dtype_),TensorSpecs(in[1],dtype_)};
+    std::vector<TensorSpecs> outs={TensorSpecs(out[0],dtype_)};
+    setup_bwd_gpu(ins,outs,ws);
 }
 
 void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, std::vector<Tensor> &,Tensor &,ExecutionContext const &e)
@@ -84,7 +256,7 @@ void Elementwise::forward(std::vector<Tensor> &input,std::vector<Tensor> &output
 void Elementwise::backward(std::vector<TensorAndGradient> &input,
                           std::vector<TensorAndGradient> &output,
                           std::vector<TensorAndGradient> &,
-                          Tensor &,
+                          Tensor &ws,
                           ExecutionContext const &e)
 {
     DLPRIM_CHECK(input.size()==2);
@@ -115,47 +287,13 @@ void Elementwise::backward(std::vector<TensorAndGradient> &input,
         backward_gpu(input[0].data,input[0].diff,
                      input[1].data,input[1].diff,
                      output[0].data,output[0].diff,
+                     ws,
                      input[0].requires_gradient,input[1].requires_gradient,
                      input[0].accumulate_gradient,input[1].accumulate_gradient,
                      e);
     }
 
 }
-void Elementwise::backward_gpu( Tensor &a,Tensor &da,
-                                Tensor &b,Tensor &db,
-                                Tensor &c,Tensor &dc,
-                                bool left,bool right,
-                                float beta_a,float beta_b,
-                                ExecutionContext const &e)
-
-{
-    int p=0;
-    int sel = int(left) + (int(right) << 1);
-    int size = a.shape().total_size();
-    kernel_bwd_.setArg(p++,size);
-    kernel_bwd_.setArg(p++,sel);
-
-    a.set_arg(kernel_bwd_,p);
-    da.set_arg(kernel_bwd_,p);
-    
-    b.set_arg(kernel_bwd_,p);
-    db.set_arg(kernel_bwd_,p);
-
-    c.set_arg(kernel_bwd_,p);
-    dc.set_arg(kernel_bwd_,p);
-
-    kernel_bwd_.setArg(p++,config_.coeff[0]);
-    kernel_bwd_.setArg(p++,config_.coeff[1]);
-
-    kernel_bwd_.setArg(p++,beta_a);
-    kernel_bwd_.setArg(p++,beta_b);
-    
-    cl::NDRange gr((size + 255) / 256 * 256);
-    cl::NDRange wg(256);
-    e.queue().enqueueNDRangeKernel(kernel_bwd_,cl::NullRange,gr,wg,e.events(),e.event("eltwise_bwd"));
-    
-}
-
 
 template<>
 struct Elementwise::StridePos<1> {

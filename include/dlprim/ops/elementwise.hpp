@@ -2,6 +2,9 @@
 #include <dlprim/operator.hpp>
 namespace dlprim {	
     namespace json { class value; }
+    namespace core {
+        class PointwiseOperationBroadcastReduce;
+    }
     struct ElementwiseConfig {
         enum Operation {
             elementwise_sum,
@@ -90,14 +93,15 @@ namespace dlprim {
         void backward_gpu(Tensor &a,Tensor &da,
                           Tensor &b,Tensor &db,
                           Tensor &c,Tensor &dc,
+                          Tensor &ws,
                           bool l,bool r, 
                           float ba,float bb,
                           ExecutionContext const &e);
+        void setup_bwd_gpu(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,size_t &ws);
 
         ElementwiseConfig config_;
         DataType dtype_;
-        cl::Kernel kernel_;
-        cl::Kernel kernel_bwd_;
+        std::unique_ptr<core::PointwiseOperationBroadcastReduce> bwd_l_,bwd_r_,bwd_both_; 
     };
 } // namespace
  
