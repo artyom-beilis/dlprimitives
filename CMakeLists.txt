@@ -259,6 +259,8 @@ add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_ne
 add_test(test_json test_json)
 add_test(test_random test_random ${TEST_DEV})
 add_test(test_context test_context ${TEST_DEV})
+add_test(test_util test_util ${TEST_DEV})
+add_test(test_broadcast_reduce test_broadcast_reduce ${TEST_DEV})
 
 
 #################

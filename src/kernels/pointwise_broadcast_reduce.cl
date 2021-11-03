@@ -5,6 +5,8 @@
 #error "DIMS must be defined"
 #endif
 
+#include "broadcast_dims.h"
+
 #define NORMAL_DIMS (DIMS - REDUCE_DIMS)
 
 #if REDUCE_DIMS > DIMS
@@ -22,10 +24,6 @@
 #define TWO_STAGE_REDUCTION 0
 #endif
 
-
-typedef struct __attribute__ ((packed)) Shape {
-    ulong s[DIMS];
-} Shape;
 
 inline ulong get_base_offset(Shape s,Shape strides,ulong offset)
 {
@@ -50,7 +48,9 @@ inline ulong get_reduce_offset(Shape s,Shape strides)
 
 void next_pos(Shape limits,Shape *pos)
 {
-#if REDUCE_DIMS == 1
+#if REDUCE_DIMS == 0
+    /// nothing
+#elif REDUCE_DIMS == 1
     pos->s[0] ++;
 #elif REDUCE_DIMS == 2
     pos->s[1]++;
@@ -75,6 +75,7 @@ void next_pos(Shape limits,Shape *pos)
 
 }
 
+#if REDUCE_DIMS >= 1
 inline Shape get_pos(Shape limits,ulong reduce_item)
 {
     Shape r;
@@ -114,6 +115,8 @@ inline Shape get_pos(Shape limits,ulong reduce_item)
 #endif
     return r;
 }
+
+#endif
 
 inline bool valid_save_pos(Shape pos,Shape limits)
 {
@@ -207,8 +210,16 @@ void exec(Shape limit
                    )
 
 {
+#if REDUCE_DIMS == 0
+    #if ITEMS_PER_WI > 1
+    #error "Invalid Items per wi size"
+    #endif
+    ulong reduce_item = 0;
+    Shape index0 = get_pos_broadcast(limit);
+#else    
     ulong reduce_item = get_global_id(0) * ITEMS_PER_WI;
     Shape index0 = get_pos(limit,reduce_item);
+#endif
     Shape index = index0;
     PREPARE_LOAD_INPUT_ALL
     REDUCE_INIT_ALL

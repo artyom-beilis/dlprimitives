@@ -95,7 +95,7 @@ namespace core {
 
 
     template<int size>
-    struct __attribute__ ((packed)) CLShape {
+    struct CLShape {
         cl_ulong s[size];
     };
 
@@ -137,9 +137,40 @@ namespace core {
     }
 
 
+    cl::NDRange get_broadcast_ndrange(Shape ref)
+    {
+        cl::NDRange range;
+        switch(ref.size()) {
+        case 1: range = cl::NDRange(ref[0]); break;
+        case 2: range = cl::NDRange(ref[1],ref[0]); break;
+        case 3: range = cl::NDRange(ref[2],ref[1],ref[0]); break;
+        case 4: range = cl::NDRange(ref[3]*ref[2],ref[1],ref[0]); break;
+        case 5: range = cl::NDRange(ref[4]*ref[3],ref[2]*ref[1],ref[0]); break;
+        default:
+            throw NotImplementedError("Invalid dimentsions count for broadcastes shape size " + std::to_string(ref.size()));
+        }
+        return range;
+    }
+
+    cl::NDRange get_broadcast_reduce_ndrange(Shape ref,int zero,int non_reduce_dims,size_t nd_range)
+    {
+        cl::NDRange range;
+        switch(non_reduce_dims) {
+        case 0: range = cl::NDRange(nd_range,1,                       1                      ); break;
+        case 1: range = cl::NDRange(nd_range,ref[zero+0],             1                      ); break;
+        case 2: range = cl::NDRange(nd_range,ref[zero+1],             ref[zero+0]            ); break;
+        case 3: range = cl::NDRange(nd_range,ref[zero+2],             ref[zero+1]*ref[zero+0]); break;
+        case 4: range = cl::NDRange(nd_range,ref[zero+3]*ref[zero+2], ref[zero+1]*ref[zero+0]); break;
+        default:
+            throw NotImplementedError("Invalid dimentsions count for broadcastes shape size " + std::to_string(ref.size()));
+        }
+        return range;
+    }
+
+
     void pointwise_operation_broadcast( std::vector<Tensor> xs,
                                         std::vector<Tensor> ys,
-                                        std::vector<double>  ws,
+                                        std::vector<double> ws,
                                         std::string const &code,
                                         ExecutionContext const &e)
     {
@@ -204,17 +235,7 @@ namespace core {
         
         for(double w:ws) 
             bind_as_dtype(k,p,w,target_type);
-        cl::NDRange range;
-        switch(ref.size()) {
-        case 1: range = cl::NDRange(ref[0]); break;
-        case 2: range = cl::NDRange(ref[1],ref[0]); break;
-        case 3: range = cl::NDRange(ref[2],ref[1],ref[0]); break;
-        case 4: range = cl::NDRange(ref[3]*ref[2],ref[1],ref[0]); break;
-        case 5: range = cl::NDRange(ref[4]*ref[3],ref[2]*ref[1],ref[0]); break;
-        default:
-            throw NotImplementedError("Invalid dimentsions count for broadcastes shape size " + std::to_string(ref.size()));
-        }
-
+        cl::NDRange range = get_broadcast_ndrange(ref);
             
         e.queue().enqueueNDRangeKernel(k,cl::NullRange,range,cl::NullRange,e.events(),e.event("pointwise_exec_broadcast"));
     }
@@ -312,14 +333,13 @@ namespace core {
                 kernel_.setArg(p++,cl_ulong(second_stage_stride_));
             }
 
-            cl::NDRange local = wg_size_ == 0 ? cl::NullRange : cl::NDRange(wg_size_,1,1);
             if(second_stage_stride_ == 1) {
-                e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,range_,local,e.events(),e.event("pointwise_exec_broadcast"));
+                e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,range_,wg_range_,e.events(),e.event("pointwise_exec_broadcast"));
             }
             else {
                 auto e1 = e.generate_series_context(0,2);
                 auto e2 = e.generate_series_context(1,2);
-                e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,range_,local,e1.events(),e1.event("pointwise_exec_broadcast_1st_stage"));
+                e.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,range_,wg_range_,e1.events(),e1.event("pointwise_exec_broadcast_1st_stage"));
                 DLPRIM_CHECK(second_stage_->workspace() == 0);
                 Tensor tmp;
                 second_stage_->enqueue(temp_ys,temp_ys_outputs,tmp,{},alpha,beta,e2);
@@ -373,8 +393,6 @@ namespace core {
                         non_reduce_dims.push_back(dim);
                 }
             }
-
-            DLPRIM_CHECK(!reduce_dims.empty());
 
             for(size_t i=0;i<shapes.size() + 1;i++) {
                 Shape &src = i < shapes.size() ? strides[i] : ref;
@@ -505,17 +523,18 @@ namespace core {
             kernel_ = cl::Kernel(prog,"exec");
 
             cl::NDRange range;
+            cl::NDRange wg_range;
             int zero = reduce_dims.size();
-            switch(non_reduce_dims.size()) {
-            case 0: range = cl::NDRange(nd_range,1,                       1                      ); break;
-            case 1: range = cl::NDRange(nd_range,ref[zero+0],             1                      ); break;
-            case 2: range = cl::NDRange(nd_range,ref[zero+1],             ref[zero+0]            ); break;
-            case 3: range = cl::NDRange(nd_range,ref[zero+2],             ref[zero+1]*ref[zero+0]); break;
-            case 4: range = cl::NDRange(nd_range,ref[zero+3]*ref[zero+2], ref[zero+1]*ref[zero+0]); break;
-            default:
-                throw NotImplementedError("Invalid dimentsions count for broadcastes shape size " + std::to_string(ref_.size()));
+            if(zero == 0) {
+                range = get_broadcast_ndrange(ref);
+                wg_range = cl::NullRange;
+            }
+            else {
+                range = get_broadcast_reduce_ndrange(ref,zero,non_reduce_dims.size(),nd_range);
+                wg_range = wg_size == 0 ? cl::NullRange : cl::NDRange(wg_size,1,1);
             }
             range_ = range;
+            wg_range_ = wg_range;
             wg_size_ = wg_size;
             ref_ = ref;
             xs_specs_ = xs;
@@ -531,7 +550,7 @@ namespace core {
         size_t second_stage_stride_;
         DataType target_type_;
         size_t wg_size_;
-        cl::NDRange range_;
+        cl::NDRange range_,wg_range_;
         cl::Kernel kernel_;
         Shape ref_;
         std::unique_ptr<PointwiseOperationBroadcastReduceImpl> second_stage_;
