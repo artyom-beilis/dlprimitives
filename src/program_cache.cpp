@@ -63,8 +63,13 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
             log += "\n";
             log += cl_log[i].second;
         }
-        std::cerr << code << std::endl;
-        throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + log.substr(0,1024),log);
+        std::cerr <<"Failed Program Code:\n"
+                    "=========================\n"
+                    << code << 
+                    "=========================\n" <<std::endl;
+
+        throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n"
+                    + log.substr(0,1024) + "\nclBuildErrorCode: " + std::to_string(e.err()),log);
     }
     #else
     catch(cl::Error const &e) {

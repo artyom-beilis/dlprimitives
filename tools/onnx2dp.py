@@ -171,6 +171,14 @@ def get_operators(model,inputs,params):
                       outputs = list(n.output),
                     )
             operators.append(op)
+        elif n.op_type == 'Mul':
+            op = dict(name = n.name,
+                      type = 'Elementwise',
+                      inputs = list(n.input),
+                      outputs = list(n.output),
+                      options = dict( operation = 'prod')
+            )
+            operators.append(op)
         elif n.op_type == 'Add':
             op = dict(name = n.name,
                       type = 'Elementwise',

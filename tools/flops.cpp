@@ -507,6 +507,7 @@ do{                                                          \
             "#,Network,Operation,Batch,Kernel,Padding,Stride,Channles In,Channles Out,Groups,Size,GFlops,GFlops%%,GB/s,GB/s%%,Algorithm\n");
         ConvBM setups[] = {
             //  k   p   s   g  in out dim net 
+            {   3,  1,  1,480,480,480, 14,"effnet" },    
             {  11,  2,  4,  1,  3, 64,224,"alexnet" },
             {   5,  2,  1,  2, 96,192, 27,"alexnet" },
             {   5,  2,  1,  1, 64,192, 27,"alexnet" },
