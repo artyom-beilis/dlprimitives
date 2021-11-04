@@ -79,6 +79,15 @@ Parameters:
 
 - `reduce` - reduction, default `mean`, one of `none`, `mean` or `sum` - the reduction on output values.
 
+### MSELoss
+
+Mean Square Error loss, expects as input two identical shapes
+
+Parameters:
+
+- `reduce` - reduction, default `mean`, one of `none`, `mean` or `sum` - the reduction on output values.
+
+
 
 ### Softmax
 

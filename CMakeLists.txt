@@ -179,6 +179,7 @@ set(DLPRIM_SRC
         src/ops/scal.cpp
         src/ops/concat.cpp
         src/ops/nll_loss.cpp
+        src/ops/mse_loss.cpp
         src/ops/initialization.cpp
         ${EXTRA_SRC}
         )

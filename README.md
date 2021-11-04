@@ -42,6 +42,7 @@ Is published under <http://dlprimitives.org/docs/>
 |-----------------------|---------------------------------------|-------------------|
 |Softmax, LogSoftmax    |                                       | Fwd,Bwd           |
 |NLLLoss                |                                       | Fwd,Bwd           |
+|MSELoss                |                                       | Fwd,Bwd           |
 |SoftmaxWithLoss        |                                       | Fwd,Bwd           |
 |Elementwise            | ax+by, max(ax,by), ax\*y, broadcasting| Fwd,Bwd           |
 |Concat                 |                                       | Fwd,Bwd           |

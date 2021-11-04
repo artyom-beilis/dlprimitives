@@ -87,6 +87,48 @@ def make_nll_loss():
                 cases.append(case)
     return report
 
+def make_mse_loss():
+    report = {
+        "operator" : "MSELoss",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for reduction in ['none','mean','sum']:
+        cases = []
+        test =  {
+            "train" : True,
+            "options" : {'reduce':reduction},
+            "setup_tensors" : [ {"shape":[10]}, {"shape":[10]} ],
+            "output_tensors" : [ {"shape": ([1] if reduction != 'none' else [10])} ],
+            "workspace": 0,
+            "cases" : cases
+        }
+        tests.append(test)
+        print("-",reduction)
+        loss = torch.nn.MSELoss(reduction=reduction)
+        for s in [[2],[2,3],[2,3,4]]:
+            case = {
+                "in_shapes"  : [s,s],
+                "out_shapes" : [[1] if reduction != 'none' else s],
+            }
+            inp1 = torch.randn(*s,requires_grad=True)
+            inp2 = torch.randn(*s,requires_grad=True)
+            out = loss(inp1,inp2)
+            with torch.no_grad():
+                dl  = torch.rand(*case['out_shapes'][0]) * 0.5 + 0.5
+                if reduction != 'none':
+                    val = dl.item();
+                    dl_print= [dl.item()]
+                    dl=torch.tensor(val)
+                else:
+                    dl_print = dl.reshape((-1,)).tolist()
+            out.backward(dl,retain_graph=True);
+            case["in_tensors"] = [inp1.reshape((-1,)).tolist(),inp2.reshape((-1,)).tolist()]
+            case["out_tensors"] = [out.reshape((-1,)).tolist()]
+            case["out_diffs"] = [dl.reshape((-1,)).tolist()]
+            case["in_diffs"] = [inp1.grad.reshape((-1,)).tolist(),inp2.grad.reshape((-1,)).tolist()]
+            cases.append(case)
+    return report
 
 
 def make_log_softmax():
@@ -868,6 +910,7 @@ if __name__ == "__main__":
         "log_softmax" : make_log_softmax,
         "softmax_loss" : make_softmax_loss,
         "nll_loss" : make_nll_loss,
+        "mse_loss" : make_mse_loss,
         "elementwise"  : make_eltwise,
         "pooling2d" : make_pooling2d,
         "global_pooling" : make_global_pooling,

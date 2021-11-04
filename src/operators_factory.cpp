@@ -20,6 +20,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     { 
+        "MSELoss", 
+        [](Context &ctx,json::value const &p) {
+            return new MSELoss(ctx,MSELossConfig::from_json(p));
+        }
+    },
+    { 
         "SoftmaxWithLoss", 
         [](Context &ctx,json::value const &p) {
             return new SoftmaxWithLoss(ctx,SoftmaxConfig::from_json(p));
