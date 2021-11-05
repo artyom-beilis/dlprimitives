@@ -120,7 +120,10 @@ namespace dlprim {
     struct TypeTraits<double> { static constexpr DataType data_type = double_data; };
 
     template<>
-    struct TypeTraits<int> { static constexpr DataType data_type = int32_data; };
+    struct TypeTraits<uint32_t> { static constexpr DataType data_type = int32_data; };
+
+    template<>
+    struct TypeTraits<int32_t> { static constexpr DataType data_type = int32_data; };
     
     inline DataType string_to_data_type(std::string const &s)
     {
@@ -168,6 +171,55 @@ namespace dlprim {
             return "unknown";
         }
     
+    }
+    enum DataTypeLimit {
+        dt_min_val,
+        dt_max_val,
+    };
+
+    inline std::string data_type_to_opencl_numeric_limit(DataType dt,DataTypeLimit lmt)
+    {
+        if(is_floating_point_data_type(dt)) {
+            std::string prefix;
+            switch(dt) {
+            case float_data: 
+            case bfloat16_data:
+                prefix="FLT"; 
+                break;
+            case double_data : prefix="DBL"; break;
+            case half_data: prefix="HALF"; break;
+            default:
+                throw ValidationError("Unsupported type");
+            }
+            switch(lmt) {
+            case dt_min_val: return "(-" + prefix + "_MAX)";
+            case dt_max_val: return prefix + "_MAX";
+            };
+        }
+        else {
+            bool unsig = (dt & (3 << 3)) == (3<<3);
+            std::string prefix;
+            switch(dt) {
+            case int64_data: return "LONG";
+            case uint64_data: return "ULONG";
+
+            case int32_data: return "INT";
+            case uint32_data: return "UINT";
+
+            case int16_data: return "SHRT";
+            case uint16_data: return "USHRT";
+
+            case int8_data: return "CHAR";
+            case uint8_data: return "UCHAR";
+            default:
+                throw NotImplementedError("Unsupported data type");
+            }
+            switch(lmt) {
+            case dt_min_val: return unsig ? "0" : prefix + "_MIN";
+            case dt_max_val: return prefix + "_MAX";
+            };
+        }
+        throw NotImplementedError("Unsupported data type");
     }
     inline std::string data_type_to_opencl_type(DataType dt,bool io_type=false)
     {

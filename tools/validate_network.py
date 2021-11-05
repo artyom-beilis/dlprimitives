@@ -147,7 +147,7 @@ def predict_on_images(model,images,device,config):
         for k in range(3):
             image[0,k,:,:] = torch.from_numpy(npimg[dr:dr+th,dc:dc+tw,k] * fact[k] + off[k])
         image = image.to(device)
-        res = model(image).to('cpu')
+        res = model(image)
         index = torch.argmax(res[0]).item()
         csv.append([path,str(index),classes[index]] + ['%8.6f' % v for v in res[0].tolist()])
     with open('report.csv','w') as f:

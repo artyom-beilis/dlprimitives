@@ -1,4 +1,5 @@
 #include <dlprim/core/common.hpp>
+#include <dlprim/core/pointwise.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 
 #include <iostream>
@@ -41,15 +42,7 @@ namespace core {
     void fill_tensor(Tensor &t,double value,ExecutionContext const &e)
     {
         Context ctx(e);
-        DLPRIM_CHECK(t.dtype() == float_data);
-        cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"fill");
-        cl::Kernel k(prog,"fill");
-        cl_ulong total = t.shape().total_size();
-        int p=0;
-        k.setArg(p++,total);
-        t.set_arg(k,p);
-        k.setArg(p++,float(value));
-        e.queue().enqueueNDRangeKernel(k,cl::NullRange,cl::NDRange(total),cl::NullRange,e.events(),e.event("fill"));
+        pointwise_operation({},{t},{value},"y0=w0;",e);
     }
 
 

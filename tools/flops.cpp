@@ -4,6 +4,7 @@
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/core/common.hpp>
 #include <dlprim/core/conv.hpp>
+#include <dlprim/core/pointwise.hpp>
 #include <iostream>
 #include <sstream>
 #include <cmath>
@@ -123,6 +124,124 @@ public:
         }
     }
 
+    std::string to_string(dp::Shape const &s)
+    {
+        std::ostringstream ss;
+        ss<<s;
+        return ss.str();
+    }
+
+    void run_br_bm(int index=-1)
+    {
+        printf("Broadcast/Reduce\n");
+        fprintf(report_,"BC/RD\n"
+            "ID,type,A,B,GFlops,GFlops %%,GB/s,GB/s%%\n");
+        dp::DataType types[3]={dp::float_data,dp::int64_data,dp::int16_data};
+        using dlprim::Shape;
+        dp::Shape setups[][3] = {
+            { Shape(64,512,24,24),  Shape(64,512,24,24),    Shape(64,512,24,24) },
+            { Shape(64,512,24,24),  Shape(512,1,1),         Shape(64,512,24,24) },
+            { Shape(64,512,24,24),  Shape(1,512,1,1),       Shape(1,512,1,1) },
+            { Shape(64,512,24,24),  Shape(64,512,24,24),    Shape(1,512,1,1) },
+            { Shape(64,512,24,24),  Shape(64,512,24,24),    Shape(64,1,1,1) },
+            { Shape(256,1000),      Shape(256,1),           Shape(1) },
+        };
+        for(dp::DataType dtype: types) {
+            for(unsigned setup = 0;setup < sizeof(setups)/sizeof(setups[0]);setup++) {
+                if(index != -1 && index != int(setup))
+                    continue;
+                Shape A = setups[setup][0];
+                Shape B = setups[setup][1];
+                Shape C = setups[setup][2];
+                double total = double(A.total_size()) 
+                               + double(B.total_size())
+                               + double(C.total_size());
+                total *= dp::size_of_data_type(dtype);
+                double op_per_sec = total / ref_.bps;
+                double target_calls = 2 / op_per_sec;
+                int calls = std::max(5,std::min(200,int(target_calls)));
+                int warms = std::max(1,calls / 5);
+                
+
+                printf("  %8s %-15s %-15s %-15s ",
+                            dp::data_type_to_opencl_type(dtype).c_str(),
+                            to_string(A).c_str(),
+                            to_string(B).c_str(),
+                            to_string(C).c_str());
+
+                fflush(stdout);
+                Metrics m = test_broadcast_reduce(warms,calls,A,B,C,dtype);
+
+                double flops_per =  m.flops / ref_.flops * 100;
+                double bandw_per =  m.bps / ref_.bps * 100;
+                double max_per = std::max(flops_per,bandw_per);
+                char const *limited = (flops_per > bandw_per) ? "gflops" : "memory";
+                
+                printf("  %8.1f GFlops (%5.2f%%) %8.1f GB/s (%5.2f%%) limited by %s %5.2f%%\n",
+                            m.flops * 1e-9, flops_per,
+                            m.bps * 1e-9, bandw_per,
+                            limited, max_per
+                            );
+                fflush(stdout);
+                fprintf(report_,"%s,%s,%s,%10s,",
+                            dp::data_type_to_opencl_type(dtype).c_str(),
+                            to_string(A).c_str(),
+                            to_string(B).c_str(),
+                            to_string(C).c_str());
+                fprintf(report_,"%8.1f,%8.1f\n",
+                            m.flops * 1e-9,
+                            m.bps * 1e-9
+                            );
+
+            }
+        }
+    }
+
+
+    Metrics test_broadcast_reduce(int warm,int calc,dp::Shape a,dp::Shape b,dp::Shape c,dp::DataType dt)
+    {
+        
+        dp::Tensor A(ctx_,a,dt);
+        dp::Tensor B(ctx_,b,dt);
+        dp::Tensor C(ctx_,c,dt);
+        
+        rand(A,1);
+        rand(B,1);
+        dp::core::fill_tensor(C,0,ec_);
+
+        auto op = dp::core::PointwiseOperationBroadcastReduce::create(ctx_,
+                    {A.specs(),B.specs()},{C.specs()},
+                    1,dt,
+                    "y0 = x0 + w0 * x1;",
+                    "reduce_y0 = 0;",
+                    "reduce_y0 += y0;");
+        dp::Tensor ws;
+        if(op->workspace()) {
+            ws = dp::Tensor(ctx_,dp::Shape(op->workspace()),dp::uint8_data);
+        }
+        
+        time_point_type start,end;
+        for(int i=-warm;i<calc;i++) {
+            if(i == 0) {
+                ec_.finish();
+                start = clock_type::now();
+            }
+            op->enqueue({A,B},{C},ws,{2},{1.0},{0.0},ec_);
+        }
+        ec_.finish();
+        end = clock_type::now();
+        double seconds = sec_diff(start,end);
+        double total_shape = dp::broadcast(A.shape(),B.shape()).total_size();
+        double reductions = total_shape / C.shape().total_size();
+        double flop = total_shape*2 + (reductions - 1)  * C.shape().total_size();
+        double bytes = A.memory_size() + B.memory_size() + C.memory_size();
+        Metrics met;
+        met.flops = flop  * calc / seconds;
+        met.bps   = bytes * calc / seconds;
+
+        return met;
+    }
+
 #ifdef CUDA_TEST
     Metrics test_gemm(int warm,int calc,int m,int n,int k,bool ta,bool tb)
     {
@@ -235,8 +354,24 @@ public:
     }
     void rand(dp::Tensor &t,float sigma)
     {
-        dp::core::fill_random(t,seed_,seq_,dp::core::rnd_normal,0,sigma,ec_);
-        seq_ += (t.shape().total_size() + 3)/4;
+        if(t.dtype() == dp::float_data || t.dtype() == dp::half_data || t.dtype() == dp::bfloat16_data) {
+            dp::core::fill_random(t,seed_,seq_,dp::core::rnd_normal,0,sigma,ec_);
+            seq_ += (t.shape().total_size() + 3)/4;
+        }
+        else {
+            size_t n=t.shape().total_size();
+            if(t.dtype() == dp::int64_data) {
+                int64_t *p=t.data<int64_t>();
+                for(size_t i=0;i<n;i++)
+                    p[i] = i%17;
+            }
+            else if(t.dtype() == dp::int16_data) {
+                int16_t *p=t.data<int16_t>();
+                for(size_t i=0;i<n;i++)
+                    p[i] = i%17;
+            }
+            t.to_device(ec_);
+        }
     }
 #endif
 
@@ -733,13 +868,14 @@ FlopsStats get_flops(std::string device, double scale)
 int main(int argc,char **argv)
 {
     if(argc < 2) {
-        std::cerr << "Usage flops [-gN] [-cN] PLAT:DEV [mpl]" << std::endl;
+        std::cerr << "Usage flops [-gN] [-bN] [-cN] PLAT:DEV [mpl]" << std::endl;
         std::cerr << " mpl is multipier how much bigger/smaller buffers/duration to calculate\n"
                      " For example dlprim_flops 0:0 0.5\n";
         return 1;
     }
     int gemm_index = -1;
     int conv_index = -1;
+    int br_index = -1;
     if(argv[1][0] == '-') {
        if(argv[1][1] == 'g') {
             gemm_index = atoi(argv[1]+2);
@@ -751,8 +887,13 @@ int main(int argc,char **argv)
             argv++;
             argc--;
         }
+        else if(argv[1][1] == 'b') {
+            br_index = atoi(argv[1]+2);
+            argv++;
+            argc--;
+        }
         else {
-            std::cerr << "Expecting g/c after -" << std::endl;
+            std::cerr << "Expecting g/c/b after -" << std::endl;
             return 1;
         }
     }
@@ -780,9 +921,18 @@ int main(int argc,char **argv)
     }
 #endif
     Benchmarker bm(argv[1],fs,scale);
-    if(conv_index==-1)
+    if(br_index == -1 && conv_index == -1 && gemm_index == -1) {
+        bm.run_br_bm(br_index);
         bm.run_gemm_bm(gemm_index);
-    if(gemm_index==-1)
         bm.run_conv_bm(conv_index);
+    }
+    else {
+        if(br_index != -1)
+            bm.run_br_bm(br_index);
+        if(conv_index!=-1)
+            bm.run_gemm_bm(gemm_index);
+        if(gemm_index!=-1)
+            bm.run_conv_bm(conv_index);
+    }
 }
 
