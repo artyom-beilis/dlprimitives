@@ -1,6 +1,7 @@
 #include <dlprim/net.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/solvers/adam.hpp>
+#include <dlprim/solvers/sgd.hpp>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -16,6 +17,7 @@ int main(int argc,char **argv)
         bool enable_backward = false;
         bool force_cpu_times = false;
         bool enable_adam = false;
+        bool enable_sgd = false;
         int batch_override = -1;
         int warm = 5;
         int iters = 20;
@@ -24,8 +26,10 @@ int main(int argc,char **argv)
             if(flag == "-t") {
                 enable_profiling = true;
             }
-            else if(flag == "-g") 
+            else if(flag == "-a") 
                 enable_adam = true;
+            else if(flag == "-g") 
+                enable_sgd = true;
             else if(flag == "-b") 
                 enable_backward = true;
             else if(flag == "-C")
@@ -51,7 +55,8 @@ int main(int argc,char **argv)
             std::cerr << "  -t enable profiling \n"
                          "  -b measure backpropogation as well, not inference only\n"
                          "  -C profile execution times rather than gpu counters (forces sync for each layer)\n"
-                         "  -g add Adam optimizer to benchmark\n"
+                         "  -a add Adam optimizer to benchmark\n"
+                         "  -g add SGD optimizer to benchmark\n"
                          "  -iNNN - number of iterations to calc average over, default 20\n"
                          "  -wMMM - number of iterations to warmup, default 20\n";
             return 1;
@@ -98,9 +103,14 @@ int main(int argc,char **argv)
                 res_diff.push_back(net.tensor_diffs()[net.output_names()[i]]);
         }
         std::unique_ptr<dp::solvers::SolverBase> solver;
-        if(enable_adam) {
+
+        if(enable_adam && enable_sgd)
+            throw std::runtime_error("Can't use both ADAM and SGD");
+
+        if(enable_adam) 
             solver.reset(new dp::solvers::Adam(ctx));
-        }
+        if(enable_sgd) 
+            solver.reset(new dp::solvers::SGD(ctx));
 
         dp::ExecutionContext q=ctx.make_execution_context((enable_profiling && !force_cpu_times)? CL_QUEUE_PROFILING_ENABLE : 0);
         std::shared_ptr<dp::TimingData> timing;

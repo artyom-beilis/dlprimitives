@@ -133,7 +133,7 @@ namespace gpu {
             if(size >= 1024)
                 wg = 256;
             int p=0;
-            scal_.setArg(p++,int(size));
+            scal_.setArg(p++,cl_ulong(size));
             scal_.setArg(p++,s);
             scal_.setArg(p++,x);
             scal_.setArg(p++,x_offset);

@@ -24,13 +24,13 @@ namespace dlprim {
         }
         else {
             int p = 0;
-            int size = t.shape().total_size();
+            size_t size = t.shape().total_size();
             int wg;
             if(size >= 1024)
                 wg = 256;
             else
                 wg = 64;
-            k_.setArg(p++,int(size));
+            k_.setArg(p++,cl_ulong(size));
             k_.setArg(p++,s);
             t.set_arg(k_,p);
             cl::NDRange l(wg);

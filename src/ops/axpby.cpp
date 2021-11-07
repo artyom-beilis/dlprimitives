@@ -1,5 +1,6 @@
 #include <dlprim/ops/axpby.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <iostream>
 #include <my_cblas.hpp>
 
 namespace dlprim {
@@ -21,6 +22,7 @@ void AXPBY::apply(float a,Tensor &x,float b,Tensor &y,Tensor &z,ExecutionContext
     DLPRIM_CHECK(x.shape().total_size() == y.shape().total_size());
     DLPRIM_CHECK(z.shape().total_size() == y.shape().total_size());
     size_t total = x.shape().total_size();
+    e.queue().finish();
     if(ctx_.is_cpu_context()) {
         float *xp = x.data<float>();
         float *yp = y.data<float>();
@@ -41,7 +43,7 @@ void AXPBY::apply(float a,Tensor &x,float b,Tensor &y,Tensor &z,ExecutionContext
         cl::NDRange g=gpu::round_range(total,l);
        
         int p=0;
-        kernel_.setArg(p++,int(total));
+        kernel_.setArg(p++,cl_ulong(total));
         kernel_.setArg(p++,a);
         x.set_arg(kernel_,p);
         kernel_.setArg(p++,b);
