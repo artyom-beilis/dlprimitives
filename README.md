@@ -40,10 +40,10 @@ Is published under <http://dlprimitives.org/docs/>
 
 |Operator               |Features                               | Computation       |
 |-----------------------|---------------------------------------|-------------------|
-|Softmax, LogSoftmax    |                                       | Fwd               |
+|Softmax, LogSoftmax    |                                       | Fwd,Bwd           |
 |NLLLoss                |                                       | Fwd,Bwd           |
 |SoftmaxWithLoss        |                                       | Fwd,Bwd           |
-|Elementwise            | ax+by, max(ax,by), ax\*y              | Fwd,Bwd           |
+|Elementwise            | ax+by, max(ax,by), ax\*y, broadcasting| Fwd,Bwd           |
 |Concat                 |                                       | Fwd,Bwd           |
 |Slice                  |                                       | Fwd,Bwd           |
 |MaxPool2d              |                                       | Fwd,Bwd           |
