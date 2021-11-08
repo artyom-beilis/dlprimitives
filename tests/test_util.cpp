@@ -1,4 +1,5 @@
 #include <dlprim/core/util.hpp>
+#include <dlprim/core/pointwise.hpp>
 #include "test.hpp"
 #include <iostream>
 
@@ -46,28 +47,49 @@ int main(int argc,char **argv)
                 TEST(memcmp(xv,xv2,sizeof(float)*8) == 0);
             }
             {
-                for(int dims=2;dims<=5;dims++) {
-                    int sizes[5]={2,3,5,7,11};
-                    Shape s=Shape::from_range(sizes+0,sizes+dims);
-                    Shape strides=s;
-                    int scale=1;
-                    for(int i=dims-1;i>=0;i--) {
-                        strides[i]=scale;
-                        scale *= s[i];
+                for(int strides_mask = 0;strides_mask < (1<<5);strides_mask++) {
+                    for(int dims=1;dims<=5;dims++) {
+                        int sizes[5]={2,3,5,7,11};
+                        Shape s=Shape::from_range(sizes+0,sizes+dims);
+                        Shape src_s = s;
+                        Shape strides_src=s,strides_tgt=s;
+                        int scale_src=1;
+                        int scale_tgt=1;
+                        for(int i=dims-1;i>=0;i--) {
+                            strides_src[i]=scale_src;
+                            strides_tgt[i]=scale_tgt;
+                            if(strides_mask & (1<<i)) {
+                                scale_src *= s[i];
+                            }
+                            else {
+                                src_s[i] = 1;
+                                strides_src[i] = 0;
+                            }
+                            scale_tgt *= s[i];
+                        }
+                        std::cout << "Checking " << src_s << " as "<< s <<"/"<<strides_src << "->" << s << "/"<<strides_tgt<< std::endl;
+                        std::vector<int> vals_x(src_s.total_size());
+                        std::vector<int> vals_y(s.total_size());
+                        std::vector<int> vals_y_ref(s.total_size());
+                        for(unsigned i=0;i<vals_x.size();i++)
+                            vals_x[i]=i+5;
+                        Tensor x(ctx,src_s);
+                        Tensor y_ref(ctx,s);
+                        Tensor y(ctx,s);
+                        x.to_device(q,vals_x.data());
+                        core::pointwise_operation_broadcast({x},{y_ref},{},"y0=x0;",q);
+                        core::copy_strided(s,x.device_buffer(),x.device_offset(),strides_src,
+                                             y.device_buffer(),y.device_offset(),strides_tgt,
+                                             int32_data,q);
+                        y.to_host(q,vals_y.data());
+                        y_ref.to_host(q,vals_y_ref.data());
+                        if(vals_y_ref != vals_y) {
+                            for(size_t i=0;i<vals_y_ref.size();i++) {
+                                std::cerr<< i <<" " << vals_y_ref[i] << " " << vals_y[i] << std::endl;
+                            }
+                        }
+                        TEST(vals_y_ref == vals_y);
                     }
-                    std::cout << "Checking " << s <<"/"<<strides << std::endl;
-                    std::vector<int> vals_x(s.total_size());
-                    std::vector<int> vals_y(s.total_size());
-                    for(unsigned i=0;i<vals_x.size();i++)
-                        vals_x[i]=i+5;
-                    Tensor x(ctx,s);
-                    Tensor y(ctx,s);
-                    x.to_device(q,vals_x.data());
-                    core::copy_strided(s,x.device_buffer(),x.device_offset(),strides,
-                                         y.device_buffer(),y.device_offset(),strides,
-                                         int32_data,q);
-                    y.to_host(q,vals_y.data());
-                    TEST(vals_x == vals_y);
                 }
             }
         }

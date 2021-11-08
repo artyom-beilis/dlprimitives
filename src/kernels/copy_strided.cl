@@ -31,7 +31,7 @@ __kernel void copy(
                 return;
             if(i1 >= d1)
                 return;
-            tgt[i0*t0 + i1*t1] = src[i0*s0 + i1*t1];
+            tgt[i0*t0 + i1*t1] = src[i0*s0 + i1*s1];
         #elif DIMS == 3            
             ulong i2 = get_global_id(0);
             ulong i1 = get_global_id(1);
