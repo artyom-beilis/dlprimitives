@@ -99,7 +99,7 @@
         int address = ((b *  (CHANNELS_IN*GROUPS) + channel) * SRC_ROWS + y) * SRC_COLS + x;
 
         #if CONVGEMM != 3
-            #if PAD_W > 0 && PAD_H > 0
+            #if PAD_W > 0 || PAD_H > 0
                 if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) {
                     return ptr[address];
                 }
@@ -108,7 +108,7 @@
                 return ptr[address];
             #endif  
         #else
-            #if PAD_W > 0 && PAD_H > 0
+            #if PAD_W > 0 || PAD_H > 0
                 if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) 
                     atomic_addf(ptr+address,dV);
             #else
