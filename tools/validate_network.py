@@ -131,6 +131,7 @@ def predict_on_images(model,images,device,config):
     classes = config['class_names']
     csv = []
     model.eval()
+    image = torch.zeros((len(images),3,th,tw),dtype=torch.float32)
     for i,path in enumerate(images):
         img = PIL.Image.open(path)
         npimg = np.array(img).astype(np.float32) * (1.0 / 255)
@@ -143,13 +144,13 @@ def predict_on_images(model,images,device,config):
         off  = -np.array(mean) * fact
         dr = (h - th) // 2
         dc = (w - tw) // 2
-        image = torch.zeros((1,3,th,tw),dtype=torch.float32)
         for k in range(3):
-            image[0,k,:,:] = torch.from_numpy(npimg[dr:dr+th,dc:dc+tw,k] * fact[k] + off[k])
-        image = image.to(device)
-        res = model(image)
-        index = torch.argmax(res[0]).item()
-        csv.append([path,str(index),classes[index]] + ['%8.6f' % v for v in res[0].tolist()])
+            image[i,k,:,:] = torch.from_numpy(npimg[dr:dr+th,dc:dc+tw,k] * fact[k] + off[k])
+    image = image.to(device)
+    res = model(image)
+    for i in range(len(images)):
+        index = torch.argmax(res[i]).item()
+        csv.append([path,str(index),classes[index]] + ['%8.6f' % v for v in res[i].tolist()])
     with open('report.csv','w') as f:
         for row in csv:
             line = ','.join(row) + '\n'
