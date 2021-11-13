@@ -75,7 +75,11 @@
         #if CONVGEMM != 3
             return ptr[address];
         #else
-            ptr[address] += dV;
+            #if REDUCE_K > 1
+                atomic_addf(ptr+address,dV);
+            #else
+                ptr[address] += dV;
+            #endif
         #endif
 #else
         int channel = matrix_col / (KERN_H * KERN_W);
@@ -152,7 +156,7 @@
     }
 
     #if CONVGEMM == 3
-        #define GET_Y_STEP K
+        #define GET_Y_STEP K_src
     #else
         #define GET_Y_STEP M
     #endif
@@ -367,6 +371,8 @@ void    sgemm(    int M,int N,int K,
     #define load_step (TILE_SIZE_M * TILE_SIZE_K / local_wg_size)
 
     float c[BLOCK_SIZE_M][BLOCK_SIZE_N] = {{0.0f}};
+    
+    int K_src = K;
 
 #if INTEL_PLATFORM == 0
     float ap[BLOCK_SIZE_M];
@@ -388,7 +394,7 @@ void    sgemm(    int M,int N,int K,
     int KS = (K + REDUCE_K - 1) / REDUCE_K;
     int sec = get_global_id(DIM_G) % REDUCE_K;
     int k_start=KS * sec;
-    K = min(K,KS * (sec + 1));
+    K = min(K_src,KS * (sec + 1));
     int k = k_start;
 #else
     int k=0;
