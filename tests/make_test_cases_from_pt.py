@@ -684,6 +684,10 @@ def make_conv2d(algo=None):
             (3, 1, 1, 1, 3, 8,True, 1, True), 
             (3, 1, 1, 1, 3, 8,True, 1, True), 
             (1, 0, 1, 1, 3, 5,False,1,False),
+            (1, 0, 1, 1, 48, 1152,False,1,False),
+            (1, 0, 1, 1, 48, 1152,False,2,False),
+            ([1,2], 0, 1, 1, 48, 1152,False,1,False),
+            ([1,2], 0, 1, 1, 48, 1152,False,2,False),
             (1, 0, 2, 1, 3, 5,False,1,False),
             (3, 1, 1, 1, 4, 8,True,2,False), 
             (3, 1, 2, 1, 6, 8,True,2,False), 
@@ -702,7 +706,8 @@ def make_conv2d(algo=None):
         else:
             op = convop
         cases=[]
-        tin = torch.randn(64,cin,256,256)
+        max_dim = 256 if cin * cout < 50000 else 10
+        tin = torch.zeros(64,cin,max_dim,max_dim)
         tout = op(tin)
         test = {
             "init" : "small_frac",
@@ -745,6 +750,8 @@ def make_conv2d(algo=None):
                   [64,cin,64,64],[53,cin,100,100]]:
             lkh,lkw = _at(kernel,0)*_at(dilate,0), _at(kernel,1)*_at(dilate,1)
             if s[2] + _at(pad,0) < lkh or s[3] + _at(pad,1) < lkw:
+                continue
+            if s[2] > max_dim or s[3] > max_dim:
                 continue
             tin = torch.randn(s)
             tin.requires_grad = True
