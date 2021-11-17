@@ -414,11 +414,15 @@ def make_pooling2d():
         [ (2,0,2),
           (3,1,1),
           ([2,4],[1,0],[1,2]),
-          ([3,5],[1,2],[3,4]) ]:
-          for tp,inc_pad,op in [ 
-                ("max",False,torch.nn.MaxPool2d(krn,stride=stride,padding=pad)),
-                ("avg",False,torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=False)),
-                ("avg",True, torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=True)) 
+          ([3,5],[1,2],[3,4]) 
+        ]:
+          for tp,inc_pad,op,cm in [ 
+                ("max",False,torch.nn.MaxPool2d(krn,stride=stride,padding=pad),False),
+                ("avg",False,torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=False),False),
+                ("avg",True, torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=True),False), 
+                ("max",False,torch.nn.MaxPool2d(krn,stride=stride,padding=pad,ceil_mode=True),True),
+                ("avg",False,torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=False,ceil_mode=True),True),
+                ("avg",True, torch.nn.AvgPool2d(krn,stride=stride,padding=pad,count_include_pad=True,ceil_mode=True),True) 
             ]:
             cases=[]
             tin = torch.randn(4,16,32,32)
@@ -430,6 +434,7 @@ def make_pooling2d():
                     "kernel":krn,
                     "pad" : pad,
                     "stride" : stride,
+                    "ceil_mode" : cm,
                     "count_include_pad": inc_pad
                 },
                 "setup_tensors" : [ { "shape" : list(tin.shape) } ],

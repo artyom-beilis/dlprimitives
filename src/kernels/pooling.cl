@@ -40,15 +40,15 @@
 # define START_VAL -DTYPE_MAX
 # define REDUCE(a,b) max((a),(b))
 # define NORMALIZE_FULL(x) (x)
-# define NORMALIZE_PARTIAL(x,dr,dc) (x)
+# define NORMALIZE_PARTIAL(x,dr,dc,vdr,vdc) (x)
 #elif POOL_MODE == 1
 # define START_VAL 0.0f
 # define REDUCE(a,b) ((a) + (b))
 # define NORMALIZE_FULL(x) ((x) * (1.0f / (POOL_H * POOL_W)))
 # if COUNT_INCLUDE_PAD == 0
-#  define NORMALIZE_PARTIAL(x,dr,dc) ((x) * (1.0f /((dr)*(dc))))
+#  define NORMALIZE_PARTIAL(x,dr,dc,vdr,vdc) ((x) * (1.0f /((dr)*(dc))))
 # else
-#  define NORMALIZE_PARTIAL(x,dr,dc) NORMALIZE_FULL(x)
+#  define NORMALIZE_PARTIAL(x,dr,dc,vdr,vdc) ((x) * (1.0f /((vdr)*(vdc))))
 # endif
 #else
 #error "Invalid mode"
@@ -131,7 +131,11 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
                 #endif
             }
         }
-        val = NORMALIZE_PARTIAL(val, min(row1,inp_H)-max(row0,0), min(col1,inp_W) - max(col0,0));
+        val = NORMALIZE_PARTIAL(val, min(row1,inp_H) - max(row0,0),
+                                     min(col1,inp_W) - max(col0,0),
+                                     min(row1,inp_H + PAD_H) - max(-PAD_H,row0),
+                                     min(col1,inp_W + PAD_W) - max(-PAD_W,col0)
+                                     );
     }
     tgt[or * out_W + oc] = val;
     #if INDEX_MAX_SRC == 1
@@ -273,7 +277,11 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
         }
     }
     else {
-        dtype dy_norm = NORMALIZE_PARTIAL(dy, min(row1,inp_H)-max(row0,0), min(col1,inp_W) - max(col0,0));
+        dtype dy_norm = NORMALIZE_PARTIAL(dy, min(row1,inp_H)-max(row0,0),
+                                              min(col1,inp_W) - max(col0,0),
+                                              min(row1,inp_H + PAD_H) - max(-PAD_H,row0),
+                                              min(col1,inp_W + PAD_W) - max(-PAD_W,col0)
+                                            );
         #pragma unroll
         for(int r=row0;r<row1;r++) {
             #pragma unroll

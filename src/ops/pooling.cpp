@@ -24,6 +24,7 @@ Pooling2DConfig Pooling2DConfig::from_json(json::value const &v)
     utils::get_1dNd_from_json(v,"kernel",cfg.kernel,true);
     utils::get_1dNd_from_json(v,"stride",cfg.stride);
     utils::get_1dNd_from_json(v,"pad",cfg.pad);
+    cfg.ceil_mode = v.get("ceil_mode",cfg.ceil_mode);
     cfg.count_include_pad = v.get("count_include_pad",cfg.count_include_pad);
     return cfg;
 }
@@ -81,9 +82,10 @@ void Pooling2D::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs
 
 int Pooling2D::calc_output_size(int in_size,int dim)
 {
-    int padded_size = in_size + config_.pad[dim]*2;
-    DLPRIM_CHECK(padded_size >= config_.kernel[dim]);
-    return (padded_size - config_.kernel[dim]) / config_.stride[dim] + 1;
+    return core::calc_pooling_output_size(in_size,  config_.kernel[dim],
+                                                    config_.pad[dim],
+                                                    config_.stride[dim],
+                                                    config_.ceil_mode);
 }
 
 Shape Pooling2D::calc_shape(Shape ins)
@@ -109,7 +111,7 @@ template<typename Dtype>
 struct Pooling2D::MaxRedcue {
     static constexpr Dtype init_val = -std::numeric_limits<Dtype>::max();
     static Dtype apply(Dtype a,Dtype b) { return std::max(a,b); };
-    static Dtype norm_valid(Dtype a,int ,int ) { return a; }
+    static Dtype norm_valid(Dtype a,int ,int,int,int ) { return a; }
     static Dtype norm_full(Dtype a) { return a; }
 };
 
@@ -120,7 +122,7 @@ struct Pooling2D::AveReduceValid
     Dtype factor;
     static constexpr Dtype init_val = Dtype();
     static Dtype apply(Dtype a,Dtype b) { return a+b; };
-    static Dtype norm_valid(Dtype a,int  dr,int dc) { return a * (Dtype(1)/(dr*dc)); }
+    static Dtype norm_valid(Dtype a,int  dr,int dc,int,int) { return a * (Dtype(1)/(dr*dc)); }
     Dtype norm_full(Dtype a) { return a * factor; }
 };
 
@@ -131,7 +133,7 @@ struct Pooling2D::AveReduceFull
     Dtype factor;
     static constexpr Dtype init_val = Dtype();
     static Dtype apply(Dtype a,Dtype b) { return a+b; };
-    Dtype norm_valid(Dtype a,int,int) { return a * factor; }
+    Dtype norm_valid(Dtype a,int,int,int dr_p,int dc_p) { return a / (dr_p*dc_p); }
     Dtype norm_full(Dtype a) { return a * factor; }
 };
 
@@ -244,12 +246,15 @@ void Pooling2D::backward_cpu_ave(Tensor &dxt,Tensor &dyt,float factor,Reduce rop
                 int row1 = row0 + config_.kernel[0];
                 int col1 = col0 + config_.kernel[1];
 
+                int dr_with_pad = std::min(row1,in_h + config_.pad[0]) - std::max(-config_.pad[0],row0);
+                int dc_with_pad = std::min(col1,in_w + config_.pad[1]) - std::max(-config_.pad[1],col0);
+
                 row0 = std::max(0,row0);
                 col0 = std::max(0,col0);
                 row1 = std::min(row1,in_h);
                 col1 = std::min(col1,in_w);
                 
-                float dy_norm = rop.norm_valid(dy[out_r*out_w + out_c],row1-row0,col1-col0);
+                float dy_norm = rop.norm_valid(dy[out_r*out_w + out_c],row1-row0,col1-col0,dr_with_pad,dc_with_pad);
                 for(int r=row0;r<row1;r++) {
                     for(int c=col0;c<col1;c++) {
                         dx[r*in_w + c] += dy_norm;
@@ -290,6 +295,9 @@ void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
                 
                 Dtype val = rop.init_val;
 
+                int dr_with_pad = std::min(row1,in_h + config_.pad[0]) - std::max(-config_.pad[0],row0);
+                int dc_with_pad = std::min(col1,in_w + config_.pad[1]) - std::max(-config_.pad[1],col0);
+                
                 row0 = std::max(0,row0);
                 col0 = std::max(0,col0);
                 row1 = std::min(row1,in_h);
@@ -305,7 +313,7 @@ void Pooling2D::forward_cpu(Tensor &in,Tensor &out,Reduce rop)
                 if(dr == config_.kernel[0] && dc == config_.kernel[1])
                     val = rop.norm_full(val);
                 else
-                    val = rop.norm_valid(val,dr,dc);
+                    val = rop.norm_valid(val,dr,dc,dr_with_pad,dc_with_pad);
                 tgt[out_r*out_w + out_c] = val;
             }
         }
