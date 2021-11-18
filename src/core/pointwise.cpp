@@ -167,15 +167,26 @@ namespace core {
         return range;
     }
 
-
     void pointwise_operation_broadcast( std::vector<Tensor> xs,
                                         std::vector<Tensor> ys,
                                         std::vector<double> ws,
                                         std::string const &code,
                                         ExecutionContext const &e)
     {
+        std::vector<DataType> dts(ws.size(),ys.at(0).dtype());
+        pointwise_operation_broadcast(xs,ys,ws,dts,code,e);
+    }
+
+    void pointwise_operation_broadcast( std::vector<Tensor> xs,
+                                        std::vector<Tensor> ys,
+                                        std::vector<double> ws,
+                                        std::vector<DataType> dts,
+                                        std::string const &code,
+                                        ExecutionContext const &e)
+    {
         DLPRIM_CHECK(!xs.empty());
         DLPRIM_CHECK(!ys.empty());
+        DLPRIM_CHECK(ws.size() == dts.size());
 
         std::vector<Shape> shapes(xs.size() + ys.size());
         for(size_t i=0;i<xs.size();i++)
@@ -212,7 +223,7 @@ namespace core {
         loads << "typedef " << data_type_to_opencl_type(target_type) <<  " target_type;\\\n";
 
         for(size_t i=0;i<ws.size();i++) {
-            params<<", "<<data_type_to_opencl_type(target_type) << " w" <<i;
+            params<<", "<<data_type_to_opencl_type(dts[i]) << " w" <<i;
         }
 
         loads << '\n';
@@ -233,8 +244,9 @@ namespace core {
         for(Tensor &y:ys)
             y.set_arg(k,p);
         
-        for(double w:ws) 
-            bind_as_dtype(k,p,w,target_type);
+        for(size_t i=0;i<ws.size();i++) { 
+            bind_as_dtype(k,p,ws[i],dts[i]);
+        }
         cl::NDRange range = get_broadcast_ndrange(ref);
             
         e.queue().enqueueNDRangeKernel(k,cl::NullRange,range,cl::NullRange,e.events(),e.event("pointwise_exec_broadcast"));
