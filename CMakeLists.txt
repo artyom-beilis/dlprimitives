@@ -10,6 +10,7 @@ endif()
 option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/cl2.hpp" OFF)
 option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
 option(USE_HDF "Compile with HDF support" ON)
+option(USE_ONEDNN "Enable support of Intel OneDNN" ON)
 
 if(USE_CL_HPP)
     find_path(OCL_PATH CL/cl.hpp)
@@ -18,6 +19,20 @@ else()
     find_path(OCL_PATH CL/cl2.hpp)
     set(DLPRIM_USE_CL1_HPP 0)
 endif()
+
+if(USE_ONEDNN)
+    find_path(ONEDNN_INCLUDE oneapi/dnnl/dnnl.hpp HINT /opt/oneDNN/include/)
+    find_library(ONEDNN_LIB  dnnl  HINT /opt/oneDNN/lib/)
+    if(ONEDNN_INCLUDE AND ONEDNN_LIB)
+        set(WITH_ONEDNN ON)
+        include_directories(${ONEDNN_INCLUDE})
+    else()
+        set(WITH_ONEDNN OFF)
+    endif()        
+else()
+    set(WITH_ONEDNN OFF)
+endif()
+
 
 find_library(OCL_LIB OpenCL) 
 
@@ -121,6 +136,15 @@ if(HDF5_FOUND)
 else()
     message("  HDF5: None")
 endif()
+
+if(WITH_ONEDNN)
+    message("  oneDNN: include ${ONEDNN_INCLUDE}")
+    message("          lib ${ONEDNN_LIB}")
+else()
+    message("  oneDNN: None")
+endif()
+    
+
 if(BUILD_PYDLPRIM)
     message("  Python dlprim: enabled")
     message("  Python version: ${PLIB_VER}")
@@ -143,6 +167,12 @@ add_custom_command(
                     -I ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels
                     ${CL_SOURCES}
                   )
+
+set(DLPRIM_EXTRA_SRC )
+if(WITH_ONEDNN)
+    set(DLPRIM_EXTRA_SRC ${DLPRIM_EXTRA_SRC} src/core/conv_onednn.cpp)
+endif()
+
 set(DLPRIM_CORE_SRC
         src/context.cpp
         src/tensor.cpp
@@ -160,6 +190,7 @@ set(DLPRIM_CORE_SRC
         src/core/loss.cpp
         src/core/activation.cpp
         src/core/util.cpp
+        ${DLPRIM_EXTRA_SRC}
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp)
 
 set(DLPRIM_SRC 
@@ -196,6 +227,9 @@ endif()
 		
 target_link_libraries(dlprim_core ${OCL_LIB})	
 target_link_libraries(dlprim dlprim_core ${OCL_LIB} ${BLAS_LIB})
+if(WITH_ONEDNN)
+    target_link_libraries(dlprim_core ${ONEDNN_LIB})
+endif()
 if(HDF5_FOUND)
     target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
 endif()

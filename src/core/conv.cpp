@@ -3,6 +3,9 @@
 #include <dlprim/core/common.hpp>
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#ifdef WITH_ONEDNN        
+#include "conv_onednn.hpp"
+#endif
 
 namespace dlprim {
 namespace core {
@@ -670,6 +673,12 @@ namespace core {
         bool auto_algo = algo == "auto" || algo == "";
         
         std::unique_ptr<Conv2DForward> r;
+#ifdef WITH_ONEDNN        
+        bool onednn = is_fwd_onednn_compatible(ctx,config,activation);
+        if(onednn && (algo == "intel_onednn" || auto_algo)) {
+            return fwd_onednn_create(ctx,config,bias,activation);
+        }
+#endif        
         if((algo == "winograd" && win) || (auto_algo && win_recommended)) {
             r.reset(new Conv2DForwardWinograd(ctx,config,bias,activation));
         }
