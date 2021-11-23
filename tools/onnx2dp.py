@@ -71,6 +71,7 @@ def get_operators(model,inputs,params):
     operators = []
     actdic = {
         "Relu" : 'relu',
+        'Sigmoid' : 'sigmoid',
         "Clip" : 'relu6'
     }
     op_len = 0
