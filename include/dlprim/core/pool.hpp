@@ -5,6 +5,22 @@ namespace dlprim {
 namespace core {
 
     ///
+    /// Compute output size of the tensor after pooling in specific dimentions.
+    ///
+    inline int calc_pooling_output_size(int in_size,int kernel,int pad,int stride,bool ceil_mode)
+    {
+        int padded_size = in_size + pad*2;
+        DLPRIM_CHECK(padded_size >= kernel);
+        int offset = ceil_mode ? (stride-1) : 0;
+        int size = (padded_size - kernel + offset) / stride + 1;
+        if((size - 1) * stride >= in_size + pad) {
+            size--;
+        }
+        return size;
+    }
+
+
+    ///
     /// 2d pooling
     ///
     class Pooling2DForward {

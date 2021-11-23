@@ -121,6 +121,7 @@ Parameters
 - `stride` - integer or list of two integers, pooling stride, default 1
 - `pad`  - integer or list of two integer, padding, default 0
 - `count_include_pad` - boolean calculate average over padded area as well, default false
+- `ceil_mode` - boolean, default false, how to round the strided pooling size upwards or downwards
 
 Note: kernel, stride and pad can be either single number for symmetric values or pair of integers, 1st for height dimension and second for width
 

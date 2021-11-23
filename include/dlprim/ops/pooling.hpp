@@ -22,11 +22,7 @@ namespace dlprim {
         int kernel[2] = {1,1};
         int pad[2] = {0,0};
         int stride[2]={1,1};
-        //
-        // FIXME: implement me
-        //
-        //bool ceil_mode=false;
-        //
+        bool ceil_mode=false;
         bool count_include_pad = false;
         static Pooling2DConfig from_json(json::value const &v);
     };

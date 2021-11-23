@@ -167,15 +167,26 @@ namespace core {
         return range;
     }
 
-
     void pointwise_operation_broadcast( std::vector<Tensor> xs,
                                         std::vector<Tensor> ys,
                                         std::vector<double> ws,
                                         std::string const &code,
                                         ExecutionContext const &e)
     {
+        std::vector<DataType> dts(ws.size(),ys.at(0).dtype());
+        pointwise_operation_broadcast(xs,ys,ws,dts,code,e);
+    }
+
+    void pointwise_operation_broadcast( std::vector<Tensor> xs,
+                                        std::vector<Tensor> ys,
+                                        std::vector<double> ws,
+                                        std::vector<DataType> dts,
+                                        std::string const &code,
+                                        ExecutionContext const &e)
+    {
         DLPRIM_CHECK(!xs.empty());
         DLPRIM_CHECK(!ys.empty());
+        DLPRIM_CHECK(ws.size() == dts.size());
 
         std::vector<Shape> shapes(xs.size() + ys.size());
         for(size_t i=0;i<xs.size();i++)
@@ -202,17 +213,21 @@ namespace core {
             std::string type = data_type_to_opencl_type(xs[i].dtype());
             params<<", __global " << type << " const *px" << i<< ", ulong px"<<i<<"_offset, Shape strides" << i;
             loads<<type << " x"<<i<<"=px"<<i<<"[get_offset(index,strides" << i << ",px"<<i<<"_offset)];\\\n";
+            loads<<"typedef " << type << " typeof_x" << i << ";\\\n";
         }
         for(size_t i=0;i<ys.size();i++) {
             std::string type = data_type_to_opencl_type(ys[i].dtype());
             params<<", __global "<<type << " *py" << i<< ", ulong py"<<i<<"_offset";
             loads<<type << " y"<<i<<";\\\n";
             saves<<"py"<<i<<"[get_direct_offset(index,limit,py"<<i<<"_offset)]=y"<<i<<";\\\n";
+            loads<<"typedef " << type << " typeof_y" << i << ";\\\n";
         }
         loads << "typedef " << data_type_to_opencl_type(target_type) <<  " target_type;\\\n";
 
         for(size_t i=0;i<ws.size();i++) {
-            params<<", "<<data_type_to_opencl_type(target_type) << " w" <<i;
+            std::string type = data_type_to_opencl_type(dts[i]);
+            params<<", "<<type<< " w" <<i;
+            loads<<"typedef " << type << " typeof_w" << i << ";\\\n";
         }
 
         loads << '\n';
@@ -233,8 +248,9 @@ namespace core {
         for(Tensor &y:ys)
             y.set_arg(k,p);
         
-        for(double w:ws) 
-            bind_as_dtype(k,p,w,target_type);
+        for(size_t i=0;i<ws.size();i++) { 
+            bind_as_dtype(k,p,ws[i],dts[i]);
+        }
         cl::NDRange range = get_broadcast_ndrange(ref);
             
         e.queue().enqueueNDRangeKernel(k,cl::NullRange,range,cl::NullRange,e.events(),e.event("pointwise_exec_broadcast"));
@@ -411,10 +427,12 @@ namespace core {
             // all the defines
             std::ostringstream PARAMS,PREPARE_LOAD_INPUT_ALL,REDUCE_INIT_ALL,LOAD_INPUT_ALL,
                 LOAD_REDUCE_ALL,SAVE_REDUCE_ALL,LOAD_REDUCED_SAVE_GLOBAL_ALL;
+            std::ostringstream types;
             
             for(size_t i=0;i<xs.size();i++) {
                 std::string type = data_type_to_opencl_type(xs[i].dtype());
                 std::string suffix = "(" + type + "," + std::to_string(i) + ") ";
+                types << "typedef " << type << " typeof_x" << i <<";\\\n";
                 PARAMS << "PARAM_INPUT" << suffix;
                 PREPARE_LOAD_INPUT_ALL << "PREPARE_LOAD_INPUT" << suffix << ";\\\n";
                 LOAD_INPUT_ALL << "LOAD_INPUT(" << i << ");\\\n";
@@ -423,6 +441,7 @@ namespace core {
             for(size_t i=0;i<ys.size();i++) {
                 std::string type = data_type_to_opencl_type(ys[i].dtype());
                 std::string suffix = "(" + type + "," + std::to_string(i) + ") ";
+                types << "typedef " << type << " typeof_y" << i <<";\\\n";
                 PARAMS << "PARAM_OUTPUT" << suffix;
                 REDUCE_INIT_ALL << "REDUCE_INIT"<<suffix << ";\\\n";
                 LOAD_REDUCE_ALL << "LOAD_REDUCE("<<i<<");\\\n";
@@ -430,11 +449,16 @@ namespace core {
                 LOAD_REDUCED_SAVE_GLOBAL_ALL << "LOAD_REDUCED_SAVE_GLOBAL("<<i<<");\\\n";
             }
 
+
             REDUCE_INIT_ALL << format_code(reduce_init) << "\n";
 
             for(size_t i=0;i<params_count_;i++) {
-                PARAMS<<", "<<data_type_to_opencl_type(target_type_) << " w" <<i;
+                std::string type = data_type_to_opencl_type(target_type_);
+                PARAMS<<", "<<type << " w" <<i;
+                types << "typedef " << type << " typeof_w" << i <<";\\\n";
             }
+
+            PREPARE_LOAD_INPUT_ALL << types.str();
 
             size_t total_reduce = 1;
             second_stage_stride_ = 1;
