@@ -11,6 +11,7 @@ Mandatory:
 Recommended:
 
 - OpenBLAS for CPU only inference/training 
+- For non-NVidia GPUs cppdb with sqlite3 backend for compiled kernels caching to improve startup times
 
 Optional:
 
