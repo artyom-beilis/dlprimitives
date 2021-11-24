@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cppdb/frontend.h>
+#include <sqlite3.h>
 #include <thread>
 #include <sstream>
 #include "sha1.hpp"
@@ -12,6 +12,217 @@
 #endif
 
 namespace dlprim {
+    class MiniDB {
+    public:
+        MiniDB(MiniDB const &) = delete;
+        void operator=(MiniDB const &) = delete;
+
+        MiniDB() : session_(nullptr)
+        {
+        }
+        void open(std::string const &path)
+        {
+            DLPRIM_CHECK(!session_);
+            if(sqlite3_open(path.c_str(),&session_)!=SQLITE_OK) {
+                throw_error("Open");
+            }
+            sqlite3_busy_timeout(session_,1000*60); // minute timeout
+        }
+        ~MiniDB()
+        {
+            for(auto &p : cache_) {
+                sqlite3_finalize(p.second);
+            }
+            if(session_)
+                sqlite3_close(session_);
+        }
+
+        void throw_error(std::string const msg)
+        {
+            if(session_)
+                throw ValidationError(msg + sqlite3_errmsg(session_));
+            else
+                throw ValidationError(msg);
+        }
+        void exec(char const *q)
+        {
+            if(sqlite3_exec(session_,q,0,0,0)!=SQLITE_OK) {
+                throw_error(q);
+            }
+        }
+        
+        // it does not own statement 
+        class Statement {
+        public:
+            Statement(sqlite3_stmt *st) : st_(st),counter_(1) {}
+            Statement(Statement const &) = delete;
+            void operator = (Statement const &) = delete;
+            Statement(Statement &&other) 
+            {
+                st_=other.st_;
+                counter_ = other.counter_;
+                other.st_ = nullptr;
+            }
+            Statement &operator = (Statement &&other) 
+            {
+                if(this != &other) {
+                    reset();
+                    st_ = other.st_;
+                    counter_ = other.counter_;
+                    other.st_= nullptr;
+                }
+                return *this;
+            }
+            void reset()
+            {
+                if(st_) {
+                    sqlite3_clear_bindings(st_);
+                    sqlite3_reset(st_);
+                    counter_ = 1;
+                }
+            }
+
+            template<typename T0,typename ...Args>
+            Statement &bind(T0 const &v,Args... args)
+            {
+                bind_val(v);
+                bind(args...);
+                return *this;
+            }
+
+            template<typename T0>
+            Statement &bind(T0 const &v)
+            {
+                bind_val(v);
+                return *this;
+            }
+
+
+            void bind_val(int64_t v)
+            {
+                if(sqlite3_bind_int64(st_,counter_++,v)!=SQLITE_OK)
+                    throw ValidationError("Invalid numeric parameter");
+            }
+            void bind_val(std::string const &txt)
+            {
+                if(sqlite3_bind_text(st_,counter_++,txt.c_str(),txt.size(),SQLITE_TRANSIENT)!=SQLITE_OK)
+                    throw ValidationError("Invalid integer parameter");
+            }
+            void bind_val(std::vector<unsigned char> const &blob)
+            {
+                if(sqlite3_bind_blob(st_,counter_++,blob.data(),blob.size(),SQLITE_TRANSIENT)!=SQLITE_OK)
+                    throw ValidationError("Invalid blob parameter");
+            }
+            template<typename T>
+            Statement &operator<<(T const &v)
+            {
+                bind(v);
+                return *this;
+            }
+            bool next()
+            {
+                int r = sqlite3_step(st_);
+                if(r == SQLITE_DONE)
+                    return false;
+                if(r == SQLITE_ROW)
+                    return true;
+                throw ValidationError("Failed to execute step");
+            }
+            void exec()
+            {
+                next();
+                reset();
+            }
+            int64_t get_int(int index)
+            {
+                return sqlite3_column_int64(st_,index);
+            }
+            std::string get_str(int index)
+            {
+                char const *txt = reinterpret_cast<char const *>(sqlite3_column_text(st_,index));
+                size_t len = sqlite3_column_bytes(st_,index);
+                std::string r;
+                r.assign(txt,len);
+                return r;
+            }
+            void get_blob(int index,std::vector<unsigned char> &v)
+            {
+                unsigned const char *p = static_cast<unsigned const char *>(sqlite3_column_blob(st_,index));
+                size_t len = sqlite3_column_bytes(st_,index);
+                v.reserve(len);
+                v.assign(p,p+len);
+            }
+            ~Statement()
+            {
+                reset();
+            }
+        private:
+            sqlite3_stmt *st_;
+            int counter_;
+
+        };
+        
+        template<typename ...Args>
+        Statement prepare_exec(char const *q,Args... args)
+        {
+            Statement st = prepare_exec(q);
+            st.bind(args...);
+            return st;
+        }
+        Statement prepare_exec(char const *q)
+        {
+            sqlite3_stmt *st = nullptr;
+            auto p = cache_.find(q);
+            if(p == cache_.end()) {
+                if(sqlite3_prepare_v2(session_,q,-1,&st,0)!=SQLITE_OK) {
+                    throw_error("prepare");
+                }
+                cache_[q] = st;
+            }
+            else {
+                st = p->second;
+            }
+            return Statement(st);
+        }
+
+        class Transaction {
+        public:
+            Transaction(MiniDB &db) : db_(&db)
+            {
+                db_->exec("BEGIN;");
+            }
+            ~Transaction()
+            {
+                try {
+                    rollback();
+                }
+                catch(...) {}
+            }
+            void commit()
+            {
+                if(db_) {
+                    db_->exec("COMMIT;");
+                    db_ = nullptr;
+                }
+            }
+            void rollback()
+            {
+                if(db_) {
+                    db_->exec("ROLLBACK;");
+                    db_ = nullptr;
+                }
+            }
+        private:
+            MiniDB *db_;
+        };
+        
+    private:
+        sqlite3 *session_;
+        // yes I compare addresses since all strings
+        // must be static char const *
+        std::map<char const *,sqlite3_stmt *> cache_;
+    };
+
     class BinaryProgramCache {
     public:
         struct Meta {
@@ -40,14 +251,13 @@ namespace dlprim {
             Meta m = get_meta(ctx);
             std::string key = get_key(m,source,params);
             
-            cppdb::transaction tr(session_);
-            cppdb::result res = session_ << "SELECT binary FROM cache WHERE key=?" << key << cppdb::row;
-            if(res.empty())
+            MiniDB::Transaction tr(session_);
+            auto st = session_.prepare_exec("SELECT binary FROM cache WHERE key=?",key);
+            if(!st.next())
                 return binary;
-            std::string binary_str = res.get<std::string>(0);
-            session_ << "UPDATE cache SET lru=? WHERE key=?" << time(0) << key << cppdb::exec;
+            st.get_blob(0,binary);
+            session_.prepare_exec("UPDATE cache SET lru=? WHERE key=?",time(0),key).exec();
             tr.commit();
-            binary.assign(binary_str.begin(),binary_str.end());
             return binary;
         }
 
@@ -63,14 +273,15 @@ namespace dlprim {
             ss.write((char *)binary.data(),binary.size());
             ss.seekg(0);
             try {
-                cppdb::transaction tr(session_);
-                session_ << "INSERT INTO cache(key,binary,size,lru,src,params,platform,platform_ver,device,driver_ver) "
-                        "VALUES(?,?,?,?,?,?,?,?,?,?); "
-                     << key << static_cast<std::istream &>(ss) << binary.size() << time(0) << prog_name << params <<m.platform << m.platform_ver<< m.device << m.driver_ver << cppdb::exec;
-                session_ << "UPDATE meta SET value=value + ? WHERE key = 'size';" << binary.size() << cppdb::exec;
-                session_.commit();
+                MiniDB::Transaction tr(session_);
+                session_.prepare_exec(
+                        "INSERT INTO cache(key,binary,size,lru,src,params,platform,platform_ver,device,driver_ver) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?); ",
+                        key,binary,binary.size(),time(0),prog_name, params,m.platform,m.platform_ver,m.device,m.driver_ver).exec();
+                session_.prepare_exec("UPDATE meta SET value=value + ? WHERE key = 'size';",binary.size()).exec();
+                tr.commit();
             }
-            catch(cppdb::cppdb_error const &e) {
+            catch(ValidationError const &e) {
                 std::cerr << e.what() << std::endl;
                 // There may be a error due to collision
                 // ignore
@@ -100,16 +311,16 @@ namespace dlprim {
             mkdir(path_.c_str(),0777);
             #endif
         
-            session_.open("sqlite3:db=" + db_path_);    
+            session_.open(db_path_);    
             prepare_db();
         }
 
         
         void prepare_db()
         {
-            cppdb::transaction tr(session_);
-            session_ << 
+            session_.exec(
             R"xxx(
+                BEGIN;
                     CREATE TABLE IF NOT EXISTS cache (
                     	key TEXT PRIMARY KEY,
                         binary BLOB NOT NULL,
@@ -122,20 +333,16 @@ namespace dlprim {
                         device TEXT NOT NULL default '',
                         driver_ver TEXT NOT NULL default ''
                     );
-            )xxx" << cppdb::exec;
-            session_ << "CREATE INDEX IF NOT EXISTS cache_lru ON cache (lru);" << cppdb::exec;
-            session_ << R"xxx(
+                    CREATE INDEX IF NOT EXISTS cache_lru ON cache (lru);
                     CREATE TABLE IF NOT EXISTS meta (
                         key TEXT PRIMARY KEY,
                         value INTEGER NOT NULL
                     );
-                )xxx" << cppdb::exec;
-
-            session_ << "INSERT OR IGNORE INTO meta VALUES('version',1);" << cppdb::exec;
-            session_ << "INSERT OR IGNORE INTO meta VALUES('size',0);" << cppdb::exec;
-            // default limit is 1G
-            session_ << "INSERT OR IGNORE INTO meta VALUES('size_limit',1073741824);" << cppdb::exec; 
-            tr.commit();
+                    INSERT OR IGNORE INTO meta VALUES('version',1);
+                    INSERT OR IGNORE INTO meta VALUES('size',0);
+                    INSERT OR IGNORE INTO meta VALUES('size_limit',1073741824);
+                COMMIT;
+            )xxx");
         }
 
         std::string get_path()
@@ -202,7 +409,7 @@ namespace dlprim {
             return res;
         }
 
-        cppdb::session session_;
+        MiniDB session_;
         std::mutex lock_;
         bool enable_;
     };

@@ -1,7 +1,7 @@
 #include  <dlprim/gpu/program_cache.hpp>
 #include <sstream>
 #include <iostream>
-#ifdef WITH_CPPDB
+#ifdef WITH_SQLITE3
 #include "binary_cache.hpp"
 #endif
 
@@ -53,7 +53,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
     }
     std::string const &code = (combine ? prepend.str() + source_text : source_text);
     std::string sparams = ss.str();
-    #ifdef  WITH_CPPDB
+    #ifdef  WITH_SQLITE3
     /// nvidia has very different type of caching since binary return not binary but rather ptx,
     /// using only native cuda cache works better, double cache adds overhead
     bool use_cache = !ctx.is_nvidia();
@@ -105,7 +105,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
         throw BuildError("Failed to build program source " + source + " with parameters " + ss.str() + " log:\n" + buffer,buffer);
     }
     #endif
-    #ifdef  WITH_CPPDB
+    #ifdef  WITH_SQLITE3
     if(use_cache){
         auto binaries = prg.getInfo<CL_PROGRAM_BINARIES>();
         DLPRIM_CHECK(binaries.size() == 1);
