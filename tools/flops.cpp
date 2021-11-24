@@ -876,18 +876,26 @@ int main(int argc,char **argv)
     int gemm_index = -1;
     int conv_index = -1;
     int br_index = -1;
+    static constexpr int run_all  = 0;
+    static constexpr int run_gemm = 1;
+    static constexpr int run_conv = 2;
+    static constexpr int run_broadcast = 3;
+    int test = run_all;
     if(argv[1][0] == '-') {
        if(argv[1][1] == 'g') {
             gemm_index = atoi(argv[1]+2);
+            test=run_gemm;
             argv++;
             argc--;
         }
         else if(argv[1][1] == 'c') {
+            test=run_conv;
             conv_index = atoi(argv[1]+2);
             argv++;
             argc--;
         }
         else if(argv[1][1] == 'b') {
+            test=run_broadcast;
             br_index = atoi(argv[1]+2);
             argv++;
             argc--;
@@ -921,18 +929,19 @@ int main(int argc,char **argv)
     }
 #endif
     Benchmarker bm(argv[1],fs,scale);
-    if(br_index == -1 && conv_index == -1 && gemm_index == -1) {
-        bm.run_br_bm(br_index);
+    if(test == run_all) {
         bm.run_gemm_bm(gemm_index);
         bm.run_conv_bm(conv_index);
+        bm.run_br_bm(br_index);
     }
-    else {
-        if(br_index != -1)
-            bm.run_br_bm(br_index);
-        if(conv_index!=-1)
-            bm.run_gemm_bm(gemm_index);
-        if(gemm_index!=-1)
-            bm.run_conv_bm(conv_index);
+    else if(test == run_broadcast) {
+        bm.run_br_bm(br_index);
+    }
+    else if(test == run_gemm) {
+        bm.run_gemm_bm(gemm_index);
+    }
+    else if(test == run_conv) {
+        bm.run_conv_bm(conv_index);
     }
 }
 
