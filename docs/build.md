@@ -11,11 +11,12 @@ Mandatory:
 Recommended:
 
 - OpenBLAS for CPU only inference/training 
+- Sqlite3 for ceching of compiled kernels for non-NVidia GPUs to improve startup times
 
 Optional:
 
-- HDF5 C++ bindings for model loading/saving in HDF5 format instead of internal
 - boost python and boost numpy - for python bindings
+- HDF5 C++ bindings for model loading/saving in HDF5 format instead of internal
 
 
 ## Building

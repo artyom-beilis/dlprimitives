@@ -8,8 +8,33 @@ import argparse
 import time
 import numpy as np
 import sys
+import csv
 
-def benchmark_model(model,batch,device,warm,iters,train,use_solver):
+def _prof_summary(report):
+    sums=dict()
+    counts=dict()
+    summary=[]
+    for line in [v for v in report.split('\n') if v]:
+       row = [v for v in line.split(' ') if v]
+       name=row[0]
+       val=float(row[1])
+       new_val = sums.get(name,0) + val
+       new_cnt =counts.get(name,0) + 1
+       sums[name ] = new_val
+       counts[name] = new_cnt
+
+    for name in sums:
+        summary.append((name,sums[name],counts[name]))
+
+    summary.sort(key = lambda x:x[1])
+    print("Summary:")
+    print("------")
+    for r in summary:
+        print("%10.5f %5d %s" % ( r[1],r[2],r[0]))
+    print("------")
+
+
+def benchmark_model(model,batch,device,warm,iters,train,use_solver,profile):
 
     def _sync():
         if device.find('opencl')==0:
@@ -42,6 +67,8 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
     if use_solver:
         optimizer = torch.optim.Adam(model.parameters())
     for it in range(-warm,iters):
+        if it == 0 and profile:
+            torch.ops.oclops.prof_start(device)
         start = time.time()
         if use_solver:
             optimizer.zero_grad()
@@ -78,6 +105,10 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver):
             solver_end = fwd_end
             bwd_end = fwd_end
         end = time.time()
+        if it == 0 and profile:
+            report = torch.ops.oclops.prof_stop()
+            print(report)
+            _prof_summary(report)
         msg = ''
         if it == -warm:
             msg = 'warming up'
@@ -181,10 +212,10 @@ def main(args):
             predict_on_images(m,args.images,args.device,get_config())
     if args.benchmark:
         if args.train:
-            benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train,args.solver)
+            benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train,args.solver,args.profile)
         else:
             with torch.no_grad():
-                benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train,False)
+                benchmark_model(m,args.batch,args.device,args.warm,args.iters,args.train,False,args.profile)
 
 if __name__ == '__main__': 
     p = argparse.ArgumentParser()
@@ -194,6 +225,7 @@ if __name__ == '__main__':
     p.add_argument('--solver',action='store_true')
     p.add_argument('--benchmark',action='store_true')
     p.add_argument('--train',action='store_true')
+    p.add_argument('--profile',action='store_true',default=False)
     p.add_argument('--onnx-opset',default=12,type=int)
     p.add_argument('--onnx-ir',default=3,type=int)
     p.add_argument('--batch',default=16,type=int)
