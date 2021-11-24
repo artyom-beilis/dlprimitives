@@ -313,6 +313,7 @@ namespace dlprim {
         
             session_.open(db_path_);    
             prepare_db();
+            clean_cache_overflow();
         }
 
         
@@ -343,6 +344,44 @@ namespace dlprim {
                     INSERT OR IGNORE INTO meta VALUES('size_limit',1073741824);
                 COMMIT;
             )xxx");
+        }
+        void clean_cache_overflow()
+        {
+            MiniDB::Transaction tr(session_);
+            size_t size = 0, size_limit = 0;
+            auto r = session_.prepare_exec("SELECT key,value FROM meta WHERE key in ('size','size_limit')");
+            while(r.next()) {
+                std::string key = r.get_str(0);
+                size_t val = r.get_int(1);
+                if(key == "size")
+                    size = val;
+                else if(key == "size_limit")
+                    size_limit = val;
+            }
+            if(size <= size_limit)
+                return;
+            auto q = session_.prepare_exec("SELECT size,lru FROM cache ORDER BY lru;");
+            size_t remove_limit = (size - size_limit) * 3;
+            size_t total = 0;
+            int64_t time = -1;
+            bool not_done;
+            while((not_done=q.next()) == true ) {
+                size_t blob_size = q.get_int(0);
+                total += blob_size;
+                time = q.get_int(1);
+                if(total >= remove_limit)
+                    break;
+            }
+            // make sure we compute correctly the size in case several lrus have same time stamp
+            if(not_done) {
+                while(q.next() && q.get_int(1) == time) {
+                    total += q.get_int(0);
+                }
+            }
+            q.reset();
+            session_.prepare_exec("DELETE FROM cache WHERE lru <= ?;",time).exec();
+            session_.prepare_exec("UPDATE meta SET value=value - ? WHERE key='size';",total).exec();
+            tr.commit();
         }
 
         std::string get_path()
