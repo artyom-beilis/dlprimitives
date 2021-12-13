@@ -562,16 +562,7 @@ namespace dlprim {
 
     Shape TransposedConvolution2D::get_output_shape(Shape const &in)
     {
-        DLPRIM_CHECK(in.size() == 4);
-        int batch = in[0];
-        DLPRIM_CHECK(int(in[1]) == config_.channels_in);
-        int ihw[2] = { int(in[2]), int(in[3]) };
-        int ohw[2];
-        for(int i=0;i<2;i++)        
-            ohw[i] = (ihw[i] - 1) * config_.stride[i] - 2 * config_.pad[i] + config_.dilate[i] * (config_.kernel[i] - 1) + config_.output_pad[i] + 1;
-        DLPRIM_CHECK(ohw[0] > 0);
-        DLPRIM_CHECK(ohw[1] > 0);
-        return Shape(batch,config_.channels_out,ohw[0],ohw[1]);
+        return core::Conv2DBase::get_output_shape_transposed(config_,in,config_.output_pad);
     }
 
     int TransposedConvolution2D::get_im2col_width()

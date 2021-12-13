@@ -26,6 +26,7 @@ namespace core {
         virtual char const *algo() const = 0;
         virtual size_t workspace() { return 0; }
         static Shape get_output_shape(Convolution2DConfigBase const &config,Shape const &in);
+        static Shape get_output_shape_transposed(Convolution2DConfigBase const &config,Shape const &in,int output_pad[2]);
     };
     ///
     /// Perform InnerProduct/FullyConnected/Dense forward calulations, allow fusing bias and activation
