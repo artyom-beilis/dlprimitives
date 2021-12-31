@@ -20,6 +20,20 @@ namespace core {
         return Shape(batch,config.channels_out,ohw[0],ohw[1]);
     }
 
+    Shape Conv2DBase::get_output_shape_transposed(Convolution2DConfigBase const &config,Shape const &in,int output_pad[2])
+    {
+        DLPRIM_CHECK(in.size() == 4);
+        int batch = in[0];
+        DLPRIM_CHECK(int(in[1]) == config.channels_in);
+        int ihw[2] = { int(in[2]), int(in[3]) };
+        int ohw[2];
+        for(int i=0;i<2;i++)        
+            ohw[i] = (ihw[i] - 1) * config.stride[i] - 2 * config.pad[i] + config.dilate[i] * (config.kernel[i] - 1) + output_pad[i] + 1;
+        DLPRIM_CHECK(ohw[0] > 0);
+        DLPRIM_CHECK(ohw[1] > 0);
+        return Shape(batch,config.channels_out,ohw[0],ohw[1]);
+    }
+
     class Conv2DForwardGEMM : public Conv2DForward {
     public:
         virtual char const *algo() const
