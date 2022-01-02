@@ -11,6 +11,7 @@ option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/cl2.hpp" OFF)
 option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
 option(USE_HDF "Compile with HDF support" ON)
 option(USE_SQLITE3 "Compile with sqlite3 support for kernel caching" ON)
+option(USE_ONNX "Compile with ONNX support" ON)
 
 if(USE_CL_HPP)
     find_path(OCL_PATH CL/cl.hpp)
@@ -30,6 +31,17 @@ if (USE_SQLITE3)
         include_directories(${SQLITE3_PATH})
         set(WITH_SQLITE3 ON)
     endif()
+endif()
+
+if(USE_ONNX)
+    find_package(Protobuf)
+    if(Protobuf_FOUND)
+        set(WITH_ONNX ON)
+    else()
+        set(WITH ONNX OFF)
+    endif()
+else()
+    set(WITH_ONNX OFF)
 endif()
 
 
@@ -139,6 +151,12 @@ if(WITH_SQLITE3)
     message("           lib ${SQLITE3_LIB}")
 else()
     message("  Sqlite3: disabled")
+endif()
+
+if(WITH_ONNX)
+    message("  onnx: ${Protobuf_VERSION}")
+else()
+    message("  onnx: disabled")
 endif()
 
 if(BUILD_PYDLPRIM)
@@ -270,6 +288,14 @@ if(BUILD_PYDLPRIM)
     install(TARGETS pydlprim
 	    LIBRARY DESTINATION python/dlprim)
  
+endif()
+
+if(WITH_ONNX)
+    include_directories(${Protobuf_INCLUDE_DIRS})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR})
+    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/onnx.proto)
+    add_library(dlprim_onnx SHARED src/onnx/onnx.cpp ${PROTO_SRCS} ${PROTO_HDRS}) 
+    target_link_libraries(dlprim_onnx dlprim)
 endif()
 
 
