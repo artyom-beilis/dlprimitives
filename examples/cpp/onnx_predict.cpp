@@ -1,4 +1,5 @@
 #include <dlprim/net.hpp>
+#include <dlprim/onnx.hpp>
 #include "util.hpp"
 namespace dp = dlprim;
 
@@ -19,21 +20,20 @@ int main(int argc,char **argv)
             argv++;
             argc--;
         }
-        if(argc<5) {
-            std::cerr << "Usage [-oconfig.json ] device net.json net.h5 img1.ppm [ img2.ppm ]..." << std::endl;
+        if(argc<4) {
+            std::cerr << "Usage [-oconfig.json ] device net.onnx img1.ppm [ img2.ppm ]..." << std::endl;
             return 1;
         }
         dp::Context ctx(argv[1]);
         std::cerr << "Using: " << ctx.name() << std::endl;
         
-        std::string net_js = argv[2];
-        std::string net_h5 = argv[3];
+        std::string onnx_path = argv[2];
 
+        dp::ONNXModel model;
+        model.load(onnx_path);
+        
         dp::Net net(ctx);
-        net.mode(dp::CalculationsMode::predict);
-        net.load_from_json_file(net_js);
-        net.setup();
-        net.load_parameters(net_h5);
+        net.load_model(model);
         dp::Tensor data = net.input(0),prob = net.output(0);
 
         Config cfg;
@@ -50,7 +50,7 @@ int main(int argc,char **argv)
         std::vector<std::string> names;
         int n = 0;
         std::ofstream rep("report_dp.csv");
-        for(int i=4;i<argc;i++) {
+        for(int i=3;i<argc;i++) {
             load_image(data,n,argv[i],cfg);
             names.push_back(argv[i]);
             n++;

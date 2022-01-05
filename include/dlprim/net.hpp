@@ -6,6 +6,7 @@
 
 namespace dlprim {
     class SharedResource;
+    class ModelBase;
 
     ///
     /// Major object used for inference
@@ -25,6 +26,10 @@ namespace dlprim {
         Net &operator=(Net &&) = default;
         Net(Net &&) = default;
 
+        ///
+        /// Load from external model, shortcut to load_from_json(mode.network()) + setup() + load_parameters(model)
+        ///
+        void load_model(ModelBase &model);
         ///
         /// Configure network graph from json
         ///
@@ -56,6 +61,10 @@ namespace dlprim {
         /// Load parameters from file name can be either DLP or HDF5 format
         ///
         void load_parameters(std::string const &name,bool allow_missing=false);
+        ///
+        /// Load parameters from external model
+        ///
+        void load_parameters(ModelBase &model,bool allow_missing=false);
 
         ///
         /// Save network parameters to DLP format

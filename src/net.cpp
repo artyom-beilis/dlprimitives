@@ -2,6 +2,7 @@
 #include <dlprim/json.hpp>
 #include <dlprim/shared_resource.hpp>
 #include <dlprim/ops/initialization.hpp>
+#include <dlprim/model.hpp>
 #include <sstream>
 #include <fstream>
 #include <set>
@@ -89,6 +90,13 @@ namespace dlprim {
         if(!f) {
             throw ValidationError("I/O error in saving to " + fname);
         }
+    }
+
+    void Net::load_model(ModelBase &model)
+    {
+        load_from_json(model.network());
+        setup();
+        load_parameters(model);
     }
 
 #ifdef DISABLE_HDF5
@@ -229,6 +237,27 @@ namespace dlprim {
         else {
             throw ValidationError("Unidentified majic number for " + file_name);
         }
+    }
+
+    void Net::load_parameters(ModelBase &model,bool allow_missing)
+    {
+        for(auto  &pr : parameters_) {
+            std::string name = pr.first;
+            Tensor &tensor = pr.second;
+            Tensor value = model.get_parameter(name);
+            if(value.shape().size() == 0) {
+                if(allow_missing)
+                    continue;
+                throw ValidationError("No parameter " + name + " was found");
+            }
+            if(tensor.shape() != value.shape() || tensor.dtype() != value.dtype()) {
+                std::ostringstream err;
+                err << "Expected " << tensor << " parameter, got " << value << " for " << name;
+                throw ValidationError(err.str());
+            }
+            memcpy(tensor.host_data(),value.host_data(),tensor.memory_size());
+        }
+        copy_parameters_to_device();
     }
     void Net::load_parameters(std::istream &f,bool allow_missing)
     {

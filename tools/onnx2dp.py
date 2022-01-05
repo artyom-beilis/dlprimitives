@@ -167,7 +167,7 @@ def get_operators(model,inputs,params):
         elif n.op_type == 'Softmax':
             assert attrs.get('axis',-1) in (1,-1)
             op = dict(name = n.name,
-                      type = 'SoftMax',
+                      type = 'Softmax',
                       inputs = [n.input[0]],
                       outputs = list(n.output),
                     )
