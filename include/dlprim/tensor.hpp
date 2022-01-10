@@ -222,6 +222,24 @@ namespace dlprim {
         Tensor sub_tensor(size_t offset,Shape const &s,DataType d=float_data,bool trainable = true) const;
 
         ///
+        /// Create a tensor with same memory but shape isn't connected to original - it is alias to 
+        /// same data but with ability to modify shape
+        ///
+        Tensor alias() const
+        {
+            return sub_tensor(0,shape(),dtype(),is_trainable());
+        }
+        ///
+        /// same as t=alias(); t.reshape(s); return t;
+        ///
+        Tensor alias(Shape const &new_shape) const
+        {
+            Tensor t = alias();
+            t.reshape(new_shape);
+            return t;
+        }
+
+        ///
         /// get pointer to the host pointer and cast to relevant type
         ///
         template<typename T>

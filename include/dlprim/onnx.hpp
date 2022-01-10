@@ -48,6 +48,7 @@ namespace dlprim {
         void add_elementwise(onnx::NodeProto const &node,std::string const &operation);
         void add_global_pooling(onnx::NodeProto const &node,std::string const &operation);
         void add_pool2d(onnx::NodeProto const &node,std::string const &operation);
+        void add_flatten(onnx::NodeProto const &node);
 
         void check_outputs(onnx::NodeProto const &node,int minv,int maxv=-1);
         void check_inputs(onnx::NodeProto const &node,int inputs_min,int inputs_max=-1,int params_min=0,int params_max=-1);

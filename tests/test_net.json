@@ -176,10 +176,16 @@
             }
         },
         {
+            "name" : "flatten",
+            "type": "Flatten",
+            "inputs": ["p2"],
+            "outputs": ["p2_flat"]
+        },
+        {
             "name": "fc",
             "type": "InnerProduct",
             "inputs": [
-                "p2"
+                "p2_flat"
             ],
             "outputs": [
                 "fc"

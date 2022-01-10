@@ -274,6 +274,7 @@ namespace dlprim {
         void setup_ws();
         void mark_backpropagating_edges();
         void allocate_tensors();
+        void allocate_aliases();
         bool is_loss(std::string const &name);
         void allocate_optimized_chunks(bool forward_only);
         void tensor_use_list(std::vector<std::list<std::string> > &start,
@@ -290,6 +291,7 @@ namespace dlprim {
         std::map<std::string,unsigned> connections_index_;
 
         Tensor workspace_;
+        std::map<std::string,std::string> alias_sources_;
         std::map<std::string,Tensor> tensors_;
         std::map<std::string,Tensor> tensors_diff_;
 

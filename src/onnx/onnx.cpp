@@ -6,6 +6,9 @@
 #include <fstream>
 #include <set>
 
+#include <google/protobuf/io/coded_stream.h>
+
+
 namespace dlprim {
     struct ONNXModel::Data {
         onnx::ModelProto model;
@@ -44,7 +47,9 @@ namespace dlprim {
         f.read(buffer.data(),length);
         if(!f)
             throw ValidationError("IO Error reading " + file_name);
-        if(!d->model.ParseFromArray(buffer.data(),length))
+        google::protobuf::io::CodedInputStream stream(reinterpret_cast<unsigned char *>(buffer.data()),length);
+        stream.SetTotalBytesLimit(std::numeric_limits<int>::max(),std::numeric_limits<int>::max());
+        if(!d->model.MergePartialFromCodedStream(&stream))
             throw ValidationError("Protobuf Parsing Error " + file_name);
     }
 
@@ -458,6 +463,19 @@ namespace dlprim {
         opt["pad"] = pads;
         opt["count_include_pad"] = count_include_pad;
         opt["ceil_mode"] = ceil_mode;
+        add_operator(node,op);
+    }
+
+    void ONNXModel::add_flatten(onnx::NodeProto const &node)
+    {
+        check_inputs(node,1);
+        check_outputs(node,1);
+        DLPRIM_CHECK(get_attr<int>(node,"axis")==1);
+        json::value op;
+        op["name"] = node.name();
+        op["type"] = "Flatten";
+        op["inputs"][0] = node.input(0);
+        op["outputs"][0] = node.output(0);
         add_operator(node,op);
     }
 

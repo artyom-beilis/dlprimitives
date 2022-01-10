@@ -76,6 +76,16 @@ namespace dlprim {
 
 
         ///
+        /// returns true of the operator is alias - generation - it only changes the shape of tensor but not its content
+        /// it actually does not perform any operation but only changes semantics, in this casse input and output are aliases
+        /// of each other
+        ///
+        virtual bool alias_generator() 
+        {
+            return false;
+        }
+
+        ///
         /// Set default parameters iniitalization
         ///
         virtual void initialize_params(std::vector<Tensor> &/*parameters*/,ExecutionContext const &/*e*/)

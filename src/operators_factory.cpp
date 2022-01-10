@@ -80,6 +80,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
+        "Flatten", 
+        [](Context &ctx,json::value const &p) {
+            return new Flatten(ctx,FlattenConfig::from_json(p));
+        }
+    },
+    {
         "Concat", 
         [](Context &ctx,json::value const &p) {
             return new Concat(ctx,ConcatConfig::from_json(p));

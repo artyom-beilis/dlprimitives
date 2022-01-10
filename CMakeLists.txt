@@ -219,6 +219,7 @@ set(DLPRIM_SRC
         src/ops/nll_loss.cpp
         src/ops/mse_loss.cpp
         src/ops/initialization.cpp
+        src/ops/reshape.cpp
         ${EXTRA_SRC}
         )
 
@@ -308,6 +309,7 @@ foreach(TEMPLATE ${TEST_TEMPLATES})
     add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
 endforeach()
 add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
+add_test(test_net_nonopt test_net "-k" ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
 add_test(test_json test_json)
 add_test(test_random test_random ${TEST_DEV})
 add_test(test_context test_context ${TEST_DEV})
