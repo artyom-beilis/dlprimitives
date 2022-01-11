@@ -4,6 +4,11 @@
 #include <dlprim/solvers/adam.hpp>
 #include <dlprim/solvers/sgd.hpp>
 #include <dlprim/json.hpp>
+
+#ifdef WITH_ONNX
+#include <dlprim/onnx.hpp>
+#endif
+
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include <string>
@@ -159,6 +164,7 @@ BOOST_PYTHON_MODULE(_pydlprim)
         export_values();
    
     bp::class_<cl::CommandQueue>("CommandQueue","Wrapper of cl::CommandQueue");
+
  
     bp::class_<Context>("Context","Context of computations - represents OpenCL device, platform and context, it is passed to all object"
                 "that are created during the process").
@@ -195,6 +201,15 @@ BOOST_PYTHON_MODULE(_pydlprim)
         def("to_host",to_host,"Enqueue copy tensor to host to a numpy array and wait for completion. numpy array must have same shape, type as tensor and must be contiguous, operation is always synchronous").
         add_property("shape",dp::get_shape,"Returns tensor shape").
         add_property("dtype",&dp::Tensor::dtype,"Returns tensor type");
+    
+    bp::class_<dp::ModelBase>("ModelBase",bp::no_init);
+#ifdef WITH_ONNX
+    bp::class_<dp::ONNXModel,bp::bases<dp::ModelBase>,boost::noncopyable >("ONNXModel",
+                "ONNX Model parser and importer, once it is loaded, Net.load can be called").
+        def(bp::init<>("Empty")).
+        def("load",&dp::ONNXModel::load,"Load model from file");
+
+#endif
 
     bp::class_<dp::Net,boost::noncopyable>("Net",
             R"xxxxx(Central class that represents network for training and inference
@@ -269,7 +284,8 @@ BOOST_PYTHON_MODULE(_pydlprim)
             "Load parameters from file, either HDF5 or DLP format. If second argument - ignore missing parameter, if true and parameter value does not exists in file it isn't considered a error, useful for transfer learning").
         def("load_parameters",net_load_parameters,"same as self.load_parameters(file,False)").
         def("save_parameters",&Net::save_parameters,"save nework parameters to DLP format").
-        def("save_parameters_to_hdf5",&Net::save_parameters_to_hdf5,"save nework parameters to HDF5 format");
+        def("save_parameters_to_hdf5",&Net::save_parameters_to_hdf5,"save nework parameters to HDF5 format").
+        def("load_model",&Net::load_model,"Load external model");
 
     using solvers::Adam;
     bp::class_<Adam>("Adam","Adam optimizer",bp::init<Context &>("Create optimizer from context")).

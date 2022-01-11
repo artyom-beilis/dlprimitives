@@ -142,7 +142,7 @@ def export_model(model,batch,path,opset,ir,train):
         extra =dict( training=torch.onnx.TrainingMode.TRAINING,do_constant_folding=False)
     else:
         extra = {}
-    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset,**extra)
+    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset,do_constant_folding=True,**extra)
     import onnx
     #from onnx import version_converter
     model = onnx.load_model(path)
@@ -226,7 +226,7 @@ if __name__ == '__main__':
     p.add_argument('--benchmark',action='store_true')
     p.add_argument('--train',action='store_true')
     p.add_argument('--profile',action='store_true',default=False)
-    p.add_argument('--onnx-opset',default=12,type=int)
+    p.add_argument('--onnx-opset',default=9,type=int)
     p.add_argument('--onnx-ir',default=3,type=int)
     p.add_argument('--batch',default=16,type=int)
     p.add_argument('--warm',default=5,type=int)

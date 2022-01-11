@@ -14,8 +14,9 @@
 #		define DLPRIM_API
 #	endif
 #else // ELF BINARIES
-#	define DLPRIM_API
-#endif
+#	define DLPRIM_API  __attribute__((visibility("default")))
+#endif     
+
 
 ///
 /// Mane namespace

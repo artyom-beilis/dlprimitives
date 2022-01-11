@@ -12,8 +12,14 @@ namespace dlprim {
     public:
         virtual  ~ModelBase(){}
         /// Return representation of the network
-        virtual json::value const &network() = 0;
+        virtual json::value const &network()  // =0 - due to boost python not fully abstractr
+        {
+            throw ValidationError("Implemente Me");
+        }
         /// Return CPU tensor containing parameter value by give name 
-        virtual Tensor get_parameter(std::string const &name) = 0;
+        virtual Tensor get_parameter(std::string const &name) // =0 - due to boost python not fully abstractr
+        {
+            return Tensor();
+        }
     };
 }

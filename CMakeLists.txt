@@ -273,6 +273,21 @@ target_link_libraries(dlprim_flops dlprim)
 target_link_libraries(test_net dlprim)
 target_link_libraries(test_random dlprim)
 
+set(EXTRA_INSTALL )
+
+if(WITH_ONNX)
+    include_directories(${PROTOBUF_INCLUDE_DIRS})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR})
+    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/onnx.proto)
+    add_library(dlprim_onnx SHARED src/onnx/onnx.cpp ${PROTO_SRCS} ${PROTO_HDRS}) 
+    set_target_properties(dlprim_onnx PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    target_link_libraries(dlprim_onnx dlprim ${PROTOBUF_LITE_LIBRARIES})
+    add_executable(onnx_predict examples/cpp/onnx_predict.cpp)
+    target_link_libraries(onnx_predict dlprim dlprim_onnx)
+    set(EXTRA_INSTALL ${EXTRA_INSTALL} dlprim_onnx)
+endif()
+
+
 
 if(BUILD_PYDLPRIM)
     add_library(pydlprim SHARED python/python_interface.cpp)
@@ -284,23 +299,15 @@ if(BUILD_PYDLPRIM)
     include_directories(${Boost_INCLUDE_DIRS})
     include_directories(${PYTHON_INCLUDE_DIRS})
     target_link_libraries(pydlprim dlprim ${BNUMPY_LIB} ${BPYTHON_LIB} ${PYTHON_LIBRARIES})
+    if(WITH_ONNX)
+        target_link_libraries(pydlprim dlprim_onnx)
+    endif()
     file(GLOB PY_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/python/dlprim/*.py)
     install(FILES ${PY_SOURCES} DESTINATION python/dlprim)
     install(TARGETS pydlprim
 	    LIBRARY DESTINATION python/dlprim)
  
 endif()
-
-if(WITH_ONNX)
-    include_directories(${PROTOBUF_INCLUDE_DIRS})
-    include_directories(${CMAKE_CURRENT_BINARY_DIR})
-    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/onnx.proto)
-    add_library(dlprim_onnx SHARED src/onnx/onnx.cpp ${PROTO_SRCS} ${PROTO_HDRS}) 
-    target_link_libraries(dlprim_onnx dlprim ${PROTOBUF_LITE_LIBRARIES})
-    add_executable(onnx_predict examples/cpp/onnx_predict.cpp)
-    target_link_libraries(onnx_predict dlprim dlprim_onnx)
-endif()
-
 
 file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
 
@@ -323,7 +330,7 @@ add_test(test_broadcast_reduce test_broadcast_reduce ${TEST_DEV})
 
 
 install(TARGETS 
-    dlprim_core dlprim dlprim_benchmark dlprim_flops
+    dlprim_core dlprim dlprim_benchmark dlprim_flops ${EXTRA_INSTALL}
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION ${LIBDIR}
 	ARCHIVE DESTINATION ${LIBDIR}

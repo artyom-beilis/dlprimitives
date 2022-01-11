@@ -486,7 +486,7 @@ namespace dlprim {
         for(onnx::NodeProto const &node : d->model.graph().node()) {
             DLPRIM_CHECK(node.has_op_type());
             std::string op = node.op_type();
-            
+
             if(op == "Conv")
                 add_conv(node);
             else if(op == "Gemm")
@@ -521,10 +521,8 @@ namespace dlprim {
                 add_pool2d(node,"max");
             else if(op == "AveragePool")
                 add_pool2d(node,"avg");
-            else if(op == "Flatten") {
-                /// FIXME
-                add_standard_activation(node,"identity");
-            }
+            else if(op == "Flatten") 
+                add_flatten(node);
             else
                 throw ValidationError("Unsupported ONNX Operator:" + op);
         }

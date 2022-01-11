@@ -16,7 +16,7 @@ namespace dlprim {
     ///     dlprim::Net net(ctx);
     ///     net.load_model(model);
     ///
-    class ONNXModel : public ModelBase {
+    class DLPRIM_API ONNXModel : public ModelBase {
     public:
         ONNXModel();
         virtual ~ONNXModel();
