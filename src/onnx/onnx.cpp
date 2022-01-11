@@ -447,10 +447,24 @@ namespace dlprim {
         json::value op;
         DLPRIM_CHECK((get_attr(node,"dilations",std::vector<int>{1,1})==std::vector<int>{1,1}));
         DLPRIM_CHECK(get_attr<std::string>(node,"auto_pad","NOTSET") == "NOTSET"); 
-        bool ceil_mode = get_attr(node,"ceil_mode",0);
-        auto pads = get_pads(node);
         auto kern = get_attr<std::vector<int> >(node,"kernel_shape");
+        bool ceil_mode = get_attr(node,"ceil_mode",0);
         auto strides = get_attr<std::vector<int> >(node,"strides");
+        auto pads = get_attr(node,"pads",std::vector<int>{0,0});
+        // for opset 9 simulation of external padding
+        if( pads.size() == 4 
+            && pads[0] == 0 && pads[1] == 0 
+            && pads[2] >  0 && pads[2] > 0
+            && strides[0] == 2 && strides[1] == 2
+            && !ceil_mode)
+        {
+            ceil_mode = true;
+            pads.resize(2);
+        }
+        else {
+            pads = get_pads(node);
+        }
+
         bool count_include_pad = get_attr(node,"count_include_pad",0);
         op["name"] = node.name();
         op["type"] = "Pooling2D";
