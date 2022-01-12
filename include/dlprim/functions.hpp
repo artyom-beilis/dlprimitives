@@ -8,4 +8,5 @@
 #include <dlprim/ops/pooling.hpp>
 #include <dlprim/ops/concat.hpp>
 #include <dlprim/ops/reshape.hpp>
+#include <dlprim/ops/pointwise.hpp>
 

@@ -220,6 +220,7 @@ set(DLPRIM_SRC
         src/ops/mse_loss.cpp
         src/ops/initialization.cpp
         src/ops/reshape.cpp
+        src/ops/pointwise.cpp
         ${EXTRA_SRC}
         )
 

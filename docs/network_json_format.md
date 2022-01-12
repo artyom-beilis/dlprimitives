@@ -199,6 +199,24 @@ Parameters
 
 For example: `{ "begin":1, "end":2","dim":1 }` - slice green channel
 
+### Threshold
+
+Compute `x > threshold ? 1 : 0`
+
+Parameters
+
+- `threshold`, default 0
+
+### Hardtanh
+
+Compute `max(min_val,min(max_val,x))`
+
+Parameters
+
+- `min_val`, default -1
+- `max_val , default 1
+
+
 ## Standard Activations
 
 Following are standard activation names: `relu`, `sigmoid`, `tanh`, `relu6`, `identity`

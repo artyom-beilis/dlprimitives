@@ -363,6 +363,53 @@ def make_concat():
     return report
 
 
+def make_pointwise(op,opset):
+    report = {
+        "operator" : op,
+        "tests" : []
+    }
+    tests = report["tests"]
+    for cfg,op in opset:
+        cases=[]
+        test = {
+            "train" : True,
+            "options" : cfg,
+            "setup_tensors" : [ {"shape":[10,50]}  ],
+            "output_tensors" : [ {"shape":[10,50]} ],
+            "workspce": 0,
+            "cases": cases
+        }
+        tests.append(test)
+        for shape in [[5,2],[32,6,16,16],[128,256,16,16],[10023]]:
+            case = dict(in_shapes = [ shape ] ,out_shapes = [shape])
+            if np.prod(shape) < 100:
+                a = torch.randn(*shape)
+                a.requires_grad = True
+                c = op(a)
+                dc = torch.randn(c.shape)
+                c.backward(dc,retain_graph=True)
+                case["in_tensors"]  = [a.reshape((-1,)).tolist()]
+                case["out_tensors"] = [c.reshape((-1,)).tolist()]
+                case["out_diffs"] = [dc.reshape((-1,)).tolist()]
+                case["in_diffs"] = [a.grad.reshape((-1)).tolist()]
+            else:
+                case["use_cpu_reference"]=True
+            cases.append(case)
+    return report
+
+def make_hardtanh():
+    return make_pointwise("Hardtanh", [
+        ( dict(min_val=-0.1,max_val=1.1), torch.nn.Hardtanh(min_val=-0.1,max_val=1.1) ),
+        ( dict(min_val=0,max_val=6), torch.nn.ReLU6() )
+    ])
+
+def make_threshold():
+    return make_pointwise("Threshold", [
+        (dict(), lambda x: (torch.nn.Hardtanh(0,1e-20)(x))*1e20),
+        (dict(threshold=0.5), lambda x: (torch.nn.Hardtanh(0,1e-20)(x-0.5))*1e20)
+    ])
+
+
 def make_activation():
     report = {
         "operator" : "Activation",
@@ -941,6 +988,8 @@ if __name__ == "__main__":
         "batchnorm" : make_batchnorm,
         "concat" : make_concat,
         "slice" : make_slice,
+        'threshold' : make_threshold,
+        'hardtanh': make_hardtanh,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))

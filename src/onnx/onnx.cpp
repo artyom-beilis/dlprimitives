@@ -8,14 +8,61 @@
 
 #include <google/protobuf/io/coded_stream.h>
 
-
 namespace dlprim {
     struct ONNXModel::Data {
         onnx::ModelProto model;
         json::value net;
         std::map<std::string,Tensor> parameters;
         std::set<std::string> edges;
+        std::map<std::string,Tensor> constants;
     };
+    namespace {
+        std::pair<Tensor,std::string> to_tensor(onnx::TensorProto const &init)
+        {
+            std::string const &name = init.name();
+            Shape sp=Shape::from_range(init.dims().begin(),init.dims().end());
+            DataType dt = float_data;
+            switch(init.data_type()) {
+            case onnx::TensorProto::FLOAT:
+                dt = float_data;
+                break;
+            case onnx::TensorProto::INT64:
+                dt = int64_data;
+                break;
+            default:
+                {
+                    std::ostringstream ss;
+                    ss << "Unsupported data type " << init.data_type() << " for tensor with shape " << sp << " name " << name;
+                    throw ValidationError(ss.str());
+                }
+            }
+            if(sp.size() == 0)
+                sp = Shape(1);
+            Context ctx; // cpu context
+            Tensor result(ctx,sp,dt);
+            size_t size = sp.total_size();
+            size_t memsize = result.memory_size();
+            void *vptr = result.host_data();
+            if(init.has_raw_data() && init.raw_data().size() == memsize) {
+                memcpy(vptr,init.raw_data().c_str(),memsize);
+            }
+            else if(dt == float_data && size_t(init.float_data().size()) == size) {
+                float *ptr = result.data<float>();
+                for(float const &v : init.float_data())
+                    *ptr++ = v;
+            }
+            else if(dt == int64_data && size_t(init.int64_data().size()) == size) {
+                std::int64_t *ptr = result.data<std::int64_t>();
+                for(int64_t const &v : init.int64_data()) {
+                    *ptr++ = v;
+                }
+            }
+            else {
+                throw ValidationError("No info found for tensor");
+            }
+            return std::make_pair(result,name);
+        }
+    }
 
     ONNXModel::ONNXModel() : d(new Data())
     {
@@ -60,31 +107,6 @@ namespace dlprim {
         validate_outputs();
     }
 
-    std::pair<Tensor,std::string> ONNXModel::to_tensor(onnx::TensorProto const &init)
-    {
-        std::string const &name = init.name();
-        Shape sp=Shape::from_range(init.dims().begin(),init.dims().end());
-        DataType dt = float_data;
-        switch(init.data_type()) {
-        case onnx::TensorProto::FLOAT:
-            dt = float_data;
-            break;
-        default:
-            throw ValidationError("Only float is supported so far");
-        }
-        Context ctx; // cpu context
-        Tensor result(ctx,sp,dt);
-        size_t size = sp.total_size();
-        float *ptr = result.data<float>();
-        if(size_t(init.float_data().size()) == size) {
-            for(float const &v : init.float_data())
-                *ptr++ = v;
-        }
-        else if(init.has_raw_data() && init.raw_data().size() == result.memory_size()) {
-            memcpy(ptr,init.raw_data().c_str(),result.memory_size());
-        }
-        return std::make_pair(result,name);
-    }
     void ONNXModel::prepare_network()
     {
         prepare_inputs_outputs();
@@ -182,6 +204,14 @@ namespace dlprim {
                 DLPRIM_CHECK(a.type() == a.FLOATS);
                 std::vector<int> r(a.floats().begin(),a.floats().end());
                 return r;
+            }
+        };
+        template<>
+        struct ParseAttr<Tensor> {
+            static Tensor get(onnx::AttributeProto const &a) 
+            {
+                DLPRIM_CHECK(a.type() == a.TENSOR);
+                return to_tensor(a.t()).first;
             }
         };
 
@@ -341,10 +371,14 @@ namespace dlprim {
             }
         }
     }
-    void ONNXModel::add_standard_activation(onnx::NodeProto const &node,std::string const &name)
+
+
+    void ONNXModel::add_standard_activation(onnx::NodeProto const &node,std::string const &name,bool validate_inputs)
     {
-        check_inputs(node,1);
-        check_outputs(node,1);
+        if(validate_inputs) {
+            check_inputs(node,1);
+            check_outputs(node,1);
+        }
         bool is_mergable = false;
         std::string type;
         json::array &ops = d->net["operators"].array();
@@ -492,7 +526,56 @@ namespace dlprim {
         op["outputs"][0] = node.output(0);
         add_operator(node,op);
     }
+    
+    void ONNXModel::handle_constant(onnx::NodeProto const &node)
+    {
+        check_inputs(node,0);
+        check_outputs(node,1);
+        Tensor t=get_attr<Tensor>(node,"value");
+        d->constants[node.output(0)] = t;
+    }
 
+    template<typename T>
+    T ONNXModel::get_scalar_constant(std::string const &name)
+    {
+        auto p = d->constants.find(name);
+        if(p == d->constants.end())
+            throw ValidationError("No such constant " + name);
+        if(p->second.shape() != Shape(1))
+            throw ValidationError("Invalid constant Shape,expecting (1)");
+        return p->second.data<T>()[0];
+    }
+
+    void ONNXModel::add_clip(onnx::NodeProto const &node)
+    {
+        float min_val = get_attr<double>(node,"min",std::numeric_limits<float>::min());
+        float max_val = get_attr<double>(node,"max",std::numeric_limits<float>::min());
+        DLPRIM_CHECK(1<= node.input_size() && node.input_size() <= 3);
+        DLPRIM_CHECK(d->edges.count(node.input(0)) == 1);
+        if(node.input_size() >= 2) {
+            min_val = get_scalar_constant<float>(node.input(1));
+        }
+        if(node.input_size() == 3) {
+            max_val = get_scalar_constant<float>(node.input(2));
+        }
+        
+        if(max_val == 6 && min_val == 0)  {
+            add_standard_activation(node,"relu6",false);
+            return;
+        }
+
+        json::value op;
+        
+        op["name"] = node.name();
+        op["type"] = "Hardtanh";
+        op["inputs"][0] = node.input(0);
+        op["outputs"][0] = node.output(0);
+        json::value &opt = op["options"];
+        opt["min_val"] = min_val;
+        opt["max_val"] = max_val;
+
+        add_operator(node,op);
+    }
 
     void ONNXModel::parse_operators()
     {
@@ -500,19 +583,15 @@ namespace dlprim {
         for(onnx::NodeProto const &node : d->model.graph().node()) {
             DLPRIM_CHECK(node.has_op_type());
             std::string op = node.op_type();
-
+            
             if(op == "Conv")
                 add_conv(node);
             else if(op == "Gemm")
                 add_ip(node);
             else if(op == "BatchNormalization")
                 add_bn(node);
-            else if(op == "Clip"
-                    && get_attr(node,"min",std::numeric_limits<double>::min()) == 0 
-                    && get_attr(node,"max",std::numeric_limits<double>::max()) == 6) 
-            {
-                add_standard_activation(node,"relu6");
-            }
+            else if(op == "Clip") 
+                add_clip(node);
             else if(op == "Relu")
                 add_standard_activation(node,"relu");
             else if(op == "Sigmoid")
@@ -537,6 +616,8 @@ namespace dlprim {
                 add_pool2d(node,"avg");
             else if(op == "Flatten") 
                 add_flatten(node);
+            else if(op == "Constant")
+                handle_constant(node);
             else
                 throw ValidationError("Unsupported ONNX Operator:" + op);
         }

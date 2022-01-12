@@ -96,7 +96,19 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         [](Context &ctx,json::value const &p) {
             return new Slice(ctx,SliceConfig::from_json(p));
         }
-    }
+    },
+    {
+        "Threshold", 
+        [](Context &ctx,json::value const &p) {
+            return new Threshold(ctx,ThresholdConfig::from_json(p));
+        }
+    },
+    {
+        "Hardtanh", 
+        [](Context &ctx,json::value const &p) {
+            return new Hardtanh(ctx,HardtanhConfig::from_json(p));
+        }
+    },
 };
     
 std::unique_ptr<Operator> create_by_name(Context &ctx,
