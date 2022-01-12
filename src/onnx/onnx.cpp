@@ -577,6 +577,42 @@ namespace dlprim {
         add_operator(node,op);
     }
 
+    void ONNXModel::add_pad(onnx::NodeProto const &node)
+    {
+        std::vector<int> pads;
+        check_outputs(node,1);
+        DLPRIM_CHECK(node.input_size() >= 1);
+        DLPRIM_CHECK(d->edges.count(node.input(0)) == 1);
+        if(node.input_size() >= 2) {
+            auto p = d->constants.find(node.input(1));
+            DLPRIM_CHECK(p!= d->constants.end());
+            size_t n=p->second.shape().total_size();
+            if(p->second.dtype() == int64_data) {
+                int64_t *values = p->second.data<int64_t>();
+                for(size_t i=0;i<n;i++)
+                    pads.push_back(values[i]);
+            }
+            else if(p->second.dtype() == int32_data) {
+                int32_t *values = p->second.data<int32_t>();
+                for(size_t i=0;i<n;i++)
+                    pads.push_back(values[i]);
+            }
+            else {
+                throw ValidationError("Pads input should have only int32/int64 type");
+           }
+            
+        }
+        else {
+            pads = get_attr<std::vector<int> >(node,"pads",std::vector<int>());
+        }
+        for(auto v: pads) {
+            if(v != 0) {
+                throw ValidationError("Pad operator supported for now only as dummy operator with 0 pads only");
+            }
+        }
+        add_standard_activation(node,"identity",false);
+    }
+
     void ONNXModel::parse_operators()
     {
         d->net["operators"] = json::array();
@@ -616,6 +652,8 @@ namespace dlprim {
                 add_pool2d(node,"avg");
             else if(op == "Flatten") 
                 add_flatten(node);
+            else if(op == "Pad")
+                add_pad(node);
             else if(op == "Constant")
                 handle_constant(node);
             else

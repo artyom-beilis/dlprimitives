@@ -59,8 +59,13 @@ class DLPrimModel(object):
         onnx_model.load(onnx_path)
         self.ctx = dp.Context(device)
         self.net = dp.Net(self.ctx)
-        self.net.mode = dp.TRAIN
+        self.net.mode = dp.PREDICT
         self.net.load_model(onnx_model)
+        print(self.net.output_names)
+        with open(onnx_path.replace('.onnx','.json'),'w') as f:
+            f.write(onnx_model.network)
+            f.write('\n')
+        self.net.save_parameters(onnx_path.replace('.onnx','.dlp'))
 
     def eval(self,batch):
         data = self.net.tensor('data')
@@ -72,6 +77,7 @@ class DLPrimModel(object):
         data.to_device(batch,q)
         self.net.forward(q)
         prob.to_host(prob_cpu,q)
+        q.finish()
         return prob_cpu
 
 

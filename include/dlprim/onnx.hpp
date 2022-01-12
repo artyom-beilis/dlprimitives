@@ -50,6 +50,7 @@ namespace dlprim {
         void add_pool2d(onnx::NodeProto const &node,std::string const &operation);
         void add_flatten(onnx::NodeProto const &node);
         void add_clip(onnx::NodeProto const &node);
+        void add_pad(onnx::NodeProto const &node);
         void handle_constant(onnx::NodeProto const &node);
         template<typename T>
         T get_scalar_constant(std::string const &name);

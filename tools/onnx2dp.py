@@ -72,7 +72,8 @@ def get_operators(model,inputs,params):
     actdic = {
         "Relu" : 'relu',
         'Sigmoid' : 'sigmoid',
-        "Clip" : 'relu6'
+        "Clip" : 'relu6',
+        "Pad" : "identity"
     }
     op_len = 0
     print("================")
@@ -200,8 +201,8 @@ def get_operators(model,inputs,params):
             operators.append(op)
              
         elif n.op_type == 'MaxPool' or n.op_type == 'AveragePool': 
-            assert attrs.get('ceil_mode',0) == 0
             assert tuple(attrs.get('dilations',[1,1])) == (1,1)
+            ceil_mode = bool(attrs.get('ceil_mode',0))
             pads = get_pads(attrs)
             kern = attrs['kernel_shape']
             strides = attrs['strides']
@@ -214,6 +215,7 @@ def get_operators(model,inputs,params):
                         kernel = kern,
                         stride = strides,
                         pad = pads,
+                        ceil_mode = ceil_mode,
                         count_include_pad = count_include_pad,
                         mode = ('max' if n.op_type == 'MaxPool' else 'avg')
                       )

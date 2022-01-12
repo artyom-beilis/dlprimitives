@@ -135,6 +135,13 @@ namespace dlprim {
         else
             n.mode(CalculationsMode::predict);
     }
+#ifdef WITH_ONNX
+    std::string onnx_net(ONNXModel &model)
+    {
+        std::ostringstream ss;
+        return model.network().save(dlprim::json::readable);
+    }
+#endif
 }
 
 
@@ -207,6 +214,7 @@ BOOST_PYTHON_MODULE(_pydlprim)
     bp::class_<dp::ONNXModel,bp::bases<dp::ModelBase>,boost::noncopyable >("ONNXModel",
                 "ONNX Model parser and importer, once it is loaded, Net.load can be called").
         def(bp::init<>("Empty")).
+        add_property("network",&onnx_net,"Export network as string").
         def("load",&dp::ONNXModel::load,"Load model from file");
 
 #endif
