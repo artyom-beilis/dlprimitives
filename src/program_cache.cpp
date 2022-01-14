@@ -1,12 +1,35 @@
 #include  <dlprim/gpu/program_cache.hpp>
 #include <sstream>
+#include <chrono>
 #include <iostream>
 #ifdef WITH_SQLITE3
 #include "binary_cache.hpp"
 #endif
 
+
+//#define DEBUG_CACHE_TIMES 
+
 namespace dlprim {
 namespace gpu {
+
+
+#ifdef DEBUG_CACHE_TIMES
+class TimeWriter {
+public:
+    decltype(std::chrono::high_resolution_clock::now()) start;
+    std::string name;
+    TimeWriter(std::string const &n) : name(n)
+    {
+        start = std::chrono::high_resolution_clock::now();
+    }
+    ~TimeWriter()
+    {
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto passed = std::chrono::duration_cast<std::chrono::duration<double> > ((stop-start)).count();
+        std::cout << "Kernel " << name << " " << passed * 1e3 << " ms" << std::endl;
+    }
+};
+#endif
 
 Cache &Cache::instance()
 {
@@ -27,6 +50,7 @@ cl::Program const &Cache::get_program(Context &ctx,std::string const &source,std
     return cache_[key];
 
 }
+
 
 cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::vector<Parameter> const &params)
 {
@@ -53,6 +77,11 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
     }
     std::string const &code = (combine ? prepend.str() + source_text : source_text);
     std::string sparams = ss.str();
+    
+    #ifdef DEBUG_CACHE_TIMES
+    TimeWriter guard(source);
+    #endif
+
     #ifdef  WITH_SQLITE3
     /// nvidia has very different type of caching since binary return not binary but rather ptx,
     /// using only native cuda cache works better, double cache adds overhead

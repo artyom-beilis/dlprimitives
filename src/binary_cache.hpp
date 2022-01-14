@@ -252,11 +252,14 @@ namespace dlprim {
             std::string key = get_key(m,source,params);
             
             MiniDB::Transaction tr(session_);
-            auto st = session_.prepare_exec("SELECT binary FROM cache WHERE key=?",key);
+            auto st = session_.prepare_exec("SELECT binary,lru FROM cache WHERE key=?",key);
             if(!st.next())
                 return binary;
             st.get_blob(0,binary);
-            session_.prepare_exec("UPDATE cache SET lru=? WHERE key=?",time(0),key).exec();
+            int64_t last_update = st.get_int(1);
+            int64_t new_update = time(0);
+            if(new_update - last_update > lru_update_)
+                session_.prepare_exec("UPDATE cache SET lru=? WHERE key=?",new_update,key).exec();
             tr.commit();
             return binary;
         }
@@ -387,10 +390,15 @@ namespace dlprim {
         std::string get_path()
         {
             enable_ = true;
+            lru_update_ = 3600*24; // 24h
             char *diable_cache = getenv("DLPRIM_CACHE_DISABLE");
             if(diable_cache && atoi(diable_cache) != 0) {
                 enable_ = false;
                 return "";
+            }
+            char *lru_update = getenv("DLPRIM_CACHE_LRU_UPDATE_TIMEOUT");
+            if(lru_update) {
+                lru_update_ = atoi(lru_update);
             }
             char *cache_dir = getenv("DLPRIM_CACHE_DIR");
             if(cache_dir)
@@ -451,5 +459,6 @@ namespace dlprim {
         MiniDB session_;
         std::mutex lock_;
         bool enable_;
+        int64_t lru_update_;
     };
 }
