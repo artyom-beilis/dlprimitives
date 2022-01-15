@@ -57,6 +57,7 @@ namespace dlprim {
     {
         json::value header;
         json::value &tensors = header["tensors"];
+        tensors = json::object();
         size_t start_pos = 0;
         for(auto  &pr : parameters_) {
             std::string name = pr.first;

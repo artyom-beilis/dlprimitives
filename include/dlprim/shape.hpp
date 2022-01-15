@@ -121,6 +121,21 @@ namespace dlprim {
         /// Add dimention=1 at axis location, for example for Shape(2,3).unsqueeze(0) == Shape(1,2,3)
         ///
         Shape unsqueeze(int axis) const;
+        
+        ///
+        /// Remove dimesnions containing 1 that appear at dims, for example  Shape(4,5,1,1).squeeze({2,3}) = Shape(4,5)
+        ///
+        /// if dim values is negative it is counted from end
+        ///
+        /// Note for all i in `[0:dims.size)` it is required shape[dim[i]] == 1
+        ///
+        ///
+        Shape squeeze(std::vector<int> dims) const;
+        
+        ///
+        /// Remove dimesnions containing 1 that appear at dims, for example  Shape(4,5,1,1).squeeze() = Shape(4,5)
+        ///
+        Shape squeeze() const;
 
         ///
         /// Compute strides needed for broadcasting this shape to target shape

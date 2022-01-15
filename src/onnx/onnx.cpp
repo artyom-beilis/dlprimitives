@@ -14,7 +14,7 @@ namespace dlprim {
         json::value net;
         std::map<std::string,Tensor> parameters;
         std::set<std::string> edges;
-        std::map<std::string,Tensor> constants;
+        std::map<std::string,std::vector<int> > pads;
     };
     namespace {
         std::pair<Tensor,std::string> to_tensor(onnx::TensorProto const &init)
@@ -217,6 +217,14 @@ namespace dlprim {
 
     }
 
+    bool ONNXModel::has_attr(onnx::NodeProto const &node,std::string const &name)
+    {
+        for(auto const &attr : node.attribute()) {
+            if(attr.name() == name)
+                return true;
+        }
+        return false;
+    }
     template<typename T>
     T ONNXModel::get_attr(onnx::NodeProto const &node,std::string const &name,T default_value)
     {
@@ -241,13 +249,30 @@ namespace dlprim {
         throw ValidationError("No attribute named " + name + " for op:" + node.name());
     }
 
-    std::vector<int> ONNXModel::get_pads(onnx::NodeProto const &node)
+    void ONNXModel::check_pad_op_2d(onnx::NodeProto const &node,std::vector<int> &pads)
     {
-        std::vector<int> pads = get_attr(node,"pads",std::vector<int>{0,0});
-        if(pads.size() == 4) {
-            DLPRIM_CHECK(pads[0] == pads[2] && pads[1] == pads[3]);
-            pads.resize(2);
+        auto p=d->pads.find(node.input(0));
+        if(p == d->pads.end())
+            return;
+        if(pads.size() != 4) {
+            throw ValidationError("Pads size for operator " + node.op_type() +  " " + node.name() + " expected to be of size 4");
         }
+        std::vector<int> &extra_pads = p->second;
+        if(extra_pads.size() != 8 || extra_pads[0] != 0 || extra_pads[1] != 0 || extra_pads[4] != 0 || extra_pads[5] !=0) {
+            throw ValidationError("Incompatible padding for operator " + node.op_type() + " " + node.name());
+        }
+        pads[0] += extra_pads[2];
+        pads[1] += extra_pads[3];
+        pads[2] += extra_pads[6];
+        pads[3] += extra_pads[7];
+    }
+
+    std::vector<int> ONNXModel::get_pads_2d(onnx::NodeProto const &node)
+    {
+        std::vector<int> pads = get_attr(node,"pads",std::vector<int>{0,0,0,0});
+        check_pad_op_2d(node,pads);
+        DLPRIM_CHECK(pads[0] == pads[2] && pads[1] == pads[3]);
+        pads.resize(2);
         return pads;
     }
 
@@ -312,32 +337,84 @@ namespace dlprim {
         opt["kernel"] = get_attr(node,"kernel_shape",std::vector<int>{int(W.shape()[2]),int(W.shape()[3])});
         opt["stride"] = get_attr(node,"strides",std::vector<int>{1,1});
         opt["dilate"] = get_attr(node,"dilations",std::vector<int>{1,1});
-        opt["pad"] = get_pads(node);
         opt["channels_out"]=W.shape()[0];
         opt["channels_in"]=W.shape()[1] * groups;
+        opt["pad"] = get_pads_2d(node);
 
         add_operator(node,v);
     }
+    std::pair<std::string,Tensor> ONNXModel::transpose_parameter(std::string const &name)
+    {
+        Tensor &Wt = d->parameters[name];
+        std::string param = name + "_dlprim_transpose";
+        DLPRIM_CHECK(Wt.shape().size() == 2);
+        Context ctx;
+        Tensor W(ctx,Shape(Wt.shape()[1],Wt.shape()[0]),Wt.dtype());
+        if(Wt.dtype() == float_data) {
+            size_t rows = W.shape()[0];
+            size_t cols = W.shape()[1];
+            float *src = Wt.data<float>();
+            float *tgt = W.data<float>();
+            for(size_t r=0;r<rows;r++)
+                for(size_t c=0;c<cols;c++)
+                    *tgt ++ = src [c * rows + r];
+        }
+        else {
+            throw ValidationError("matmul only float supported");
+        }
+        d->parameters[param] = W;
+        return std::make_pair(param,W);
+    }
     void ONNXModel::add_ip(onnx::NodeProto const &node)
     {
-        DLPRIM_CHECK(get_attr<double>(node,"alpha") == 1.0);
-        DLPRIM_CHECK(get_attr<double>(node,"beta") == 1.0);
+        DLPRIM_CHECK(get_attr<double>(node,"alpha",1.0) == 1.0);
+        DLPRIM_CHECK(get_attr<double>(node,"beta",1.0) == 1.0);
         DLPRIM_CHECK(get_attr<int>(node,"transA",0) == 0);
-        DLPRIM_CHECK(get_attr<int>(node,"transB",0) == 1);
+        bool trans_b = get_attr<int>(node,"transB",0);
         check_inputs(node,1,1,1,2);
         check_outputs(node,1);
         bool bias = node.input_size() == 3;
-        Tensor &W = d->parameters[node.input(1)];
+        Tensor W;
+        std::string pname = node.input(1);
+        if(trans_b) {
+            W = d->parameters[pname];
+        }
+        else {
+            auto tr = transpose_parameter(pname);
+            pname = tr.first;
+            W = tr.second;
+        }
         json::value op;
         op["name"] = node.name();
         op["type"] = "InnerProduct";
         op["inputs"][0] = node.input(0);
         op["outputs"][0] = node.output(0);
-        op["params"][0] = node.input(1);
+        op["params"][0] = pname;
         if(bias)
             op["params"][1] = node.input(2);
         json::value &opt = op["options"];
         opt["bias"] = bias;
+        opt["inputs"] = W.shape()[1];
+        opt["outputs"] = W.shape()[0];
+        add_operator(node,op);
+    }
+
+    void ONNXModel::add_matmul(onnx::NodeProto const &node)
+    {
+        check_inputs(node,1,1,1,1);
+        check_outputs(node,1);
+        std::string param = node.input(1);
+        auto tr = transpose_parameter(param);
+        param = tr.first;
+        Tensor W = tr.second;
+        json::value op;
+        op["name"] = node.name();
+        op["type"] = "InnerProduct";
+        op["inputs"][0] = node.input(0);
+        op["outputs"][0] = node.output(0);
+        op["params"][0] = param;
+        json::value &opt = op["options"];
+        opt["bias"] = false;
         opt["inputs"] = W.shape()[1];
         opt["outputs"] = W.shape()[0];
         add_operator(node,op);
@@ -348,7 +425,7 @@ namespace dlprim {
         check_inputs(node,1,1,4,4);
         check_outputs(node,1,5);
         double eps = get_attr<double>(node,"epsilon");
-        double momentum = 1.0 - get_attr<double>(node,"momentum");
+        double momentum = 1.0 - get_attr(node,"momentum",0.9);
         json::value op;
         op["name"] = node.name();
         op["type"] = "BatchNorm";
@@ -443,7 +520,7 @@ namespace dlprim {
         DLPRIM_CHECK(attr == 1 || attr == -1); 
         json::value op;
         op["name"] = node.name();
-        op["type"] = "Concat";
+        op["type"] = "Softmax";
         op["inputs"][0] = node.input(0);
         op["outputs"][0] = node.output(0);
         add_operator(node,op);
@@ -484,7 +561,8 @@ namespace dlprim {
         auto kern = get_attr<std::vector<int> >(node,"kernel_shape");
         bool ceil_mode = get_attr(node,"ceil_mode",0);
         auto strides = get_attr<std::vector<int> >(node,"strides");
-        auto pads = get_attr(node,"pads",std::vector<int>{0,0});
+        auto pads = get_attr(node,"pads",std::vector<int>{0,0,0,0});
+        check_pad_op_2d(node,pads);
         // for opset 9 simulation of external padding
         if( pads.size() == 4 
             && pads[0] == 0 && pads[1] == 0 
@@ -496,7 +574,7 @@ namespace dlprim {
             pads.resize(2);
         }
         else {
-            pads = get_pads(node);
+            pads = get_pads_2d(node);
         }
 
         bool count_include_pad = get_attr(node,"count_include_pad",0);
@@ -532,15 +610,15 @@ namespace dlprim {
         check_inputs(node,0);
         check_outputs(node,1);
         Tensor t=get_attr<Tensor>(node,"value");
-        d->constants[node.output(0)] = t;
+        d->parameters[node.output(0)] = t;
     }
 
     template<typename T>
     T ONNXModel::get_scalar_constant(std::string const &name)
     {
-        auto p = d->constants.find(name);
-        if(p == d->constants.end())
-            throw ValidationError("No such constant " + name);
+        auto p = d->parameters.find(name);
+        if(p == d->parameters.end())
+            throw ValidationError("No such constant/parameter " + name);
         if(p->second.shape() != Shape(1))
             throw ValidationError("Invalid constant Shape,expecting (1)");
         return p->second.data<T>()[0];
@@ -577,6 +655,54 @@ namespace dlprim {
         add_operator(node,op);
     }
 
+    void ONNXModel::add_squeeze(onnx::NodeProto const &node)
+    {
+        check_inputs(node,1,1,0,1);
+        check_outputs(node,1);
+        std::vector<int> dims;
+        bool all=true;
+        if(node.input_size() == 1) {
+            if(has_attr(node,"axis")) {
+                dims = get_attr<std::vector<int> >(node,"axis");
+                all = false;
+            }
+        }
+        else {
+            dims = tensor_to_intvec(d->parameters[node.input(1)]);
+            all = false;
+        }
+        json::value op;
+        op["name"] = node.name();
+        op["type"] = "Squeeze";
+        op["inputs"][0] = node.input(0);
+        op["outputs"][0] = node.output(0);
+        json::value &opt = op["options"];
+        opt["all"] = all;
+        opt["dims"] = dims;
+        
+        add_operator(node,op);
+    }
+
+    std::vector<int> ONNXModel::tensor_to_intvec(Tensor t)
+    {
+        std::vector<int> res;
+        size_t n=t.shape().total_size();
+        if(t.dtype() == int64_data) {
+            int64_t *values = t.data<int64_t>();
+            for(size_t i=0;i<n;i++)
+                res.push_back(values[i]);
+        }
+        else if(t.dtype() == int32_data) {
+            int32_t *values = t.data<int32_t>();
+            for(size_t i=0;i<n;i++)
+                res.push_back(values[i]);
+        }
+        else {
+            throw ValidationError("input should have only int32/int64 type");
+        }
+        return res;
+    }
+
     void ONNXModel::add_pad(onnx::NodeProto const &node)
     {
         std::vector<int> pads;
@@ -584,42 +710,123 @@ namespace dlprim {
         DLPRIM_CHECK(node.input_size() >= 1);
         DLPRIM_CHECK(d->edges.count(node.input(0)) == 1);
         if(node.input_size() >= 2) {
-            auto p = d->constants.find(node.input(1));
-            DLPRIM_CHECK(p!= d->constants.end());
-            size_t n=p->second.shape().total_size();
-            if(p->second.dtype() == int64_data) {
-                int64_t *values = p->second.data<int64_t>();
-                for(size_t i=0;i<n;i++)
-                    pads.push_back(values[i]);
-            }
-            else if(p->second.dtype() == int32_data) {
-                int32_t *values = p->second.data<int32_t>();
-                for(size_t i=0;i<n;i++)
-                    pads.push_back(values[i]);
-            }
-            else {
+            auto p = d->parameters.find(node.input(1));
+            if(p!=d->parameters.end())
+                pads = tensor_to_intvec(p->second);
+            else 
                 throw ValidationError("Pads input should have only int32/int64 type");
-           }
             
         }
         else {
             pads = get_attr<std::vector<int> >(node,"pads",std::vector<int>());
         }
+        bool all_zeros = true;
         for(auto v: pads) {
             if(v != 0) {
-                throw ValidationError("Pad operator supported for now only as dummy operator with 0 pads only");
+                all_zeros = false;
+                break;
             }
         }
-        add_standard_activation(node,"identity",false);
+        if(all_zeros) {
+            add_standard_activation(node,"identity",false);
+            return;
+        }
+        std::string output = node.output(0);
+        std::string input = node.input(0);
+        for(auto const &other_node: d->model.graph().node()) {
+            for(std::string const &other_input : other_node.input()) {
+                if(other_input == output) {
+                    std::string type = other_node.op_type();
+                    if(type != "Conv" && type != "MaxPool" && type != "AveragePool") {
+                        throw ValidationError("Pad operator need to be followed by operator that provides padding or be dummy operator with 0 pads only" 
+                           ", operator " + type + "/" + other_node.name() + " isn't supported"
+                        );
+                    }
+                }
+            }
+        }
+        d->pads[output] = pads;
+        json::array &operators = d->net["operators"].array();
+        // replace output
+        for(auto &op : operators) {
+            for(auto &out : op["outputs"].array()) {
+                if(out.str() == input) {
+                    out = output;
+                }
+            }
+        }
+        d->edges.erase(input);
+        d->edges.insert(output);
+    }
+
+    void ONNXModel::add_bias(onnx::NodeProto const &node)
+    {
+        check_inputs(node,1,1,1,1);
+        check_outputs(node,1);
+        json::array &operators = d->net["operators"].array();
+        if(operators.empty())
+            throw ValidationError("Bias isn't supported as first operator");
+        json::value &last_op = operators.back();
+        std::string type = last_op.get<std::string>("type");
+        if(type != "Convolution2D" && type != "InnerProduct")
+            throw ValidationError("Bias should follow InnerProduct or Convolution2D operator");
+        if(last_op["options"].get("bias",true) == true) {
+            throw ValidationError("Previous operator already has bias, can't add another");
+        }
+        if(last_op["outputs"][0].str() != node.input(0)) {
+            throw ValidationError("Bias previous operator output must match current op input");
+        }
+        std::string bias_name = node.input(1);
+        Tensor &parameter = d->parameters[bias_name];
+        bool valid_paramerer_shape = false;
+        Shape pshape = parameter.shape();
+        if(type == "Convolution2D") {
+            valid_paramerer_shape =
+              (pshape.size() == 4 && pshape[0] == 1 && pshape[2] == 1 && pshape[3] == 1)
+              || (pshape.size() == 3 && pshape[1] == 1 && pshape[2] == 1);
+        }
+        else if(type == "InnerProduct") {
+            valid_paramerer_shape = 
+              pshape.size() == 1 
+              || (pshape.size() == 2 && pshape[0] == 1);
+        }
+        if(!valid_paramerer_shape) {
+            std::ostringstream ss;
+            ss << "Invalid parameter shape " << pshape;
+            throw ValidationError(ss.str());
+        }
+        bias_name += "_dlprim_bias";
+        Tensor reshaped_param = parameter.alias();
+        reshaped_param.reshape(Shape(parameter.shape().total_size()));
+        d->parameters[bias_name] = reshaped_param;
+
+        d->edges.erase(last_op["outputs"][0].str());
+        d->edges.insert(node.output(0));
+        last_op["options"]["bias"] = true;
+        last_op["outputs"][0] = node.output(0);
+        last_op["params"][1] = bias_name;
     }
 
     void ONNXModel::parse_operators()
     {
         d->net["operators"] = json::array();
-        for(onnx::NodeProto const &node : d->model.graph().node()) {
+        size_t nodes = d->model.graph().node_size();
+        for(size_t node_index = 0;node_index < nodes ;node_index++) {
+            onnx::NodeProto const &node = d->model.graph().node(node_index);
+            
             DLPRIM_CHECK(node.has_op_type());
             std::string op = node.op_type();
-            
+
+            #if 0
+            std::cerr << "op:" <<op << std::endl;
+            std::cerr << " inputs:";
+            for(auto const &in: node.input())
+                std::cerr <<" - "<< in  << std::endl;
+            std::cerr << " outputs:";
+            for(auto const &out: node.output())
+                std::cerr <<" - "<< out << std::endl;
+            #endif
+
             if(op == "Conv")
                 add_conv(node);
             else if(op == "Gemm")
@@ -640,8 +847,14 @@ namespace dlprim {
                 add_softmax(node);
             else if(op == "Mul")
                 add_elementwise(node,"prod");
-            else if(op == "Add")
-                add_elementwise(node,"sum");
+            else if(op == "Add") {
+                if(node.input_size() == 2 && d->parameters.count(node.input(1))==1) {
+                    add_bias(node);
+                }
+                else {
+                    add_elementwise(node,"sum");
+                }
+            }
             else if(op == "GlobalAveragePool")
                 add_global_pooling(node,"avg");
             else if(op == "GlobalMaxPool")
@@ -652,10 +865,14 @@ namespace dlprim {
                 add_pool2d(node,"avg");
             else if(op == "Flatten") 
                 add_flatten(node);
+            else if(op == "Squeeze") 
+                add_squeeze(node);
             else if(op == "Pad")
                 add_pad(node);
             else if(op == "Constant")
                 handle_constant(node);
+            else if(op == "MatMul")
+                add_matmul(node);
             else
                 throw ValidationError("Unsupported ONNX Operator:" + op);
         }

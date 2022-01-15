@@ -8,12 +8,19 @@ namespace dp = dlprim;
 
 void test_shape()
 {
-    std::cout << "Tesh Shape" << std::endl;
+    std::cout << "Test Shape" << std::endl;
     dp::Shape s(2,3,4);
     TEST(s.unsqueeze(0) == dp::Shape(1,2,3,4));
     TEST(s.unsqueeze(3) == dp::Shape(2,3,4,1));
     TEST(s.unsqueeze(1) == dp::Shape(2,1,3,4));
     TEST(s.unsqueeze(-1) == dp::Shape(2,3,4,1));
+
+    TEST(dp::Shape(2,4,1,1).squeeze() == dp::Shape(2,4));
+    TEST(dp::Shape(2,4,1,1).squeeze({ 2, 3}) == dp::Shape(2,4));
+    TEST(dp::Shape(2,4,1,1).squeeze({-1,-2}) == dp::Shape(2,4));
+    TEST(dp::Shape(2,1,4,1).squeeze() == dp::Shape(2,4));
+    TEST(dp::Shape(2,1,4,1).squeeze({ 1,-1}) == dp::Shape(2,4));
+    TEST(dp::Shape(2,1,4,1).squeeze({ 1, 3}) == dp::Shape(2,4));
 
     std::cout << "Broadcasting" << std::endl;
     TEST(dp::broadcast(dp::Shape(2,3,4),dp::Shape(3,4)) == dp::Shape(2,3,4));

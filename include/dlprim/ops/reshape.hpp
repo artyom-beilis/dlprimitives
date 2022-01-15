@@ -64,6 +64,31 @@ namespace dlprim {
             return r;
         }
     };
+    struct SqueezeConfig {
+        std::vector<int> dims;
+        bool all=false;
+        static SqueezeConfig from_json(json::value const &);
+    };
+
+    class Squeeze : public ReshapeBase {
+    public:
+        
+        Squeeze(Context &ctx,SqueezeConfig const &config = SqueezeConfig()) : ReshapeBase(ctx), cfg_(config) {}
+        virtual ~Squeeze() {}
+        
+        virtual char const *operator_type() const
+        {
+            return "Squeeze";
+        }
+        virtual Shape new_shape(Shape const &in)
+        {
+            if(cfg_.all)
+                return in.squeeze();
+            else
+                return in.squeeze(cfg_.dims);
+        }
+        SqueezeConfig cfg_;
+    };
 
 } // namespace
  

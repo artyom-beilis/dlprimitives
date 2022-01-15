@@ -1,4 +1,5 @@
 #include <dlprim/ops/reshape.hpp>
+#include <dlprim/json.hpp>
 
 namespace dlprim {
     ReshapeBase::ReshapeBase(Context const &c) : Operator(c) 
@@ -22,5 +23,16 @@ namespace dlprim {
         ws = 0;
         out.assign({new_shape(in[0])});
         DLPRIM_CHECK(out[0].total_size() == in[0].total_size());
+    }
+    SqueezeConfig SqueezeConfig::from_json(json::value const &v)
+    {
+        SqueezeConfig cfg;
+        cfg.dims = v.get("dims",cfg.dims);
+        if(!cfg.dims.empty())
+            cfg.all = false;
+        cfg.all = v.get("all",cfg.all);
+        if(cfg.all && !cfg.dims.empty())
+            throw ValidationError("Can't use both squeeze all and squeeze by dims");
+        return cfg;
     }
 };

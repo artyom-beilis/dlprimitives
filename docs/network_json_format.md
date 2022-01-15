@@ -199,6 +199,18 @@ Parameters
 
 For example: `{ "begin":1, "end":2","dim":1 }` - slice green channel
 
+### Flatten
+
+Flattens the shape to `[batch,features]` no parameters
+
+### Squeeze
+
+Squeezes the shape
+
+- `all` default true if dims empty otherwise false, squeeze all 1 dimensions
+- `dims` - list dimension to squeeze, negative counted from end
+
+
 ### Threshold
 
 Compute `x > threshold ? 1 : 0`

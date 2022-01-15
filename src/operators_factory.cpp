@@ -86,6 +86,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
+        "Squeeze", 
+        [](Context &ctx,json::value const &p) {
+            return new Squeeze(ctx,SqueezeConfig::from_json(p));
+        }
+    },
+    {
         "Concat", 
         [](Context &ctx,json::value const &p) {
             return new Concat(ctx,ConcatConfig::from_json(p));
