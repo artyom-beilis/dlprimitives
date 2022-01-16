@@ -90,5 +90,27 @@ namespace dlprim {
         SqueezeConfig cfg_;
     };
 
+    struct ReshapeConfig {
+        std::vector<int> dims;
+        static ReshapeConfig from_json(json::value const &);
+    };
+
+    class Reshape : public ReshapeBase {
+    public:
+        
+        Reshape(Context &ctx,ReshapeConfig const &config = ReshapeConfig()) : ReshapeBase(ctx), cfg_(config) {}
+        virtual ~Reshape() {}
+        
+        virtual char const *operator_type() const
+        {
+            return "Reshape";
+        }
+        virtual Shape new_shape(Shape const &in)
+        {
+            return in.reshape(cfg_.dims);
+        }
+        ReshapeConfig cfg_;
+    };
+
 } // namespace
  

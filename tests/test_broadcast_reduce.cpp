@@ -22,6 +22,11 @@ void test_shape()
     TEST(dp::Shape(2,1,4,1).squeeze({ 1,-1}) == dp::Shape(2,4));
     TEST(dp::Shape(2,1,4,1).squeeze({ 1, 3}) == dp::Shape(2,4));
 
+    TEST(dp::Shape(2,3,4).reshape({0,-1}) == dp::Shape(2,12));
+    TEST(dp::Shape(2,3,4).reshape({-1,12}) == dp::Shape(2,12));
+    TEST(dp::Shape(2,3,4).reshape({2,12}) == dp::Shape(2,12));
+    TEST(dp::Shape(2,3,4).reshape({-1,4}) == dp::Shape(6,4));
+
     std::cout << "Broadcasting" << std::endl;
     TEST(dp::broadcast(dp::Shape(2,3,4),dp::Shape(3,4)) == dp::Shape(2,3,4));
     TEST(dp::broadcast(dp::Shape(1,3,4),dp::Shape(5,3,1)) == dp::Shape(5,3,4));

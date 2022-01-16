@@ -210,6 +210,12 @@ Squeezes the shape
 - `all` default true if dims empty otherwise false, squeeze all 1 dimensions
 - `dims` - list dimension to squeeze, negative counted from end
 
+### Reshape
+
+Reshapes the tensor
+
+- `dims` - list of ints new dimension, 0 - keep same as origin, -1 deduce from others
+
 
 ### Threshold
 

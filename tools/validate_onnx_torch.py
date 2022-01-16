@@ -138,13 +138,18 @@ def predict_on_images(model,images,config):
     return res
 
 
-def get_config(fw):
+def get_config(fw,model):
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(base_path + '/examples/cpp/imagenet_predict_config.json','r') as f:
         cfg = json.load(f)
     if fw == 'tf':
-        cfg['mean'] = [0.5,0.5,0.5]
-        cfg['std'] =[0.5,0.5,0.5]
+        if model.startswith('efficientnet'):
+            cfg['mean'] = [0,0,0];
+            cfg['std'] = [1/255.0,1/255.0,1/255.0]
+        else:
+            cfg['mean'] = [0.5,0.5,0.5]
+            cfg['std'] =[0.5,0.5,0.5]
+
     return cfg
 
 def get_tf_model(model_name):
@@ -156,14 +161,16 @@ def get_tf_model(model_name):
         return tf.keras.applications.ResNet50(classifier_activation=None)
     elif model_name == 'densenet121':
         return tf.keras.applications.DenseNet121()
-    elif model_name == 'nasnetmobile':
-        return tf.keras.applications.NASNetMobile()
+    #elif model_name == 'nasnetmobile': channel last
+    #    return tf.keras.applications.NASNetMobile()
     elif model_name == 'mobilenet':
         return tf.keras.applications.MobileNet(classifier_activation=None)
     elif model_name == 'mobilenet_v2':
         return tf.keras.applications.MobileNetV2(classifier_activation=None)
     elif model_name == 'vgg16':
         return tf.keras.applications.VGG16(classifier_activation=None)
+    elif model_name == 'efficientnetb0':
+        return tf.keras.applications.efficientnet.EfficientNetB0(classifier_activation=None)
     raise Exception("Invalid name " + model_name)
 
 class MXModel(object):
@@ -189,7 +196,7 @@ def get_mx_model_and_export(name,batch,onnx_path):
 
 def main(args):
     onnx_path = args.model + ".onnx"
-    config = get_config(args.fw)
+    config = get_config(args.fw,args.model)
     if args.fw == 'torch':
         import torch
         import torchvision

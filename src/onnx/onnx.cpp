@@ -5,6 +5,7 @@
 
 #include <fstream>
 #include <set>
+#include <algorithm>
 
 #include <google/protobuf/io/coded_stream.h>
 
@@ -305,7 +306,9 @@ namespace dlprim {
         }
         int index = 0;
         for(;index<inputs_count;index++) {
-            DLPRIM_CHECK(d->edges.find(node.input(index))!=d->edges.end());
+            if(d->edges.find(node.input(index))==d->edges.end()) {
+                throw ValidationError("Can't find input " + node.input(index) + " for operator " + node.op_type() + "/" + node.name());
+            }
         }
         for(;index<size;index++) {
             DLPRIM_CHECK(d->parameters.find(node.input(index))!=d->parameters.end());
@@ -687,6 +690,31 @@ namespace dlprim {
         add_operator(node,op);
     }
 
+    void ONNXModel::add_reshape(onnx::NodeProto const &node)
+    {
+        check_inputs(node,1,1,0,1);
+        check_outputs(node,1);
+        std::vector<int> dims;
+        if(node.input_size() == 1) {
+            dims = get_attr<std::vector<int> >(node,"shape");
+        }
+        else {
+            dims = tensor_to_intvec(d->parameters[node.input(1)]);
+        }
+        bool allowzero = get_attr(node,"allowzero",0);
+        if(std::find(dims.begin(),dims.end(),0)!=dims.end() && allowzero)
+                throw ValidationError("Reshape to dim with 0 dimension isn't supported");
+        json::value op;
+        op["name"] = node.name();
+        op["type"] = "Reshape";
+        op["inputs"][0] = node.input(0);
+        op["outputs"][0] = node.output(0);
+        json::value &opt = op["options"];
+        opt["dims"] = dims;
+        
+        add_operator(node,op);
+    }
+
     std::vector<int> ONNXModel::tensor_to_intvec(Tensor t)
     {
         std::vector<int> res;
@@ -821,7 +849,7 @@ namespace dlprim {
             DLPRIM_CHECK(node.has_op_type());
             std::string op = node.op_type();
 
-            #if 0
+            #if 0 
             std::cerr << "op:" <<op << " [" << node.name() << "]" << std::endl;
             std::cerr << " inputs:\n";
             for(auto const &in: node.input())
@@ -871,6 +899,8 @@ namespace dlprim {
                 add_flatten(node);
             else if(op == "Squeeze") 
                 add_squeeze(node);
+            else if(op == "Reshape") 
+                add_reshape(node);
             else if(op == "Pad")
                 add_pad(node);
             else if(op == "Constant")

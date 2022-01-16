@@ -141,6 +141,10 @@ namespace dlprim {
         /// Compute strides needed for broadcasting this shape to target shape
         ///
         Shape broadcast_strides(Shape const &target) const;
+        ///
+        /// Reshape, to dims, if dim[i] == 0 the dim is preserverd, if dim[i] == -1 it is calculated from the rest of dimensions
+        ///        
+        Shape reshape(std::vector<int> const &dims) const;
 
         size_t const *begin() const
         {

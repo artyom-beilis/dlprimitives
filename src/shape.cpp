@@ -18,6 +18,40 @@ namespace dlprim {
         r.size_ = size_ + 1;
         return r;
     }
+
+    Shape Shape::reshape(std::vector<int> const &dims) const
+    {
+        std::vector<int> rshape;
+        int calc_axis = -1;
+        for(int i=0;i<int(dims.size());i++) {
+            if(dims[i] == -1) {
+                if(calc_axis != -1)
+                    throw ValidationError("At most one index may be -1 in reshape");
+                calc_axis = i;
+                rshape.push_back(1);
+            }
+            else if(dims[i] == 0) {
+                if(i >= size())
+                    throw ValidationError("0 reshape for index too large");
+                rshape.push_back(shape_[i]);
+            }
+            else {
+                rshape.push_back(dims[i]);
+            }
+        }
+        if(calc_axis != -1) {
+            size_t provided = 1;
+            for(auto const &d : rshape)
+                provided *= d;
+            if(total_size() % provided != 0 || total_size() < provided)
+                throw ValidationError("Can't computed deduced shape, original shape isn't multiple of provided");
+            rshape[calc_axis] = total_size() / provided;
+        }
+        Shape res = from_range(rshape.begin(),rshape.end());
+        if(res.total_size() != total_size())
+            throw ValidationError("Reshape to invalid total size");
+        return res;
+    }
     
     dlprim::Shape Shape::squeeze() const
     {

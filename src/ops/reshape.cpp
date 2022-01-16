@@ -35,4 +35,12 @@ namespace dlprim {
             throw ValidationError("Can't use both squeeze all and squeeze by dims");
         return cfg;
     }
+    ReshapeConfig ReshapeConfig::from_json(json::value const &v)
+    {
+        ReshapeConfig cfg;
+        cfg.dims = v.get("dims",cfg.dims);
+        if(cfg.dims.empty())
+            throw ValidationError("Empty reshape dims");
+        return cfg;
+    }
 };
