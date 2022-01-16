@@ -30,6 +30,13 @@ Integration with existing frameworks:
     
     <https://github.com/artyom-beilis/caffe/tree/opencl_dlprim>
 
+## Integration With ONNX
+
+ONNX Model loading and inference tested on following imagenet networks:
+
+- Pytorch, opsets 9, 11, 13: `alexnet`, `vgg16`, `resnet18`, `resnext50_32x4d`, `wide_resnet50_2`, `efficientnet_b0`, `efficientnet_b4`, `regnet_y_400mf`, `squeezenet1_0`, `mobilenet_v2`, `densenet121`
+- MXNet: `vgg11_bn`, `alexnet`, `mobilenetv2_0.25`, `mobilenet0.25`, `densenet121`, `resnet18_v1`, `squeezenet1.0`
+- Tensorflow, limited initiall support, channel first: `resnet50`, `densenet121`
 
 ## Documentation 
 
@@ -53,25 +60,16 @@ Is published under <http://dlprimitives.org/docs/>
 |GlobalAvgPool2d        |                                       | Fwd,Bwd           |
 |Inner Product          |                                       | Fwd,Bwd           |
 |BatchNorm              |                                       | Fwd,Bwd           | 
+|Reshape                |                                       | Fwd,Bwd           |
+|Squeeze                |                                       | Fwd,Bwd           |                                
+|Flatten                |                                       | Fwd,Bwd           | 
+|Threshold              |                                       | Fwd,Bwd           | 
+|Hardtanh               |                                       | Fwd,Bwd           | 
 |Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
 |TransposedConv2d       | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
 |Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
 
 Solvers: SGD, Adam
-
-## Validated Networks
-
-| Network       | Source of model       | Operation     |
-|---------------|-----------------------|---------------|
-| AlexNet       | torchvision.models    | Inference     |
-| VGG16         | torchvision.models    | Inference     |
-| ResNet50      | torchvision.models    | Inference     |
-| ResNet18      | torchvision.models    | Inference     |
-| MobileNet v2  | torchvision.models    | Inference     |
-
-The networks were exported from pytorch to ONNX and imported for DLPrimitives.
-Results compared with sample images. Note currently only inference validated,
-backpropogation is convered by per-layer regression.
 
 ## Tested GPUs
 
