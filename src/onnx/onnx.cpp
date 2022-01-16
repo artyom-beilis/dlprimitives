@@ -15,6 +15,7 @@ namespace dlprim {
         std::map<std::string,Tensor> parameters;
         std::set<std::string> edges;
         std::map<std::string,std::vector<int> > pads;
+        int counter = 0;
     };
     namespace {
         std::pair<Tensor,std::string> to_tensor(onnx::TensorProto const &init)
@@ -441,6 +442,9 @@ namespace dlprim {
     }
     void ONNXModel::add_operator(onnx::NodeProto const &node,json::value &v,bool add_outputs)
     {
+        if(v["name"].str().empty()) {
+            v["name"] = "DLPRIMOp_" + std::to_string(d->counter++);
+        }
         d->net["operators"].array().push_back(std::move(v));
         if(add_outputs) {
             for(std::string const &output : node.output()) {
@@ -596,7 +600,7 @@ namespace dlprim {
     {
         check_inputs(node,1);
         check_outputs(node,1);
-        DLPRIM_CHECK(get_attr<int>(node,"axis")==1);
+        DLPRIM_CHECK(get_attr<int>(node,"axis",1)==1);
         json::value op;
         op["name"] = node.name();
         op["type"] = "Flatten";
@@ -818,11 +822,11 @@ namespace dlprim {
             std::string op = node.op_type();
 
             #if 0
-            std::cerr << "op:" <<op << std::endl;
-            std::cerr << " inputs:";
+            std::cerr << "op:" <<op << " [" << node.name() << "]" << std::endl;
+            std::cerr << " inputs:\n";
             for(auto const &in: node.input())
                 std::cerr <<" - "<< in  << std::endl;
-            std::cerr << " outputs:";
+            std::cerr << " outputs:\n";
             for(auto const &out: node.output())
                 std::cerr <<" - "<< out << std::endl;
             #endif
@@ -873,6 +877,8 @@ namespace dlprim {
                 handle_constant(node);
             else if(op == "MatMul")
                 add_matmul(node);
+            else if(op == "Identity")
+                add_standard_activation(node,"identity");
             else
                 throw ValidationError("Unsupported ONNX Operator:" + op);
         }

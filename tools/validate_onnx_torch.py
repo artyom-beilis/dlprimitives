@@ -1,6 +1,6 @@
 import json
 import os
-import PIL
+from PIL import Image
 import argparse
 import time
 import numpy as np
@@ -113,7 +113,7 @@ def predict_on_images(model,images,config):
     csv = []
     image = np.zeros((len(images),3,th,tw),dtype=np.float32)
     for i,path in enumerate(images):
-        img = PIL.Image.open(path)
+        img = Image.open(path)
         npimg = np.array(img).astype(np.float32) * (1.0 / 255)
         h = npimg.shape[0]
         w = npimg.shape[1]
@@ -129,7 +129,7 @@ def predict_on_images(model,images,config):
     res = model.eval(image)
     for i in range(len(images)):
         index = np.argmax(res[i]).item()
-        csv.append([path,str(index),classes[index]] + ['%8.6f' % v for v in res[i].tolist()])
+        csv.append([images[i],str(index),classes[index]] + ['%8.6f' % v for v in res[i].tolist()])
     with open('report.csv','w') as f:
         for row in csv:
             line = ','.join(row) + '\n'
@@ -166,6 +166,25 @@ def get_tf_model(model_name):
         return tf.keras.applications.VGG16(classifier_activation=None)
     raise Exception("Invalid name " + model_name)
 
+class MXModel(object):
+    def __init__(self,model):
+        self.model = model
+
+    def eval(self,batch):
+        import mxnet as mx
+        mx_batch = mx.nd.array(batch)
+        mx_res = self.model(mx_batch)
+        np_res = mx_res.asnumpy()
+        return np_res
+
+def get_mx_model_and_export(name,batch,onnx_path):
+    import mxnet as mx
+    model = mx.gluon.model_zoo.vision.get_model(name,pretrained=True) 
+    model.hybridize()
+    model(mx.nd.array(np.random.randn(batch,3,224,224).astype(np.float32)))
+    model.export('mx_model')
+    mx.onnx.export_model('mx_model-symbol.json','mx_model-0000.params',in_shapes=[(batch,3,224,224)],in_types=[np.float32],onnx_file_path=onnx_path)
+    return MXModel(model)
 
 
 def main(args):
@@ -185,6 +204,10 @@ def main(args):
         m = get_tf_model(args.model)
         export_tf_model(m,args.batch,onnx_path,args.onnx_opset)
         src_model = TFModel(m)
+    elif args.fw == 'mx':
+        src_model = get_mx_model_and_export(args.model,args.batch,onnx_path)
+    else:
+        raise Exception("Invalid framework " + args.fw)
     print("Framework:",args.fw)
     ref = predict_on_images(src_model,args.images,config)
     src_model = None
