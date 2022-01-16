@@ -16,6 +16,7 @@ Recommended:
 Optional:
 
 - boost python and boost numpy - for python bindings
+- Google protobuf for ONNX support
 - HDF5 C++ bindings for model loading/saving in HDF5 format instead of internal
 
 
