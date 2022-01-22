@@ -56,6 +56,9 @@
 
 #if CONVGEMM == 3 || REDUCE_K > 1
 #include "atomic.h"
+#if ACTIVATION != ACTIVATION_IDENTITY
+# error "Can't use activation with atomic ops"
+#endif
 #endif
 
 #if CONVGEMM != 0
@@ -664,7 +667,7 @@ void    sgemm(    int M,int N,int K,
                 if(row+dr < M) {
                     int index =(row + dr)*ldc + offset;
                     #if REDUCE_K > 1
-                    atomic_addf(C+index,ACTIVATION_F(c[dr][dc]));
+                    atomic_addf(C+index,c[dr][dc]);
                     #else
                     if(beta_factor != 0)
                         C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
