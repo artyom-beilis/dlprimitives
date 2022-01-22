@@ -48,8 +48,11 @@ namespace dlprim {
             rshape[calc_axis] = total_size() / provided;
         }
         Shape res = from_range(rshape.begin(),rshape.end());
-        if(res.total_size() != total_size())
-            throw ValidationError("Reshape to invalid total size");
+        if(res.total_size() != total_size()) {
+            std::ostringstream ss;
+            ss << "Reshape from " << *this << " to " << res << " invalid total size" << std::endl;
+            throw ValidationError(ss.str());
+        }
         return res;
     }
     

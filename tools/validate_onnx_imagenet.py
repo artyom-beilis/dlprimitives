@@ -42,21 +42,27 @@ def export_torch_model(model,batch,path,opset = None):
 
 
 class TorchModel(object):
-    def __init__(self,model):
-        self.model = model
+    def __init__(self,model,torch_dev='cuda:0'):
+        self.model = model.to(torch_dev)
+        self.dev = torch_dev
+        self.model.eval();
     
     def eval(self,batch):
         import torch
         with torch.no_grad():
-            self.model.eval();
-            t = torch.from_numpy(batch)
+            t = torch.from_numpy(batch).to(self.dev)
             r = self.model(t)
-            return r.detach().numpy()
+            return r.detach().cpu().numpy()
 
 class ONNXRTMode(object):
-    def __init__(self,onnx_path):
+    def __init__(self,onnx_path,mode='cuda'):
         import onnxruntime as rt
-        self.sess = rt.InferenceSession(onnx_path)
+        if mode == 'cuda':
+            self.sess = rt.InferenceSession(onnx_path,providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+        elif mode == 'trt':
+            self.sess = rt.InferenceSession(onnx_path,providers=['TensorrtExecutionProvider', 'CPUExecutionProvider'])
+        else:
+            self.sess = rt.InferenceSession(onnx_path,providers=['CPUExecutionProvider'])
         self.input_name = self.sess.get_inputs()[0].name
 
     def eval(self,batch):
@@ -184,6 +190,21 @@ class MXModel(object):
         np_res = mx_res.asnumpy()
         return np_res
 
+def run_bm(name,model,bs):
+    data = np.random.randn(bs,3,224,224).astype(np.float32)
+    vals = []
+    import time
+    print("Bechmark ",name)
+    for i in range(-3,10):
+        start = time.time()
+        model.eval(data)
+        end = time.time()
+        print("%3d %5.3f ms" % (i,(end-start)*1000))
+        if i>=0:
+            vals.append(end-start)
+    print(name,"Mean %5.3fms" % (1000*np.mean(vals)))
+
+
 def get_mx_model_and_export(name,batch,onnx_path):
     import mxnet as mx
     model = mx.gluon.model_zoo.vision.get_model(name,pretrained=True) 
@@ -217,17 +238,42 @@ def main(args):
         raise Exception("Invalid framework " + args.fw)
     print("Framework:",args.fw)
     ref = predict_on_images(src_model,args.images,config)
+    if args.benchmark:
+        run_bm(args.fw,src_model,len(args.images))
     src_model = None
+    try:
+        import torch
+        torch.cuda.empty_cache()
+    except:
+        pass
+    if args.onnx_tensorrt:
+        print("ONNX Runtime TensorRT")
+        m = ONNXRTMode(onnx_path,'trt')
+        onx = predict_on_images(m,args.images,config)
+        if args.benchmark:
+            run_bm('ORT-TensorRT',m,len(args.images))
+        del m
+        err = np.max(np.abs(ref - onx))
+        print("ONNX Runtime Error:",err)
+
     if args.onnx_rt:
         print("ONNX Runtime")
-        onx = predict_on_images(ONNXRTMode(onnx_path),args.images,config)
+        m = ONNXRTMode(onnx_path,'cuda')
+        onx = predict_on_images(m,args.images,config)
+        if args.benchmark:
+            run_bm('ORT-Cuda',m,len(args.images))
+        del m
         err = np.max(np.abs(ref - onx))
         print("ONNX Runtime Error:",err)
     print("DLPrimitives")
-    act = predict_on_images(DLPrimModel(onnx_path,args.device),args.images,config)
+    m = DLPrimModel(onnx_path,args.device)
+    act = predict_on_images(m,args.images,config)
+    if args.benchmark:
+        run_bm('dlprimitives',m,len(args.images))
     err = np.max(np.abs(ref - act))
+    del m
     print("Error:",err)
-    if err > 1e4:
+    if err > 1e-4:
         print("Failed")
         sys.exit(1)
 
@@ -236,9 +282,12 @@ if __name__ == '__main__':
     p.add_argument('--model',default='alexnet')
     p.add_argument('--fw',default='torch')
     p.add_argument('--device',default='0:0')
+    p.add_argument('--onnx-tensorrt',action='store_true',default=False)
     p.add_argument('--onnx-rt',action='store_true',default=False)
     p.add_argument('--onnx-opset',default=9,type=int)
     p.add_argument('--batch',default=4,type=int)
+    p.add_argument('--benchmark',default=False,action='store_true')
     p.add_argument('images',nargs='*')
     r = p.parse_args()
+    r.batch = len(r.images)
     main(r)

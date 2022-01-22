@@ -9,6 +9,10 @@
 #include <dlprim/onnx.hpp>
 #endif
 
+#ifdef WITH_CAFFE
+#include <dlprim/caffe.hpp>
+#endif
+
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include <string>
@@ -42,7 +46,7 @@ namespace dlprim {
         Shape nd_shape = Shape::from_range(ar.get_shape(),ar.get_shape()+n);
         std::string np_type = bp::extract<std::string>(bp::str(ar.get_dtype()));
         DataType np_dt = string_to_data_type(np_type);
-        TensorSpecs ns(nd_shape,np_dt);
+        TensorSpecs ns(nd_shape,np_dt,t.is_trainable());
         if(t.specs() != ns) {
             std::ostringstream msg;
             msg << "numpy array and tensor have different shapes/types tensor="  << t.specs() << " ndarray=" << ns; 
@@ -142,6 +146,13 @@ namespace dlprim {
         return model.network().save(dlprim::json::readable);
     }
 #endif
+#ifdef WITH_CAFFE
+    std::string caffe_net(CaffeModel &model)
+    {
+        std::ostringstream ss;
+        return model.network().save(dlprim::json::readable);
+    }
+#endif
 }
 
 
@@ -216,6 +227,14 @@ BOOST_PYTHON_MODULE(_pydlprim)
         def(bp::init<>("Empty")).
         add_property("network",&onnx_net,"Export network as string").
         def("load",&dp::ONNXModel::load,"Load model from file");
+
+#endif
+#ifdef WITH_CAFFE
+    bp::class_<dp::CaffeModel,bp::bases<dp::ModelBase>,boost::noncopyable >("CaffeModel",
+                "Caffe Model parser and importer, once it is loaded, Net.load can be called").
+        def(bp::init<>("Empty")).
+        add_property("network",&caffe_net,"Export network as string").
+        def("load",&dp::CaffeModel::load,"Load model from file");
 
 #endif
 

@@ -155,7 +155,7 @@ def get_operators(model,inputs,params):
                           options = dict(activation=opt_name))
                 operators.append(op)
         elif n.op_type in ('Flatten','Dropout','Reshape'):
-            assert operators[-1]['outputs'][0] == n.input[0]
+            #assert operators[-1]['outputs'][0] == n.input[0]
             operators[-1]['outputs'][0] = n.output[0]
         elif n.op_type == 'Concat':
             op = dict(name = n.name,
@@ -166,7 +166,7 @@ def get_operators(model,inputs,params):
                     )
             operators.append(op)
         elif n.op_type == 'Softmax':
-            assert attrs.get('axis',-1) in (1,-1)
+            #assert attrs.get('axis',-1) in (1,-1)
             op = dict(name = n.name,
                       type = 'Softmax',
                       inputs = [n.input[0]],

@@ -12,7 +12,7 @@ then
         for opset in 9 11 13
         do
             echo "Net $net, opset $opset"
-            python ../tools/validate_onnx_torch.py  --model $net --fw $fw --onnx-opset $opset ../tests/samples/*.ppm || exit 1
+            python ../tools/validate_onnx_imagenet.py  --model $net --fw $fw --onnx-opset $opset ../tests/samples/*.ppm || exit 1
         done
     done
 elif [ "$fw" == 'tf' ] 
@@ -22,7 +22,7 @@ then
         for opset in 9 11
         do
             echo "Net $net, opset $opset"
-            TF_CPP_MIN_LOG_LEVEL=3 python ../tools/validate_onnx_torch.py  --model $net --fw $fw --onnx-opset $opset ../tests/samples/*.ppm || exit 1
+            TF_CPP_MIN_LOG_LEVEL=3 python ../tools/validate_onnx_imagenet.py  --model $net --fw $fw --onnx-opset $opset ../tests/samples/*.ppm || exit 1
         done
     done
 elif [ "$fw" == "mx" ]
@@ -30,7 +30,7 @@ then
     for net in vgg11_bn alexnet mobilenetv2_0.25 mobilenet0.25 densenet121 resnet18_v1 squeezenet1.0
     do
         echo "Net $net"
-        python ../tools/validate_onnx_torch.py  --model $net --fw $fw ../tests/samples/*.ppm || exit 1
+        python ../tools/validate_onnx_imagenet.py  --model $net --fw $fw ../tests/samples/*.ppm || exit 1
     done
 
 else
