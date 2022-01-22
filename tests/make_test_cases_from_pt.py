@@ -650,60 +650,65 @@ def make_inner_product():
         "tests" : []
     }
     tests = report["tests"]
-    for inp,out in \
-        [ (5,11),
-          (1024,1024),
-          (4096,4096),
-          (500,1000) ]:
-          for bias in [True,False]:
-            op = torch.nn.Linear(inp,out,bias=bias) 
-            for act,mact in [ ("identity",lambda x:x), ("relu",torch.nn.ReLU()) ]:
-                params = list(op.parameters())
-                cases=[]
-                tin = torch.randn(10,inp)
-                tout = op(tin)
-                test = {
-                    "train" : True,
-                    "init" : "small_frac",
-                    "options" : {
-                        "inputs": inp,
-                        "outputs" : out,
-                        "activation": act,
-                        "bias" : bias
-                    },
-                    "setup_tensors" : [ { "shape" : list(tin.shape) } ],
-                    "output_tensors": [ { "shape" : list(tout.shape) } ],
-                    "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
-                    "workspce": 0,
-                    "cases": cases
-                }
-                if inp * out < 100:
-                    test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
-                else:
-                    test['random_params'] = True
-
-                print(test["options"])
-                tests.append(test)
-                final_op = lambda x: mact(op(x))
-                for s in [[2,inp],[8,inp],[16,inp],[127,inp],[128,inp]]:
-                    print("- ",s)
-                    tin = torch.randn(s)
-                    tin.requires_grad = True
-                    tout = final_op(tin)
-                    dtout = torch.randn(tout.shape)
-                    tout.backward(dtout,retain_graph=True)
-                    case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
-                    if np.prod(s) < 50:
-                        case["in_tensors"] = [tin.reshape((-1,)).tolist()]
-                        case["out_tensors"] = [tout.reshape((-1,)).tolist()]
-                        case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
-                        case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
-                        case["params_diffs"] = [ p.grad.reshape((-1,)).tolist() for p in params ]
+    for batch in [1,128,512]:
+        for inp,out in \
+            [ (5,11),
+              (1024,1024),
+              (5,1024),
+              (1024,5),
+              (4096,4096),
+              (500,1000) ]:
+              for bias in [True,False]:
+                op = torch.nn.Linear(inp,out,bias=bias) 
+                for act,mact in [ ("identity",lambda x:x), ("relu",torch.nn.ReLU()) ]:
+                    params = list(op.parameters())
+                    cases=[]
+                    tin = torch.randn(batch,inp)
+                    tout = op(tin)
+                    test = {
+                        "train" : True,
+                        "init" : "small_frac",
+                        "options" : {
+                            "inputs": inp,
+                            "outputs" : out,
+                            "activation": act,
+                            "bias" : bias
+                        },
+                        "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+                        "output_tensors": [ { "shape" : list(tout.shape) } ],
+                        "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
+                        "workspce": 0,
+                        "cases": cases
+                    }
+                    if inp * out < 100:
+                        test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
                     else:
-                        case["use_cpu_reference"]=True
-                    for p in params:
-                        p.grad*=0
-                    cases.append(case)
+                        test['random_params'] = True
+
+                    print(test["options"])
+                    tests.append(test)
+                    final_op = lambda x: mact(op(x))
+                    for s in [[1,inp],[2,inp],[8,inp],[16,inp],[127,inp],[128,inp],[512,inp]]:
+                        if s[0] > batch:
+                            continue
+                        print("- ",s)
+                        tin = torch.randn(s)
+                        tin.requires_grad = True
+                        tout = final_op(tin)
+                        dtout = torch.randn(tout.shape)
+                        tout.backward(dtout,retain_graph=True)
+                        case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
+                        if np.prod(s) < 50 and test.get('random_params',False) == False:
+                            case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                            case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                            case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
+                            case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                            case["params_diffs"] = [ p.grad.reshape((-1,)).tolist() for p in params ]
+                        else:
+                            case["use_cpu_reference"]=True
+                        for p in params:
+                            p.grad*=0
+                        cases.append(case)
     return report
 
 def _at(x,n):
@@ -726,29 +731,30 @@ def make_conv2d(algo=None):
         "tests" : []
     }
     tests = report["tests"]
-    for kernel,pad,stride,dilate,cin,cout,bias,groups,relu in \
+    for kernel,pad,stride,dilate,cin,cout,bias,groups,relu,batch_limit in \
         [ 
-            (3, 1, 1, 1, 1, 1,False,1,False), 
-            (3, 1, 1, 1, 2, 1,False,1,False), 
-            (3, 1, 1, 1, 1, 2,False,1,False), 
-            (3, 1, 1, 1, 3, 8,False,1,False), 
-            (3, 1, 1, 1, 128, 64,False,1,False), 
-            (3, 1, 1, 1, 3, 8,True, 1, True), 
-            (3, 1, 1, 1, 3, 8,True, 1, True), 
-            (1, 0, 1, 1, 3, 5,False,1,False),
-            (1, 0, 1, 1, 48, 1152,False,1,False),
-            (1, 0, 1, 1, 48, 1152,False,2,False),
-            ([1,2], 0, 1, 1, 48, 1152,False,1,False),
-            ([1,2], 0, 1, 1, 48, 1152,False,2,False),
-            (1, 0, 2, 1, 3, 5,False,1,False),
-            (3, 1, 1, 1, 4, 8,True,2,False), 
-            (3, 1, 2, 1, 6, 8,True,2,False), 
-            (3, 1, 1, 1, 8, 8,True,8,False), 
-            ([1,7],[0,3],[1,1],[1,1],192,160,True,1,False),
-            ([7,1],[3,0],[1,1],[1,1],128,192,True,1,False),
-            ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False),
-            (5, 2, 1, 1, 16,32,True,1,False),
-            (11,2, 4, 1, 16,32,True,1,False),
+            (5, 2, 1, 1,98,128,True,1,True,1), 
+            (3, 1, 1, 1, 1, 1,False,1,False,64), 
+            (3, 1, 1, 1, 2, 1,False,1,False,64), 
+            (3, 1, 1, 1, 1, 2,False,1,False,64), 
+            (3, 1, 1, 1, 3, 8,False,1,False,64), 
+            (3, 1, 1, 1, 128, 64,False,1,False,64), 
+            (3, 1, 1, 1, 3, 8,True, 1, True,64), 
+            (3, 1, 1, 1, 3, 8,True, 1, True,64), 
+            (1, 0, 1, 1, 3, 5,False,1,False,64),
+            (1, 0, 1, 1, 48, 1152,False,1,False,64),
+            (1, 0, 1, 1, 48, 1152,False,2,False,64),
+            ([1,2], 0, 1, 1, 48, 1152,False,1,False,64),
+            ([1,2], 0, 1, 1, 48, 1152,False,2,False,64),
+            (1, 0, 2, 1, 3, 5,False,1,False,64),
+            (3, 1, 1, 1, 4, 8,True,2,False,64), 
+            (3, 1, 2, 1, 6, 8,True,2,False,64), 
+            (3, 1, 1, 1, 8, 8,True,8,False,64), 
+            ([1,7],[0,3],[1,1],[1,1],192,160,True,1,False,64),
+            ([7,1],[3,0],[1,1],[1,1],128,192,True,1,False,64),
+            ([3,5], [1,2], [2,3], [3,2], 3, 8,False,1,False,64),
+            (5, 2, 1, 1, 16,32,True,1,False,64),
+            (11,2, 4, 1, 16,32,True,1,False,64),
         ]:
 
         convop = torch.nn.Conv2d(cin,cout,kernel,stride=stride,padding=pad,dilation=dilate,groups=groups, bias=bias)
@@ -759,7 +765,7 @@ def make_conv2d(algo=None):
             op = convop
         cases=[]
         max_dim = 256 if cin * cout < 50000 else 10
-        tin = torch.zeros(64,cin,max_dim,max_dim)
+        tin = torch.zeros(batch_limit,cin,max_dim,max_dim)
         tout = op(tin)
         test = {
             "init" : "small_frac",
@@ -798,8 +804,10 @@ def make_conv2d(algo=None):
             test["options"]["activation"] = "relu"
         print(test["options"],"predefined params",pred_param)
         tests.append(test)
-        for s in [[1,cin,2,2],[1,cin,7,7],[1,cin,4,4],[3,cin,4,4],[2,cin,7,7],[2,cin,10,5],[2,cin,10,10],[2,cin,19,19],[2,cin,20,20],[2,cin,32,32],
+        for s in [[1,cin,2,2],[1,cin,7,7],[1,cin,8,8],[1,cin,4,4],[3,cin,4,4],[2,cin,7,7],[2,cin,10,5],[2,cin,10,10],[2,cin,19,19],[2,cin,20,20],[2,cin,32,32],
                   [64,cin,64,64],[53,cin,100,100]]:
+            if s[0] > batch_limit:
+                continue
             lkh,lkw = _at(kernel,0)*_at(dilate,0), _at(kernel,1)*_at(dilate,1)
             if s[2] + _at(pad,0) < lkh or s[3] + _at(pad,1) < lkw:
                 continue

@@ -8,9 +8,10 @@ namespace gpu {
     
     class StandardSGEMMBase : public GEMM {
     public:
-        StandardSGEMMBase(Context &ctx,int M,int N,int K,bool actual_gemm)
+        StandardSGEMMBase(Context &ctx,int M,int N,int K,bool actual_gemm,StandardActivations &activation)
         {
             sep_scale_ = false;
+            sep_act_ = false;
             reduce_k_ = 1;
             if(ctx.check_device_extension("cl_intel_subgroups")) {
                 block_size_m_ = 8;
@@ -112,19 +113,39 @@ namespace gpu {
                 int cores = ctx.estimated_core_count();
                 if(M * N / (block_size_m_ * block_size_n_) < 4 * cores && K > M*16 && K > N*16) {
                     reduce_k_ = 8;
-                    set_scale(ctx);
+                    set_scale(ctx,activation);
                 }
             }
 
         }
     protected:
-        void set_scale(Context &ctx)
+        void set_scale(Context &ctx,StandardActivations &activation)
         {
             if(sep_scale_ == false) {
                 cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"scal");
                 scal_ = std::move(cl::Kernel(prog,"sscal"));
+                
+                if(activation != StandardActivations::identity) {
+                    cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"activation",
+                                                        "ACTIVATION",int(activation));
+                    cl::Kernel k(prog,"activation");
+                    act_ = std::move(k);
+                    activation = StandardActivations::identity;
+                    sep_act_ = true;
+                }
+
                 sep_scale_ = true;
             }
+        }
+
+        void activation(size_t size,cl::Buffer &x,cl_ulong x_offset,ExecutionContext const &ec)
+        {
+                act_.setArg(0,cl_ulong(size));
+                act_.setArg(1,x);
+                act_.setArg(2,x_offset);
+                act_.setArg(3,x);
+                act_.setArg(4,x_offset);
+                ec.queue().enqueueNDRangeKernel(act_, cl::NullRange, cl::NDRange(size),cl::NullRange,ec.events(),ec.event("activation"));
         }
 
         void scale(size_t size,float s,cl::Buffer &x,cl_ulong x_offset,ExecutionContext const &ec)
@@ -146,7 +167,9 @@ namespace gpu {
         int off_;
         int reduce_k_;
         bool sep_scale_;
+        bool sep_act_;
         cl::Kernel scal_;
+        cl::Kernel act_;
     };
 
     class StandardSGEMM : public StandardSGEMMBase {
@@ -157,7 +180,7 @@ namespace gpu {
                         int bias,
                         StandardActivations act,
                         int im2col_chan = 0) : 
-                StandardSGEMMBase(ctx,M,N,K,true)
+                StandardSGEMMBase(ctx,M,N,K,true,act)
         {
             ///
             /// on AMD lda % 1024==0 / ldb % 1024==0 wipes cache out - so we reorder 
@@ -209,9 +232,10 @@ namespace gpu {
         {
 
             ExecutionContext e;
+            int kernel_runs = 1 + int(sep_act_) + int(sep_scale_);
             if(sep_scale_) {
-                scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,2));
-                e=ein.generate_series_context(1,2);
+                scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,kernel_runs));
+                e=ein.generate_series_context(1,kernel_runs);
                 beta = 1.0;
             }
             else {
@@ -266,6 +290,11 @@ namespace gpu {
                 local =  cl::NDRange(ls0,ls1);
             }
             e.queue().enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,e.events(),e.event("gemm"));
+            
+            if(sep_act_) {
+                auto e2 = ein.generate_series_context(kernel_runs-1,kernel_runs);
+                activation(size_of_c,c,offset_c,e2);
+            }
         }
 
     private:
@@ -287,7 +316,7 @@ namespace gpu {
                     int bias,
                     StandardActivations act,
                     int im2col_chan = 0) :
-                StandardSGEMMBase(ctx,M,N,K,false)
+                StandardSGEMMBase(ctx,M,N,K,false,act)
         {
             cl::Program const &prog = Cache::instance().get_program(ctx,"sgemm",
                                         "TILE_SIZE_M",tile_size_m_,
@@ -314,7 +343,8 @@ namespace gpu {
                                         "REDUCE_K",reduce_k_,
                                         "ACTIVATION",int(act));
             if(op_mode == GemmOpMode::backward_data) {
-                set_scale(ctx);
+                DLPRIM_CHECK(act == StandardActivations::identity);
+                set_scale(ctx,act);
                 gemm_name_="conv_gemm_bwd_data";
             }
             else if(op_mode == GemmOpMode::backward_filter)
@@ -352,9 +382,10 @@ namespace gpu {
                           ExecutionContext const &ein)
         {
             ExecutionContext e;
+            int kernel_runs = 1 + int(sep_scale_) + int(sep_act_);
             if(sep_scale_) {
-                scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,2));
-                e=ein.generate_series_context(1,2);
+                scale(size_of_c,beta,c,offset_c,ein.generate_series_context(0,kernel_runs));
+                e=ein.generate_series_context(1,kernel_runs);
                 beta = 1.0;
             }
             else {
@@ -397,6 +428,11 @@ namespace gpu {
                 local =  cl::NDRange(ls0,ls1,1);
             }
             e.queue().enqueueNDRangeKernel(kernel_, cl::NullRange, global,local,e.events(),e.event(gemm_name_));
+
+            if(sep_act_) {
+                auto e2 = ein.generate_series_context(kernel_runs-1,kernel_runs);
+                activation(size_of_c,c,offset_c,e2);
+            }
         }
 
     private:
