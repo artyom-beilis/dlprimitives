@@ -65,6 +65,9 @@ Is published under <http://dlprimitives.org/docs/>
 |Flatten                |                                       | Fwd,Bwd           | 
 |Threshold              |                                       | Fwd,Bwd           | 
 |Hardtanh               |                                       | Fwd,Bwd           | 
+|Abs                    |                                       | Fwd,Bwd           | 
+|Parameter              |                                       | Fwd,Bwd           | 
+|Reduction              | Sum, Mean, Sum Squares, L1            | Fwd,Bwd           |
 |Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
 |TransposedConv2d       | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
 |Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
