@@ -217,6 +217,18 @@ Reshapes the tensor
 - `dims` - list of ints new dimension, 0 - keep same as origin, -1 deduce from others
 
 
+### Reduce
+
+Performs reduction over different axises
+
+Parameters:
+
+- `method` - string, default `sum`. Options `sum`: sum, `sumsq`: sum of squares, `abssum`: L1 norm, `mean` - average value
+- `keep_dim` - boolean, default true, weather to kip dimenstion. For result in reduction of shape [2,3,4] over axises 1,2, the output will have shape [2,1,1] of `keep_dim` is true and other wise it will be [2]
+- `output_scale` - float, default 1, multiply result after reduction by factor
+- `dims` - list of ints, dimensions to reduce over, may be negative, can't be specified together with `start_axis`, 
+- `start_axis` - integer, default 0 - first axis to reduce till end, for example if `start_axis==1` and input shape is [2,3,4], result shape will be [2,1,1]. Can't specify both `start_axis`and `dims`
+
 ### Threshold
 
 Compute `x > threshold ? 1 : 0`
@@ -233,6 +245,20 @@ Parameters
 
 - `min_val`, default -1
 - `max_val , default 1
+
+
+### Abs
+
+Compute `abs(x)`, no parameters
+
+
+### Parameter
+
+Special layer with no inputs that produces output of its only paramerer
+
+- `shape` - list of ints - output shape
+- `dtype` - string, default float - type of output tensor
+- `is_trainable` - booleam default true, backpropogate gradients to parameter
 
 
 ## Standard Activations

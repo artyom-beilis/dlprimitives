@@ -46,7 +46,7 @@ namespace dlprim {
         void load_binary_proto(std::string const &file_name);
         void load_text_proto(std::string const &file);
         void load_parameters();
-        void add_operator(caffe::LayerParameter const &layer,json::value &v,bool add_outputs=true);
+        void add_operator(caffe::LayerParameter const &layer,json::value &v,int dims,bool add_outputs=true);
         void add_deprecated_input();
         void add_layers();
         void get_conv_params(caffe::ConvolutionParameter const &lp,json::value &opt);

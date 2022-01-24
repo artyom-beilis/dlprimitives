@@ -16,7 +16,7 @@ namespace dlprim {
         caffe::NetParameter params;
         json::value net;
         std::map<std::string,Tensor> parameters;
-        std::set<std::string> edges;
+        std::map<std::string,int> edges; // number of dims per edge
         int counter = 0;
     };
 
@@ -60,7 +60,7 @@ namespace dlprim {
                 d->net["inputs"][i]["name"] = d->model.input(i);
                 std::vector<int> shape(d->model.input_shape(i).dim().begin(),d->model.input_shape(i).dim().end());
                 d->net["inputs"][i]["shape"]  = shape;
-                d->edges.insert(d->model.input(i));
+                d->edges[d->model.input(i)] = shape.size();
             }
         }
         else if(d->model.input_size()!=0) {
@@ -68,7 +68,7 @@ namespace dlprim {
             d->net["inputs"][0]["name"] = d->model.input(0);
             std::vector<int> shape(d->model.input_dim().begin(),d->model.input_dim().end());
             d->net["inputs"][0]["shape"]  = shape;
-            d->edges.insert(d->model.input(0));
+            d->edges[d->model.input(0)] = shape.size();
         }
     }
     void CaffeModel::check_inputs(caffe::LayerParameter const &layer,int inputs_min,int inputs_max)
@@ -183,12 +183,12 @@ namespace dlprim {
         }
     }
 
-    void CaffeModel::add_operator(caffe::LayerParameter const &layer,json::value &v,bool add_outputs)
+    void CaffeModel::add_operator(caffe::LayerParameter const &layer,json::value &v,int N,bool add_outputs)
     {
         d->net["operators"].array().push_back(std::move(v));
         if(add_outputs) {
             for(std::string const &output : layer.top()) {
-                d->edges.insert(output);
+                d->edges[output] = N;
             }
         }
     }
@@ -215,14 +215,15 @@ namespace dlprim {
         get_conv_params(lp,opt);
         opt["channels_out"]=lp.num_output();
 
-        add_operator(layer,v);
+        add_operator(layer,v,4);
 
     }
     std::string CaffeModel::remove_inplace(std::string const &name)
     {
         std::string new_name = name + "_DLPRIM_remove_inline";
+        int N = d->edges[name];
         d->edges.erase(name);
-        d->edges.insert(new_name);
+        d->edges[new_name] = N;
         json::array &operators = d->net["operators"].array();
         for(json::value &v : operators) {
             for(json::value &out : v["outputs"].array()) {
@@ -302,7 +303,7 @@ namespace dlprim {
         }
         op["params"][0] = mean;
         op["params"][1] = var;
-        add_operator(layer,op);
+        add_operator(layer,op,d->edges[input]);
     }
     
     bool CaffeModel::is_mergable(caffe::LayerParameter const &layer)
@@ -337,46 +338,112 @@ namespace dlprim {
             op["options"]["affine"] = true;
             if(mergable) {
                 op["outputs"][0] = layer.top(0);
+                int N = d->edges[layer.bottom(0)];
                 d->edges.erase(layer.bottom(0));
-                d->edges.insert(layer.top(0));
+                d->edges[layer.top(0)] = N;
             }
             return;
         }
-        json::value op;
+        std::string input_name = non_inplace_input(layer); 
+        std::string output_name = layer.top(0);
         std::string p1 = param_name(layer,0);
         std::string p2;
         Tensor W = get_parameter(p1);
-        size_t N = W.shape().total_size();
-        DLPRIM_CHECK(N > 0);
-        p1 += "_DLPrim_Reshape";
-        W = W.alias();
-        W.reshape(Shape(N,1,1,1));
-        d->parameters[p1] = W;
-        op["params"][0] = p1;
+        Tensor B;
         if(bias) {
             p2 = param_name(layer,1);
-            Tensor B = get_parameter(p2);
-            DLPRIM_CHECK(B.shape().total_size() == N);
-            if(B.shape() != Shape(N)) {
-                p2 += "_DLPrim_Reshape";
-                B = B.alias();
-                B.reshape(Shape(N));
-                d->parameters[p2] = B;
-            }
-            op["params"][1] = p2;
+            B = get_parameter(p2);
         }
+        if(d->edges[input_name] == 4) {
+            json::value op;
+            size_t N = W.shape().total_size();
+            DLPRIM_CHECK(N > 0);
+            p1 += "_DLPrim_Reshape";
+            W = W.alias();
+            W.reshape(Shape(N,1,1,1));
+            d->parameters[p1] = W;
+            op["params"][0] = p1;
+            if(bias) {
+                DLPRIM_CHECK(B.shape().total_size() == N);
+                if(B.shape() != Shape(N)) {
+                    p2 += "_DLPrim_Reshape";
+                    B = B.alias();
+                    B.reshape(Shape(N));
+                    d->parameters[p2] = B;
+                }
+                op["params"][1] = p2;
+            }
+            op["name"] = layer.name();
+            op["type"] = "Convolution2D";
+            op["inputs"][0] = input_name;
+            op["outputs"][0] = layer.top(0);
+            json::value &opt = op["options"];
+            opt["bias"] = bias;
+            opt["groups"] = N;
+            opt["channels_out"] = N;
+            opt["channels_in"] = N;
+            opt["kernel"] = 1;
+            add_operator(layer,op,4);
+        }
+        else {
+            DLPRIM_CHECK(W.shape().size() == 1);
+            if(bias) {
+                DLPRIM_CHECK(W.shape() == B.shape());
+            }
+            int input_rank = d->edges[input_name];
+            int N = W.shape()[0];
+            std::vector<int> dims={N};
+            for(int i=2;i<input_rank;i++)
+                dims.push_back(1);
+            Shape new_shape=Shape::from_range(dims.begin(),dims.end());
+            if(new_shape != W.shape()) {
+                W = W.alias();
+                W.reshape(new_shape);
+                p1 += "_DLPrim_Reshape";
+                d->parameters[p1] = W;
+                if(bias) {
+                    B = B.alias();
+                    p2 += "_DLPrim_Reshape";
+                    B.reshape(new_shape);
+                }
+            }
+            json::value op;
+            op["name"] = p1;
+            op["type"] = "Parameter";
+            op["inputs"] = json::array();
+            op["outputs"][0] = p1;
+            op["params"][0] = p1;
+            op["options"]["shape"] = dims;
+            json::value tmp_op = op;
+            add_operator(layer,tmp_op,0,false);
+            d->edges[p1] = dims.size();
 
-        op["name"] = layer.name();
-        op["type"] = "Convolution2D";
-        op["inputs"][0] = is_inplace(layer) ? remove_inplace(layer.bottom(0)) : layer.bottom(0);
-        op["outputs"][0] = layer.top(0);
-        json::value &opt = op["options"];
-        opt["bias"] = bias;
-        opt["groups"] = N;
-        opt["channels_out"] = N;
-        opt["channels_in"] = N;
-        opt["kernel"] = 1;
-        add_operator(layer,op);
+            std::string output_scal = bias ? layer.top(0) + "_dlprim_scal" : layer.top(0);
+            json::value scal;
+            scal["name"] = layer.name();
+            scal["type"] = "Elementwise";
+            scal["inputs"][0] = input_name;
+            scal["inputs"][1] = p1;
+            scal["outputs"][0] = output_scal;
+            scal["options"]["operation"] = "prod";
+            json::value tmp_scal = scal;
+            add_operator(layer,tmp_scal,0,false);
+            d->edges[output_scal] = input_rank;
+
+            if(bias) {
+                op["name"] = p2;
+                op["outputs"][0] = p2;
+                op["params"][0] = p2;
+                add_operator(layer,op,0,false);
+                d->edges[p2] = dims.size();
+                scal["name"] = layer.name() + "_dlprim_bias";
+                scal["inputs"][0] = output_scal;
+                scal["inputs"][1] = p2;
+                scal["outputs"][0] = layer.top(0);
+                scal["options"]["operation"] = "sum";
+                add_operator(layer,scal,input_rank);
+            }
+        }
     }
 
     void CaffeModel::add_standard_activation(caffe::LayerParameter const &layer,std::string const &name,bool validate_inputs)
@@ -395,8 +462,9 @@ namespace dlprim {
             && ops.back()["options"].get("activation","identity") == "identity"
             && ops.back()["outputs"][0] == layer.bottom(0))
         {
+            int N = d->edges[layer.bottom(0)];
             d->edges.erase(layer.bottom(0));
-            d->edges.insert(layer.top(0));
+            d->edges[layer.top(0)] = N;
             ops.back()["outputs"][0] = layer.top(0);
             ops.back()["options"]["activation"] = name;
         }
@@ -407,7 +475,7 @@ namespace dlprim {
             op["inputs"][0] = layer.bottom(0);
             op["outputs"][0] = layer.top(0);
             op["options"]["activation"] = name;
-            add_operator(layer,op);
+            add_operator(layer,op,d->edges[layer.bottom(0)]);
         }
     }
     
@@ -459,7 +527,7 @@ namespace dlprim {
             opt["count_include_pad"] = false;
             opt["ceil_mode"] = true;
         }
-        add_operator(layer,op);
+        add_operator(layer,op,4);
     }
     void CaffeModel::add_elementwise(caffe::LayerParameter const &layer)
     {
@@ -497,8 +565,8 @@ namespace dlprim {
             opt["operation"] = op_name;
             opt["coef1"] = coeff1;
             opt["coef2"] = coeff2;
-            add_operator(layer,op,false);
-            d->edges.insert(result);
+            add_operator(layer,op,0,false);
+            d->edges[result] = std::max(d->edges[left],d->edges[right]);
         }
     }
     
@@ -512,7 +580,7 @@ namespace dlprim {
         op["type"] = "Softmax";
         op["inputs"][0] = layer.bottom(0);
         op["outputs"][0] = layer.top(0);
-        add_operator(layer,op);
+        add_operator(layer,op,2);
 
     }
     
@@ -538,7 +606,7 @@ namespace dlprim {
         DLPRIM_CHECK(par.axis() == 1 || par.axis() == -1);
         DLPRIM_CHECK(par.transpose() == false);
 
-        add_operator(layer,op);
+        add_operator(layer,op,2);
 
     }
     void CaffeModel::add_input(caffe::LayerParameter const &layer)
@@ -552,7 +620,7 @@ namespace dlprim {
             inp["name"] = layer.top(i);
             inp["shape"] = dims;
             d->net["inputs"].array().push_back(inp);
-            d->edges.insert(layer.top(i));
+            d->edges[layer.top(i)] = dims.size();
         }
     }
     void CaffeModel::add_flatten(caffe::LayerParameter const &layer)
@@ -565,7 +633,7 @@ namespace dlprim {
         op["type"] = "Flatten";
         op["inputs"][0] = layer.bottom(0);
         op["outputs"][0] = layer.top(0);
-        add_operator(layer,op);
+        add_operator(layer,op,2);
     }
     void CaffeModel::add_reshape(caffe::LayerParameter const &layer)
     {
@@ -580,7 +648,7 @@ namespace dlprim {
         op["inputs"][0] = layer.bottom(0);
         op["outputs"][0] = layer.top(0);
         op["options"]["dims"] = shape;
-        add_operator(layer,op);
+        add_operator(layer,op,shape.size());
     }
     void CaffeModel::add_concat(caffe::LayerParameter const &layer)
     {
@@ -593,7 +661,7 @@ namespace dlprim {
         op["inputs"] = std::vector<std::string>(layer.bottom().begin(),layer.bottom().end());
         op["outputs"][0] = layer.top(0);
         op["options"]["dim"] = layer.concat_param().axis();
-        add_operator(layer,op);
+        add_operator(layer,op,d->edges[layer.bottom(0)]);
 
     }
     void CaffeModel::add_slice(caffe::LayerParameter const &layer)
@@ -616,7 +684,7 @@ namespace dlprim {
             op["options"]["begin"] = start;
             op["options"]["end"] = end;
             add_operator(layer,op,false);
-            d->edges.insert(layer.top(i)); 
+            d->edges[layer.top(i)] = d->edges[layer.bottom(0)];
         }
     }
     std::string CaffeModel::non_inplace_input(caffe::LayerParameter const &layer)
@@ -632,10 +700,11 @@ namespace dlprim {
         json::value op;
         op["name"] = layer.name();
         op["type"] = "Threshold";
-        op["inputs"][0] = non_inplace_input(layer);
+        std::string input_name = non_inplace_input(layer);
+        op["inputs"][0] = input_name;
         op["outputs"][0] = layer.top(0);
         op["options"]["threshold"] = layer.threshold_param().threshold();
-        add_operator(layer,op);
+        add_operator(layer,op,d->edges[input_name]);
     }
     void CaffeModel::add_abs(caffe::LayerParameter const &layer)
     {
@@ -646,7 +715,7 @@ namespace dlprim {
         op["type"] = "Abs";
         op["inputs"][0] = non_inplace_input(layer);
         op["outputs"][0] = layer.top(0);
-        add_operator(layer,op);
+        add_operator(layer,op,d->edges[layer.bottom(0)]);
     }
     void CaffeModel::add_reduction(caffe::LayerParameter const &layer)
     {
@@ -671,7 +740,12 @@ namespace dlprim {
             throw ValidationError("Unsupported reduction");
         }
         op["operation"]["method"] = method;
-        add_operator(layer,op);
+        int input_dim = d->edges[layer.bottom(0)];
+        int axis = pr.axis();
+        if(axis < 0)
+            axis = input_dim + axis;
+        int N = std::max(1,axis);
+        add_operator(layer,op,N);
     }
     void CaffeModel::add_layers()
     {

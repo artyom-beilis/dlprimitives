@@ -133,6 +133,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
             return new Reduction(ctx,ReductionConfig::from_json(p));
         }
     },
+    {
+        "Parameter", 
+        [](Context &ctx,json::value const &p) {
+            return new Parameter(ctx,ParameterConfig::from_json(p));
+        }
+    },
 };
     
 std::unique_ptr<Operator> create_by_name(Context &ctx,
