@@ -59,7 +59,6 @@ class CaffeModel(object):
             self.net.reshape()
         np.copyto(data.data,batch)
         host_prob = np.zeros(prob.data.shape,dtype=np.float32)
-        print(prob.data.shape)
         self.net.forward()
         np.copyto(host_prob,prob.data)
         return host_prob
@@ -166,7 +165,7 @@ def main(args):
     config = get_config()
     src_model = CaffeModel(proto,param,0)
     global layer
-    layer = 'riv_relu4'
+    layer = None
     if args.data:
         ref = predict_on_data(src_model,args.data)
     else:

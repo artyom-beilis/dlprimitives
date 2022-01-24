@@ -82,6 +82,23 @@ namespace dlprim {
         HardtanhConfig cfg_;
     };
 
+    struct AbsConfig {
+        static AbsConfig from_json(json::value const &) { return AbsConfig(); }
+    };
+
+    class Abs : public PointwiseBase {
+    public:
+        Abs(Context &ctx,AbsConfig const & = AbsConfig()) : 
+            PointwiseBase(ctx)
+        {
+        }
+        virtual char const *operator_type() const { return "Abs"; }
+        virtual void forward_cpu_float(size_t n,float const *x,float *y);
+        virtual void backward_cpu_float(size_t n,float const *,float *,float const *,float const *,float beta);
+        virtual void forward_gpu(Tensor &x,Tensor &y,ExecutionContext const &q);
+        virtual void backward_gpu(Tensor &x,Tensor &dx,Tensor &y,Tensor &dy,float beta,ExecutionContext const &q);
+    };
+
 
 } // namespace
  

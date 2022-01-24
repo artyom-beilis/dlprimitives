@@ -39,9 +39,10 @@ namespace dlprim {
         Tensor to_tensor(caffe::BlobProto const &blob);
         void get_outputs();
         void check_inputs(caffe::LayerParameter const &layer,int inputs_min,int inputs_max=-1);
-        void check_outputs(caffe::LayerParameter const &layer,int minv,int maxv=-1);
+        void check_outputs(caffe::LayerParameter const &layer,int minv,int maxv=-1,bool allow_inplace=false);
         std::string param_name(caffe::LayerParameter const &layer,int index,bool check=true);
         std::string param_name(std::string const &n,int index);
+        std::string non_inplace_input(caffe::LayerParameter const &layer);
         void load_binary_proto(std::string const &file_name);
         void load_text_proto(std::string const &file);
         void load_parameters();
@@ -54,6 +55,8 @@ namespace dlprim {
         void add_conv(caffe::LayerParameter const &layer);
         void add_ip(caffe::LayerParameter const &layer);
         void add_bn(caffe::LayerParameter const &layer);
+        void add_abs(caffe::LayerParameter const &layer);
+        void add_threshold(caffe::LayerParameter const &layer);
         void add_scale(caffe::LayerParameter const &layer);
         void add_pool2d(caffe::LayerParameter const &layer);
         void add_softmax(caffe::LayerParameter const &layer);
@@ -62,6 +65,7 @@ namespace dlprim {
         void add_flatten(caffe::LayerParameter const &layer);
         void add_reshape(caffe::LayerParameter const &layer);
         void add_concat(caffe::LayerParameter const &layer);
+        void add_reduction(caffe::LayerParameter const &layer);
 
 
         std::string remove_inplace(std::string const &name);

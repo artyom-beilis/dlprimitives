@@ -9,4 +9,5 @@
 #include <dlprim/ops/concat.hpp>
 #include <dlprim/ops/reshape.hpp>
 #include <dlprim/ops/pointwise.hpp>
+#include <dlprim/ops/reduction.hpp>
 

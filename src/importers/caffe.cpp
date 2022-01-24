@@ -76,7 +76,8 @@ namespace dlprim {
         if(inputs_max == -1)
             inputs_max = inputs_min;
         int size = layer.bottom_size();
-        DLPRIM_CHECK(inputs_min <= size && size <= inputs_max);
+        if(!(inputs_min <= size && size <= inputs_max))
+            throw ValidationError("Invalid number of inputs for layer " + layer.type() + "/" + layer.name());
         for(int index = 0;index<size;index++) {
             if(d->edges.find(layer.bottom(index))==d->edges.end()) {
                 throw ValidationError("Can't find input " + layer.bottom(index) + " for operator " + layer.type() + "/" + layer.name());
@@ -122,12 +123,15 @@ namespace dlprim {
         }
         return res;
     }
-    void CaffeModel::check_outputs(caffe::LayerParameter const &layer,int minv,int maxv)
+    void CaffeModel::check_outputs(caffe::LayerParameter const &layer,int minv,int maxv,bool allow_inplace)
     {
         if(maxv == -1)
             maxv = minv;
         DLPRIM_CHECK(minv <= layer.top_size() && layer.top_size() <= maxv);
-        for(auto const &name: layer.top()) {
+        for(int i=0;i<layer.top_size();i++) {
+            std::string const &name = layer.top(i);
+            if(allow_inplace && i<layer.bottom_size() && name == layer.bottom(i))
+                continue;
             DLPRIM_CHECK(d->edges.find(name) == d->edges.end());
         }
     }
@@ -195,7 +199,7 @@ namespace dlprim {
         check_outputs(layer,1);
         json::value v;
         v["name"] = layer.name();
-        v["type"] = "Convolution2D",
+        v["type"] = layer.type() == "Deconvolution"  ? "TransposedConvolution2D" : "Convolution2D";
         v["inputs"][0] = layer.bottom(0);
         v["outputs"][0] = layer.top(0);
         v["params"][0] = param_name(layer,0);
@@ -459,31 +463,43 @@ namespace dlprim {
     }
     void CaffeModel::add_elementwise(caffe::LayerParameter const &layer)
     {
-        check_inputs(layer,2);
+        check_inputs(layer,2,std::numeric_limits<int>::max());
         check_outputs(layer,1);
-        json::value op;
-        op["name"] = layer.name();
-        op["type"] = "Elementwise";
-        op["inputs"][0] = layer.bottom(0);
-        op["inputs"][1] = layer.bottom(1);
-        op["outputs"][0] = layer.top(0);
-        json::value &opt = op["options"];
         auto const &par = layer.eltwise_param();
-        std::string op_name;
-        if(par.operation() == par.MAX)
-            op_name = "max";
-        else if(par.operation() == par.SUM)
-            op_name = "sum";
-        else if(par.operation() == par.PROD)
-            op_name = "prod";
-        else
-            throw ValidationError("Operation not supported elementwise");
-        opt["operation"] = op_name;
-        if(par.coeff_size() >= 1)
-            opt["coef1"] = par.coeff(0);
-        if(par.coeff_size() >= 2)
-            opt["coef2"] = par.coeff(1);
-        add_operator(layer,op);
+        std::string last_output;
+        for(int i=1;i<layer.bottom_size();i++) {
+            std::string left = last_output.empty() ? layer.bottom(i-1) : last_output;
+            std::string right = layer.bottom(i);
+            std::string result = (i + 1 == layer.bottom_size()) ? layer.top(0) : layer.top(0) + "_eltwize_intermed_" + std::to_string(i);
+            last_output = result;
+            float coeff1 = 1.0, coeff2 = 1.0;
+            if(last_output.empty() && i-1 < par.coeff_size())
+                coeff1 = par.coeff(i-1);
+            if(i < par.coeff_size())
+                coeff2 = par.coeff(i);
+            std::string name = (i + 1 == layer.bottom_size()) ? layer.name() : layer.name() + "_eltwise_name_" + std::to_string(i);
+            json::value op;
+            op["name"] = name;
+            op["type"] = "Elementwise";
+            op["inputs"][0] = left;
+            op["inputs"][1] = right;
+            op["outputs"][0] = result;
+            json::value &opt = op["options"];
+            std::string op_name;
+            if(par.operation() == par.MAX)
+                op_name = "max";
+            else if(par.operation() == par.SUM)
+                op_name = "sum";
+            else if(par.operation() == par.PROD)
+                op_name = "prod";
+            else
+                throw ValidationError("Operation not supported elementwise");
+            opt["operation"] = op_name;
+            opt["coef1"] = coeff1;
+            opt["coef2"] = coeff2;
+            add_operator(layer,op,false);
+            d->edges.insert(result);
+        }
     }
     
     void CaffeModel::add_softmax(caffe::LayerParameter const &layer)
@@ -603,6 +619,60 @@ namespace dlprim {
             d->edges.insert(layer.top(i)); 
         }
     }
+    std::string CaffeModel::non_inplace_input(caffe::LayerParameter const &layer)
+    {
+        if(is_inplace(layer))
+            return remove_inplace(layer.bottom(0));
+        return layer.bottom(0);
+    }
+    void CaffeModel::add_threshold(caffe::LayerParameter const &layer)
+    {
+        check_inputs(layer,1);
+        check_outputs(layer,1,1,true);
+        json::value op;
+        op["name"] = layer.name();
+        op["type"] = "Threshold";
+        op["inputs"][0] = non_inplace_input(layer);
+        op["outputs"][0] = layer.top(0);
+        op["options"]["threshold"] = layer.threshold_param().threshold();
+        add_operator(layer,op);
+    }
+    void CaffeModel::add_abs(caffe::LayerParameter const &layer)
+    {
+        check_inputs(layer,1);
+        check_outputs(layer,1,1,true);
+        json::value op;
+        op["name"] = layer.name();
+        op["type"] = "Abs";
+        op["inputs"][0] = non_inplace_input(layer);
+        op["outputs"][0] = layer.top(0);
+        add_operator(layer,op);
+    }
+    void CaffeModel::add_reduction(caffe::LayerParameter const &layer)
+    {
+        check_inputs(layer,1);
+        check_outputs(layer,1);
+        json::value op;
+        op["name"] = layer.name();
+        op["type"] = "Reduction";
+        op["inputs"][0] = layer.bottom(0);
+        op["outputs"][0] = layer.top(0);
+        auto const &pr = layer.reduction_param();
+        op["options"]["output_scale"] = pr.coeff();
+        op["options"]["start_axis"] = pr.axis();
+        op["options"]["keep_dim"] = false;
+        std::string method;
+        switch(pr.operation()) {
+        case caffe::ReductionParameter::SUM:   method = "sum";     break;
+        case caffe::ReductionParameter::ASUM:  method = "abssum";  break;
+        case caffe::ReductionParameter::SUMSQ: method = "sumsq";   break;
+        case caffe::ReductionParameter::MEAN:  method = "mean";    break;
+        default:
+            throw ValidationError("Unsupported reduction");
+        }
+        op["operation"]["method"] = method;
+        add_operator(layer,op);
+    }
     void CaffeModel::add_layers()
     {
         for(int i=0;i<d->model.layer_size();i++) {
@@ -617,7 +687,7 @@ namespace dlprim {
             }
             #endif
 
-            if(type == "Convolution")
+            if(type == "Convolution" || type == "Deconvolution")
                 add_conv(layer);
             else if(type == "BatchNorm")
                 add_bn(layer);
@@ -631,6 +701,10 @@ namespace dlprim {
                 add_standard_activation(layer,"tanh");
             else if(type == "Sigmoid")
                 add_standard_activation(layer,"sigmoid");
+            else if(type == "AbsVal")
+                add_abs(layer);
+            else if(type == "Threshold")
+                add_threshold(layer);
             else if(type == "Pooling")
                 add_pool2d(layer);
             else if(type == "Softmax")
@@ -645,8 +719,12 @@ namespace dlprim {
                 add_flatten(layer);
             else if(type == "Reshape")
                 add_reshape(layer);
+            else if(type == "Reduction")
+                add_reduction(layer);
             else if(type == "Input")
                 add_input(layer);
+            else if(type == "Silence") 
+                ; // meta layer nothing to do
             else if(type == "Dropout")
                 add_standard_activation(layer,"identity");
             else

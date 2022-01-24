@@ -71,8 +71,6 @@ namespace dlprim {
     {
         DLPRIM_CHECK(config_.channels_out > 0);
         DLPRIM_CHECK(dtype_==float_data);
-        DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
-        DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
         out_h_ = out_w_ = 0;
         in_h_ = in_w_ = 0;
         bs_ = 0;
@@ -586,8 +584,6 @@ namespace dlprim {
     {
         DLPRIM_CHECK(config_.channels_out > 0);
         DLPRIM_CHECK(dtype_==float_data);
-        DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
-        DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
         out_h_ = out_w_ = 0;
         in_h_ = in_w_ = 0;
         bs_ = 0;

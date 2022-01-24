@@ -116,9 +116,21 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
+        "Abs", 
+        [](Context &ctx,json::value const &p) {
+            return new Abs(ctx,AbsConfig::from_json(p));
+        }
+    },
+    {
         "Hardtanh", 
         [](Context &ctx,json::value const &p) {
             return new Hardtanh(ctx,HardtanhConfig::from_json(p));
+        }
+    },
+    {
+        "Reduction", 
+        [](Context &ctx,json::value const &p) {
+            return new Reduction(ctx,ReductionConfig::from_json(p));
         }
     },
 };

@@ -143,4 +143,34 @@ namespace dlprim {
     }
 
 
+    void Abs::forward_cpu_float(size_t n,float const *x,float *y)
+    {
+        for(size_t i=0;i<n;i++)
+            y[i] = std::abs(x[i]);
+    }
+    void Abs::backward_cpu_float(size_t n,float const *x,float *dx,float const *y,float const *dy,float beta)
+    {
+        if(beta == 0) {
+            for(size_t i=0;i<n;i++)
+                dx[i] =  x[i] >= 0 ? dy[i] : -dy[i];
+        }
+        else {
+            for(size_t i=0;i<n;i++) {
+                dx[i] = dx[i] * beta + (x[i] >= 0 ? dy[i] : -dy[i]);
+            }
+        }
+    }
+    void Abs::forward_gpu(Tensor &x,Tensor &y,ExecutionContext const &q)
+    {
+        core::pointwise_operation({x},{y},{},
+                                    "y0=x0 >= 0 ? x0 : -x0;",q);
+    }
+    void Abs::backward_gpu(Tensor &x,Tensor &dx,Tensor &,Tensor &dy,float beta,ExecutionContext const &q)
+    {
+        core::pointwise_operation({x,dy,dx},{dx},{beta},
+                                    "y0 = (w0 != 0 ? (x2 * w0) : 0) +  ((x0 >= 0) ? x1 : -x1);",
+                                    q);
+    }
+
+
 }

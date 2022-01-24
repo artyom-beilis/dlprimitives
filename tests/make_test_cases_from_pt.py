@@ -403,6 +403,11 @@ def make_hardtanh():
         ( dict(min_val=0,max_val=6), torch.nn.ReLU6() )
     ])
 
+def make_abs():
+    return make_pointwise("Abs", [
+        ( dict(), torch.abs )
+    ])
+
 def make_threshold():
     return make_pointwise("Threshold", [
         (dict(), lambda x: (torch.nn.Hardtanh(0,1e-20)(x))*1e20),
@@ -508,6 +513,91 @@ def make_pooling2d():
                     case["use_cpu_reference"]=True
                 cases.append(case)
     return report
+
+def make_reduction():
+    report = {
+        "operator" : "Reduction",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for keepdims in [False,True]:
+        for dims,dim_list,cfg in [
+                (1,[0],{}),
+                (1,[0],{"dims":[0]}),
+                (1,[0],{"start_axis":0}),
+                (2,[1],{"start_axis":1}),
+                (2,[1],{"dims":[1]}),
+                (2,[0,1],{"start_axis":0}),
+                (2,[0,1],{"dims":[0,1]}),
+                (3,[2],{"start_axis":-1}),
+                (3,[1,2],{"start_axis":1}),
+                (3,[1,2],{"start_axis":1,"output_scale":0.2}),
+                (3,[1,2],{"dims":[-1,-2]}),
+                (3,[0,2],{"dims":[0,-1]}),
+                (4,[1,2,3],{"start_axis":1}),
+                (4,[1,2],{"dims":[1,2]}),
+                (5,[2,3,4],{"start_axis":2}),
+                (5,[1,3,4],{"dims":[1,3,4]}),
+            ]:
+
+            scale = cfg.get("output_scale",1)
+            torch_keep_dims = keepdims
+            for method,op in [
+                    ("sum",lambda x: scale * torch.sum(x,dim_list,keepdims = torch_keep_dims) ),
+                    ("sumsq", lambda x: scale * torch.sum(x*x,dim_list,keepdims = torch_keep_dims) ),
+                    ("abssum", lambda x: scale * torch.sum(torch.abs(x),dim_list,keepdims = torch_keep_dims) ),
+                    ("mean", lambda x: scale * torch.mean(x,dim_list,keepdims = torch_keep_dims) )
+                ]:
+                cases=[]
+                tin=torch.randn({1:(5),2:(2,3),3:(2,3,4),4:(2,3,4,5),5:(2,3,4,5,6)}[dims])
+                tout = op(tin)
+                os = list(tout.shape)
+                if not os:
+                    os = [1]
+                test = {
+                    "train" : True,
+                    "options" : {},
+                    "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+                    "output_tensors": [ { "shape" : os } ],
+                    "workspce": 0,
+                    "cases": cases
+                }
+                test["options"].update(cfg)
+                test["options"]["method"] = method
+                test["options"].update(dict(keep_dim = keepdims))
+                print(test["options"])
+                tests.append(test)
+                for s in [  (5,),(100,),
+                            (2,3),(200,300),
+                            (2,3,4),(20,30,40),
+                            (2,3,4,5),(20,30,40,50),
+                            (2,3,4,5,6),(20,30,40,50,60) ]:
+                    if len(s) != dims:
+                        continue
+                    print("- ",s)
+                    tin = torch.randn(s,requires_grad=True)
+                    tout = op(tin)
+                    dy = torch.randn(tout.shape);
+                    tout.backward(dy,retain_graph=True);
+                    out_shape = list(tout.shape)
+                    if not out_shape:
+                        out_shape = [1]
+                    case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [out_shape])
+                    if np.max(s) < 10:
+                        case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                        case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                        case["out_diffs"] = [dy.reshape((-1,)).tolist()]
+                        case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                    else:
+                        case["use_cpu_reference"]=True
+                        if len(s) <= 4:
+                            case["eps"] = 0.01
+                        else:
+                            case["eps"] = 0.1
+                    cases.append(case)
+    return report
+
+
 
 def make_global_pooling():
     report = {
@@ -998,6 +1088,8 @@ if __name__ == "__main__":
         "slice" : make_slice,
         'threshold' : make_threshold,
         'hardtanh': make_hardtanh,
+        'abs': make_abs,
+        'reduction': make_reduction,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))
