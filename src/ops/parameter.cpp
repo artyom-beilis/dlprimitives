@@ -17,12 +17,16 @@ namespace dlprim {
     {
         DLPRIM_CHECK(tgt.specs() == src.specs());
         if(ctx_.is_cpu_context()) {
-            if(accum == 0)
+            if(accum == 0) {
                 memcpy(tgt.host_data(),src.host_data(),tgt.memory_size());
-            else
-                cblas_saxpby(tgt.shape().total_size(),
-                                1.0f,src.data<float>(),1,
-                                accum,tgt.data<float>(),1);
+            }
+            else {
+                size_t N = tgt.shape().total_size();
+                if(accum != 1.0)
+                    cblas_sscal(N,accum, tgt.data<float>(),1);
+
+                cblas_saxpy(N,1.0f,src.data<float>(),1,tgt.data<float>(),1);
+            }
         }
         else {
             if(accum == 0)

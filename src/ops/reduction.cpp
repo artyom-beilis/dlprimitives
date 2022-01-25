@@ -2,6 +2,7 @@
 #include <dlprim/utils/json_helpers.hpp>
 #include <dlprim/core/pointwise.hpp>
 #include <my_cblas.hpp>
+#include <cmath>
 
 namespace dlprim {
     ReductionConfig ReductionConfig::from_json(json::value const &v)
@@ -198,7 +199,7 @@ namespace dlprim {
         using FWDBase::FWDBase;
         void operator()(size_t x_offset,size_t y_offset)
         {
-            y[y_offset]+=std::abs(x[x_offset]);
+            y[y_offset]+=fabs(x[x_offset]);
         }
     };
     struct Reduction::L1Bwd : public Reduction::BWDBase {

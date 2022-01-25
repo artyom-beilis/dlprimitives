@@ -1,6 +1,7 @@
 #include <dlprim/ops/pointwise.hpp>
 #include <dlprim/core/pointwise.hpp>
 #include <dlprim/json.hpp>
+#include <cmath>
 #include <my_cblas.hpp>
 namespace dlprim {
     PointwiseBase::PointwiseBase(Context &ctx) : Operator(ctx) {}
@@ -146,7 +147,7 @@ namespace dlprim {
     void Abs::forward_cpu_float(size_t n,float const *x,float *y)
     {
         for(size_t i=0;i<n;i++)
-            y[i] = std::abs(x[i]);
+            y[i] = fabs(x[i]);
     }
     void Abs::backward_cpu_float(size_t n,float const *x,float *dx,float const *y,float const *dy,float beta)
     {
