@@ -55,6 +55,7 @@ namespace dlprim {
         void add_bias(onnx::NodeProto const &node);
         void add_squeeze(onnx::NodeProto const &node);
         void add_reshape(onnx::NodeProto const &node);
+        void add_reduce(onnx::NodeProto const &node,std::string const &method);
         void handle_constant(onnx::NodeProto const &node);
         std::pair<std::string,Tensor> transpose_parameter(std::string const &name);
 

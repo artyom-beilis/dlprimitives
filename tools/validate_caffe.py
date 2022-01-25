@@ -71,7 +71,7 @@ class DLPrimModel(object):
         caffe_model.load(proto,params)
         self.ctx = dp.Context(device)
         self.net = dp.Net(self.ctx)
-        self.net.keep_intermediate_tensors = True
+        #self.net.keep_intermediate_tensors = True
         self.net.mode = dp.PREDICT
         base_path = proto.replace('.prototxt','')
         with open(base_path +'.json','w') as f:

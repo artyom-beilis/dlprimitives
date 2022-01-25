@@ -839,6 +839,26 @@ namespace dlprim {
         last_op["params"][1] = bias_name;
     }
 
+    void ONNXModel::add_reduce(onnx::NodeProto const &node,std::string const &method)
+    {
+        check_inputs(node,1);
+        check_outputs(node,1);
+        auto axes = get_attr(node,"axes",std::vector<int>());
+        bool keepdims = get_attr(node,"keepdims",1);
+        json::value op;
+        op["name"] = node.name();
+        op["type"] = "Reduction";
+        op["inputs"][0] = node.input(0);
+        op["outputs"][0] = node.output(0);
+        json::value &opt = op["options"];
+        if(!axes.empty())
+            opt["dims"] = axes;
+        opt["keep_dim"] = keepdims;
+        opt["method"] = method;
+        
+        add_operator(node,op);
+    }
+
     void ONNXModel::parse_operators()
     {
         d->net["operators"] = json::array();
@@ -909,6 +929,14 @@ namespace dlprim {
                 add_matmul(node);
             else if(op == "Identity")
                 add_standard_activation(node,"identity");
+            else if(op == "ReduceMean")
+                add_reduce(node,"mean");
+            else if(op == "ReduceL1")
+                add_reduce(node,"abssum");
+            else if(op == "ReduceSum")
+                add_reduce(node,"sum");
+            else if(op == "ReduceSumSquare")
+                add_reduce(node,"sumsq");
             else
                 throw ValidationError("Unsupported ONNX Operator:" + op);
         }
