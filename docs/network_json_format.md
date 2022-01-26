@@ -54,6 +54,7 @@ Each operator has following fields:
 - `outputs` - list of generated tensors, can be same as input for in-place operations - list of strings. 
 - `frozen` - boolean flag that marks the operator as not-participating in gradient descend, for example for transfer learning. Default is `false`
 - `options` - object operation specific parameters
+- `params` - list of strings, optional non standard name of parameters for inported data/parameter sharing
 
 For example:
 
@@ -100,7 +101,7 @@ Parameters:
 
 Parameters:
 
-- `activation` - string, one of standard activation names
+- `activation` - string, one of standard activation names, relu, tanh, sigmoid, relu6, identity
 
 ### Elementwise
 
@@ -217,7 +218,7 @@ Reshapes the tensor
 - `dims` - list of ints new dimension, 0 - keep same as origin, -1 deduce from others
 
 
-### Reduce
+### Reduction
 
 Performs reduction over different axises
 

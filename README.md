@@ -45,32 +45,31 @@ Is published under <http://dlprimitives.org/docs/>
 
 ## Features Matrix
 
-|Operator               |Features                               | Computation       |
-|-----------------------|---------------------------------------|-------------------|
-|Softmax, LogSoftmax    |                                       | Fwd,Bwd           |
-|NLLLoss                |                                       | Fwd,Bwd           |
-|MSELoss                |                                       | Fwd,Bwd           |
-|SoftmaxWithLoss        |                                       | Fwd,Bwd           |
-|Elementwise            | ax+by, max(ax,by), ax\*y, broadcasting| Fwd,Bwd           |
-|Concat                 |                                       | Fwd,Bwd           |
-|Slice                  |                                       | Fwd,Bwd           |
-|MaxPool2d              |                                       | Fwd,Bwd           |
-|AvgPool2d              |                                       | Fwd,Bwd           |
-|GlobalMaxPool2d        |                                       | Fwd,Bwd           |
-|GlobalAvgPool2d        |                                       | Fwd,Bwd           |
-|Inner Product          |                                       | Fwd,Bwd           |
-|BatchNorm              |                                       | Fwd,Bwd           | 
-|Reshape                |                                       | Fwd,Bwd           |
-|Squeeze                |                                       | Fwd,Bwd           |                                
-|Flatten                |                                       | Fwd,Bwd           | 
-|Threshold              |                                       | Fwd,Bwd           | 
-|Hardtanh               |                                       | Fwd,Bwd           | 
-|Abs                    |                                       | Fwd,Bwd           | 
-|Parameter              |                                       | Fwd,Bwd           | 
-|Reduction              | Sum, Mean, Sum Squares, L1            | Fwd,Bwd           |
-|Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
-|TransposedConv2d       | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
-|Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
+|Operator               |Features                               | Comment    |
+|-----------------------|---------------------------------------|------------|
+|Softmax                | Softmax, LogSoftmax                   |            |
+|NLLLoss                |                                       |            |
+|MSELoss                |                                       |            |
+|SoftmaxWithLoss        |                                       |            |
+|Elementwise            | ax+by, max(ax,by), ax\*y, broadcasting|            |
+|Concat                 |                                       |            |
+|Slice                  |                                       |            |
+|Pooling2D              | max, average                          |            |
+|GlobalPooling          | max, average                          | 2D only    |
+|GlobalAvgPool2d        |                                       |            |
+|InnerProduct           |                                       |            |
+|BatchNorm              |                                       |            | 
+|Reshape                |                                       |            |
+|Squeeze                |                                       |            |                                
+|Flatten                |                                       |            | 
+|Threshold              |                                       |            | 
+|Hardtanh               |                                       |            | 
+|Abs                    |                                       |            | 
+|Parameter              |                                       |ֹUtility     | 
+|Reduction              | Sum, Mean, Sum Squares, L1            |            |
+|Convolution2D          | GEMM, Winograd, Depthwise Separable   |            |
+|TransposedConvolution2D| GEMM, Winograd, Depthwise Separable   |            |
+|Activation             | relu, sigmoid, tanh, relu6            |            |
 
 Solvers: SGD, Adam
 

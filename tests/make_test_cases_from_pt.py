@@ -733,6 +733,43 @@ def make_batchnorm():
                 if p.grad is not None:
                     p.grad*=0
     return report
+
+def make_param():
+    report = {
+        "operator" : "Parameter",
+        "tests" : []
+    }
+    tests = report["tests"]
+    par = torch.randn((2,3,4))
+    par.requires_grad = True
+    params = [par]
+    cases=[]
+    tout = par + 0
+    test = {
+        "train" : True,
+        "options" : {
+            "shape": [2,3,4],
+            "dtype" : "float"
+        },
+        "setup_tensors" : [ ],
+        "output_tensors": [ { "shape" : list(tout.shape) } ],
+        "param_specs":  [ { "shape" : list(p.shape) } for p in params ],
+        "workspce": 0,
+        "cases": cases
+    }
+    test['param_tensors'] = [ p.reshape((-1,)).tolist() for p in params ]
+    print(test["options"])
+    tests.append(test)
+    dtout = torch.randn(tout.shape)
+    tout.backward(dtout,retain_graph=True)
+    case = dict(in_shapes = [] ,out_shapes = [list(tout.shape)])
+    case["in_tensors"] = []
+    case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+    case["out_diffs"] = [dtout.reshape((-1,)).tolist()]
+    case["in_diffs"] = []
+    case["params_diffs"] = [ p.grad.reshape((-1,)).tolist() for p in params ]
+    cases.append(case)
+    return report
     
 def make_inner_product():
     report = {
@@ -1090,6 +1127,7 @@ if __name__ == "__main__":
         'hardtanh': make_hardtanh,
         'abs': make_abs,
         'reduction': make_reduction,
+        'param': make_param,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))
