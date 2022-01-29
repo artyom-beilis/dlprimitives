@@ -13,6 +13,9 @@ namespace dlprim {
     struct ONNXModel::Data {
         onnx::ModelProto model;
         json::value net;
+        bool network_ready = false;
+        bool model_loaded = false;
+        std::map<std::string,std::vector<int> > dynamic_axes;
         std::map<std::string,Tensor> parameters;
         std::set<std::string> edges;
         std::map<std::string,std::vector<int> > pads;
@@ -73,6 +76,8 @@ namespace dlprim {
 
     json::value const &ONNXModel::network()
     {
+        DLPRIM_CHECK(d->model_loaded);
+        build();
         return d->net;
     }
 
@@ -102,17 +107,63 @@ namespace dlprim {
             throw ValidationError("Protobuf Parsing Error " + file_name);
     }
 
+    std::map<std::string,Shape> ONNXModel::input_shapes()  const
+    {
+        std::map<std::string,Shape> shapes;
+        for(json::value const &v:d->net["inputs"].array()) {
+            std::string name = v["name"].str();
+            auto const &s = v.get<std::vector<int> >("shape");
+            shapes[name] = Shape::from_range(s.begin(),s.end());
+        }
+        return shapes;
+    }
+
+    void ONNXModel::set_dynamic_axis(std::string const &name,int axis,size_t limit)
+    {
+        auto p = d->dynamic_axes.find(name);
+        if(p == d->dynamic_axes.end() || std::find(p->second.begin(),p->second.end(),axis) == p->second.end()) {
+            throw ValidationError("Invalid dynamic axis for input " + name + ", axis " + std::to_string(axis));
+        }
+        for(json::value &v:d->net["inputs"].array()) {
+            if(v["name"].str() != name)
+                continue;
+            v["shape"][axis] = limit;
+            return;
+        }
+        throw ValidationError("Internal error should not get there");
+    }
+    std::map<std::string,std::vector<int> > ONNXModel::dynamic_axes() const
+    {
+        return d->dynamic_axes;
+    }
+    
+    void ONNXModel::set_batch(size_t size)
+    {
+        for(auto const &sp : d->dynamic_axes) {
+            if(sp.second.size() > 0 && sp.second[0] == 0)
+                set_dynamic_axis(sp.first,0,size);
+        }
+    }
     void ONNXModel::load(std::string const &file_name)
     {
+        DLPRIM_CHECK(d->model_loaded == false);
         load_proto(file_name);
+        d->model_loaded = true;
+        prepare_inputs_outputs();
+    }
+
+    void ONNXModel::build()
+    {
+        if(d->network_ready)
+            return;
         prepare_network();
-        validate_outputs();
+        d->network_ready=true;
     }
 
     void ONNXModel::prepare_network()
     {
-        prepare_inputs_outputs();
         parse_operators();
+        validate_outputs();
     }
     void ONNXModel::validate_outputs()
     {
@@ -148,7 +199,15 @@ namespace dlprim {
             jinp["shape"]=json::array();
             int index = 0;
             for(auto const &dv : tensor_type.shape().dim()) {
-                jinp["shape"][index++] = dv.dim_value();
+                if(dv.value_case() == dv.kDimValue) {
+                    auto dim = dv.dim_value();
+                    DLPRIM_CHECK(dim > 0);
+                    jinp["shape"][index++] = dim;
+                }
+                else {
+                    d->dynamic_axes[name].push_back(index);
+                    jinp["shape"][index++] = 0;
+                }
             }
             inputs.push_back(jinp);
             d->edges.insert(name);

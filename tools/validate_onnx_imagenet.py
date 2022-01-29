@@ -37,7 +37,9 @@ def export_torch_model(model,batch,path,opset = None):
     import torch
     inp = torch.randn(batch,3,224,224)
     model.eval()
-    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset)
+    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset,dynamic_axes = 
+            dict(data={0:'batch'},prob={0:'batch'})
+        )
 
 
 
@@ -70,9 +72,11 @@ class ONNXRTMode(object):
         return pred_onx
 
 class DLPrimModel(object):
-    def __init__(self,onnx_path,device):
+    def __init__(self,onnx_path,device,max_batch):
         onnx_model=dp.ONNXModel();
         onnx_model.load(onnx_path)
+        onnx_model.set_batch(max_batch)
+        onnx_model.build()
         self.ctx = dp.Context(device)
         self.net = dp.Net(self.ctx)
         self.net.mode = dp.PREDICT
@@ -105,7 +109,7 @@ class TFModel(object):
 def export_tf_model(model,batch,path,opset = None):
     import tf2onnx
     import tensorflow as tf
-    onnx,_ = tf2onnx.convert.from_keras(model,input_signature=[tf.TensorSpec([batch,3,224,224], dtype=tf.dtypes.float32)],opset=opset)
+    onnx,_ = tf2onnx.convert.from_keras(model,input_signature=[tf.TensorSpec([None,3,224,224], dtype=tf.dtypes.float32)],opset=opset)
     with open(path,'wb') as f:
         f.write(onnx.SerializeToString())
 
@@ -185,7 +189,7 @@ class MXModel(object):
 
     def eval(self,batch):
         import mxnet as mx
-        mx_batch = mx.nd.array(batch)
+        mx_batch = mx.nd.array(batch,ctx=mx.gpu(0))
         mx_res = self.model(mx_batch)
         np_res = mx_res.asnumpy()
         return np_res
@@ -207,11 +211,17 @@ def run_bm(name,model,bs):
 
 def get_mx_model_and_export(name,batch,onnx_path):
     import mxnet as mx
-    model = mx.gluon.model_zoo.vision.get_model(name,pretrained=True) 
+    ctx = mx.gpu(0)
+    model = mx.gluon.model_zoo.vision.get_model(name,pretrained=True,ctx=ctx) 
     model.hybridize()
-    model(mx.nd.array(np.random.randn(batch,3,224,224).astype(np.float32)))
+    model(mx.nd.array(np.random.randn(batch,3,224,224).astype(np.float32),ctx=ctx))
     model.export('mx_model')
-    mx.onnx.export_model('mx_model-symbol.json','mx_model-0000.params',in_shapes=[(batch,3,224,224)],in_types=[np.float32],onnx_file_path=onnx_path)
+    mx.onnx.export_model('mx_model-symbol.json','mx_model-0000.params',
+                          in_shapes=[(batch,3,224,224)],
+                          in_types=[np.float32],
+                          dynamic=True,
+                          dynamic_input_shapes=[(None,3,224,224)],
+                          onnx_file_path=onnx_path)
     return MXModel(model)
 
 
@@ -266,7 +276,7 @@ def main(args):
         err = np.max(np.abs(ref - onx))
         print("ONNX Runtime Error:",err)
     print("DLPrimitives")
-    m = DLPrimModel(onnx_path,args.device)
+    m = DLPrimModel(onnx_path,args.device,args.batch)
     act = predict_on_images(m,args.images,config)
     if args.benchmark:
         run_bm('dlprimitives',m,len(args.images))

@@ -24,6 +24,32 @@ namespace dlprim {
         /// Parse and prepare the model from ONNX file
         ///
         void load(std::string const &file_name);
+        
+        ///
+        /// get input shapes so dynamic shapes can be fixed to their limits, the 
+        /// dynamix axis has dimension 0.
+        ///
+        std::map<std::string,Shape> input_shapes() const;
+
+        /// return list of dynamix axes index per input tensor
+        std::map<std::string,std::vector<int> > dynamic_axes() const;
+
+        ///
+        /// Set initial dimension for dynamic axis
+        ///
+        void set_dynamic_axis(std::string const &name,int axis,size_t limit);
+
+        ///
+        /// Modify first (batch) dynamix axis of each input shape
+        ///
+        void set_batch(size_t size);
+        
+
+        ///
+        /// Generates the network, called after the dynamic axis are defined
+        ///
+        void build();
+
         ///
         /// Generated network
         ///

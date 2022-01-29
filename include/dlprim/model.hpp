@@ -10,6 +10,7 @@ namespace dlprim {
     ///
     class ModelBase {
     public:
+        
         virtual  ~ModelBase(){}
         /// Return representation of the network
         virtual json::value const &network()  // =0 - due to boost python not fully abstractr

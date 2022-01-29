@@ -31,6 +31,19 @@ namespace dlprim {
         return l;
     }
 
+    static bp::dict map_shape(std::map<std::string,dp::Shape> const &s)
+    {
+        bp::dict r;
+        for(auto const &pair : s) {
+            std::vector<int> shape(pair.second.begin(),pair.second.end());
+            bp::list l;
+            for(int i:shape)
+                l.append(i);
+            r[pair.first] = l;
+        }
+        return r;
+    }
+
     static bp::list net_get_input_names(Net &n)
     {
         return vec_to_plist(n.input_names());
@@ -145,6 +158,21 @@ namespace dlprim {
         std::ostringstream ss;
         return model.network().save(dlprim::json::readable);
     }
+    bp::dict onnx_input_shapes(ONNXModel &model)
+    {
+        return map_shape(model.input_shapes());
+    }
+    bp::dict onnx_dynamic_axes(ONNXModel &model)
+    {
+        bp::dict r;
+        for(auto const &p : model.dynamic_axes()) {
+            bp::list axes;
+            for(auto const &axis : p.second)
+                axes.append(axis);
+            r[p.first] = axes;
+        }
+        return r;
+    }
 #endif
 #ifdef WITH_CAFFE
     std::string caffe_net(CaffeModel &model)
@@ -226,7 +254,12 @@ BOOST_PYTHON_MODULE(_pydlprim)
                 "ONNX Model parser and importer, once it is loaded, Net.load can be called").
         def(bp::init<>("Empty")).
         add_property("network",&onnx_net,"Export network as string").
-        def("load",&dp::ONNXModel::load,"Load model from file");
+        add_property("input_shapes",&onnx_input_shapes,"input shapes - to update in needed before loading").
+        add_property("dynamic_axes",&onnx_dynamic_axes,"list of dynamic axes per input, for example {'data':[0]}").
+        def("set_dynamic_axis",&dp::ONNXModel::set_dynamic_axis,"Modify dynamic shape - set maximal limit an axis for input, if the shape isn't fixed rises a error").
+        def("set_batch",&dp::ONNXModel::set_batch,"Shortcut to update first dim of all inputs").
+        def("load",&dp::ONNXModel::load,"Load model from file").
+        def("build",&dp::ONNXModel::build,"Build network");
 
 #endif
 #ifdef WITH_CAFFE
