@@ -8,15 +8,18 @@ namespace core {
     void copy_strided(  Shape shape,
                         cl::Buffer const &src,cl_ulong src_offset,Shape src_strides,
                         cl::Buffer const &dst,cl_ulong dst_offset,Shape dst_strides,
-                        DataType dtype,
+                        DataType dtype_src,
+                        DataType dtype_dst,
                         ExecutionContext const &q)
     {
         DLPRIM_CHECK(shape.size() == src_strides.size());
         DLPRIM_CHECK(shape.size() == dst_strides.size());
         int dims = shape.size();
         Context ctx(q);
+        bool use_io_type = dtype_src == dtype_dst;
         cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"copy_strided",
-                                "dtype",data_type_to_opencl_type(dtype,true),
+                                "dtype_src",data_type_to_opencl_type(dtype_src,use_io_type),
+                                "dtype_tgt",data_type_to_opencl_type(dtype_dst,use_io_type),
                                 "DIMS",dims);
         cl::NDRange range;
         switch(dims) {

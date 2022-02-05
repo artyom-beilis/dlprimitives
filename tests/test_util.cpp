@@ -28,7 +28,7 @@ int main(int argc,char **argv)
                 x.to_device(q,xv);
                 core::copy_strided(Shape(4),x.device_buffer(),x.device_offset(),Shape(2),
                                             y.device_buffer(),y.device_offset(),Shape(1),
-                                            float_data,q);
+                                            float_data,float_data,q);
                 y.to_host(q,yv);
                 TEST(yv[0]==1);
                 TEST(yv[1]==3);
@@ -42,7 +42,7 @@ int main(int argc,char **argv)
                 y.to_device(q,yv);
                 core::copy_strided(Shape(4),y.device_buffer(),y.device_offset(),Shape(1),
                                             x.device_buffer(),x.device_offset(),Shape(2),
-                                            float_data,q);
+                                            float_data,float_data,q);
                 x.to_host(q,xv);
                 TEST(memcmp(xv,xv2,sizeof(float)*8) == 0);
             }
@@ -69,18 +69,18 @@ int main(int argc,char **argv)
                         }
                         std::cout << "Checking " << src_s << " as "<< s <<"/"<<strides_src << "->" << s << "/"<<strides_tgt<< std::endl;
                         std::vector<int> vals_x(src_s.total_size());
-                        std::vector<int> vals_y(s.total_size());
-                        std::vector<int> vals_y_ref(s.total_size());
+                        std::vector<float> vals_y(s.total_size());
+                        std::vector<float> vals_y_ref(s.total_size());
                         for(unsigned i=0;i<vals_x.size();i++)
                             vals_x[i]=i+5;
-                        Tensor x(ctx,src_s);
-                        Tensor y_ref(ctx,s);
-                        Tensor y(ctx,s);
+                        Tensor x(ctx,src_s,int32_data);
+                        Tensor y_ref(ctx,s,float_data);
+                        Tensor y(ctx,s,float_data);
                         x.to_device(q,vals_x.data());
                         core::pointwise_operation_broadcast({x},{y_ref},{},"y0=x0;",q);
                         core::copy_strided(s,x.device_buffer(),x.device_offset(),strides_src,
                                              y.device_buffer(),y.device_offset(),strides_tgt,
-                                             int32_data,q);
+                                             int32_data,float_data,q);
                         y.to_host(q,vals_y.data());
                         y_ref.to_host(q,vals_y_ref.data());
                         if(vals_y_ref != vals_y) {

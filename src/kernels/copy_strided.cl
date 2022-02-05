@@ -14,8 +14,8 @@ __kernel void copy(
 #if DIMS >= 5
                 ulong d4,ulong s4,ulong t4,
 #endif
-                __global dtype const *src,ulong src_offset,
-                __global dtype *tgt,ulong tgt_offset)
+                __global dtype_src const *src,ulong src_offset,
+                __global dtype_tgt *tgt,ulong tgt_offset)
 {
         src+=src_offset;
         tgt+=tgt_offset;
