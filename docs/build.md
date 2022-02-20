@@ -41,7 +41,7 @@ Some OpenCL programs use older header `CL/cl.hpp`, in order to make dlprimitives
 or
     ctest
 
-By default ctest used `0:0` GPU - 0 platform, 0 device if you want to change it to another one, lets say platofm 1 and device 0, pass parameter to cmake: `-DTEST_DEV="1:0"`
+By default ctest used `0:0` GPU - 0 platform, 0 device if you want to change it to another one, lets say platform 1 and device 0, pass parameter to cmake: `-DTEST_DEV="1:0"`
 
 
 ## Installation
