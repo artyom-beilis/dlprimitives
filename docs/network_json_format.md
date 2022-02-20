@@ -52,9 +52,9 @@ Each operator has following fields:
 - `type` - type of operation, string, for example "Activation"
 - `inputs` - list of input tensors - must be either outputs of one of previous operators or one of inputs - list of strings
 - `outputs` - list of generated tensors, can be same as input for in-place operations - list of strings. 
-- `frozen` - boolean flag that marks the operator as not-participating in gradient descend, for example for transfer learning. Default is `false`
+- `frozen` - boolean flag that marks the operator as not-participating in gradient descent, for example for transfer learning. Default is `false`
 - `options` - object operation specific parameters
-- `params` - list of strings, optional non standard name of parameters for inported data/parameter sharing
+- `params` - list of strings, optional non standard name of parameters for imported data/parameter sharing
 
 For example:
 
@@ -220,12 +220,12 @@ Reshapes the tensor
 
 ### Reduction
 
-Performs reduction over different axises
+Performs reduction over different axes
 
 Parameters:
 
 - `method` - string, default `sum`. Options `sum`: sum, `sumsq`: sum of squares, `abssum`: L1 norm, `mean` - average value
-- `keep_dim` - boolean, default true, weather to kip dimenstion. For result in reduction of shape [2,3,4] over axises 1,2, the output will have shape [2,1,1] of `keep_dim` is true and other wise it will be [2]
+- `keep_dim` - boolean, default true, whether to keep dimension. For result in reduction of shape [2,3,4] over axes 1,2, the output will have shape [2,1,1] of `keep_dim` is true and otherwise it will be [2]
 - `output_scale` - float, default 1, multiply result after reduction by factor
 - `dims` - list of ints, dimensions to reduce over, may be negative, can't be specified together with `start_axis`, 
 - `start_axis` - integer, default 0 - first axis to reduce till end, for example if `start_axis==1` and input shape is [2,3,4], result shape will be [2,1,1]. Can't specify both `start_axis`and `dims`
@@ -259,7 +259,7 @@ Special layer with no inputs that produces output of its only paramerer
 
 - `shape` - list of ints - output shape
 - `dtype` - string, default float - type of output tensor
-- `is_trainable` - booleam default true, backpropogate gradients to parameter
+- `is_trainable` - boolean default true, backpropagate gradients to parameter
 
 
 ## Standard Activations
