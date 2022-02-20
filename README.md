@@ -14,7 +14,7 @@ of any operating systems other than Linux.
 multiple GPU architectures.
 - Create an inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
 - Create minimalistic deep-learning framework as POC of capabilities and performance.
-- Integrate to existing large scale deep learing projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
+- Integrate to existing large scale deep learning projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
 
 Please note this is only work in progress - first and preliminary stages.
 
@@ -36,7 +36,7 @@ ONNX Model loading and inference tested on following imagenet networks:
 
 - Pytorch, opsets 9, 11, 13: `alexnet`, `vgg16`, `resnet18`, `resnext50_32x4d`, `wide_resnet50_2`, `efficientnet_b0`, `efficientnet_b4`, `regnet_y_400mf`, `squeezenet1_0`, `mobilenet_v2`, `densenet121`
 - MXNet: `vgg11_bn`, `alexnet`, `mobilenetv2_0.25`, `mobilenet0.25`, `densenet121`, `resnet18_v1`, `squeezenet1.0`
-- Tensorflow, limited initiall support, channel first: `resnet50`, `densenet121`
+- Tensorflow, limited initial support, channel first: `resnet50`, `densenet121`
 
 ## Documentation 
 
@@ -90,4 +90,4 @@ Devices Tested on Windows: AMD RX 560, NVidia GTX 960.
 ## Other features
 
 - Network object for inference
-- ONNX to DlPrimitives model converter
+- ONNX to DLPrimitives model converter
