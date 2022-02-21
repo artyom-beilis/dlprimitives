@@ -11,7 +11,7 @@ Mandatory:
 Recommended:
 
 - OpenBLAS for CPU only inference/training 
-- Sqlite3 for ceching of compiled kernels for non-NVidia GPUs to improve startup times
+- Sqlite3 for caching of compiled kernels for non-NVidia GPUs to improve startup times
 
 Optional:
 
