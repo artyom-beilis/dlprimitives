@@ -3,7 +3,7 @@
 ## Summary
 
 Summary of performance comparison of DLPrmitives to Native Pytorch (cuda+cudnn or hip+miopen) and best of existing OpenCL
-solution - Caffe OpenCL or Kerals with PlaidML. Measured prtformane difference average over 5 networks:
+solution - Caffe OpenCL or Kerals with PlaidML. Measured performance difference average over 5 networks:
 alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
 
 |             GPU|Batch|Train, Cuda/HIP|Test, Cuda/HIP|Train, Plaidml/Caffe-OCL|Test,  Plaidml/Caffe-OCL|
@@ -16,7 +16,7 @@ alexnet, resnet18, resnet50, vgg16 and mobilenet\_v2.
 |      AMD Rx 560|    8|            55%|        54.19%|           172%|       122.64%|
 |    Intel HD 530|    8|               |              |           109%|        66.12%|
 
-## DlPrimitives vs Other Frameworks
+## DLPrimitives vs Other Frameworks
 
 Tested using ResNet18, batch size is 16 224x224 images. Units: milliseconds per batch.  
 

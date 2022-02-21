@@ -15,7 +15,7 @@ DB size to 300MiB. Note size is approximate only.
 - Cache can be disabled in runtime by setting environment variable `DLPRIM_CACHE_DISABLE` to 1.
 - Cache file location can be changed from default by setting environment variable `DLPRIM_CACHE_DIR`
 
-Note: the cache is disable on nVidia GPUs since nVidia provides its own cache of binary code. Double caching
+Note: the cache is disabled on nVidia GPUs since nVidia provides its own cache of binary code. Double caching
 makes it less efficient. Also what is possible to cache on nVidia platform is actually PTX "assembly" rather than 
 actual binary code so you always need another level of cache PTX to Binary provided by nVidia.
 
