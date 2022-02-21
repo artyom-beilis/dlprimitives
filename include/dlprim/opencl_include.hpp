@@ -13,7 +13,11 @@
 #  ifndef CL_HPP_TARGET_OPENCL_VERSION
 #    define CL_HPP_TARGET_OPENCL_VERSION 120
 #  endif
-#  include <CL/cl2.hpp>
+#  ifdef __APPLE__
+#    include <OpenCL/cl2.hpp>
+#  else
+#    include <CL/cl2.hpp>
+#  endif
 #else
 #  ifndef CL_TARGET_OPENCL_VERSION
 #    define CL_TARGET_OPENCL_VERSION 120
@@ -21,6 +25,10 @@
 #  ifndef __CL_ENABLE_EXCEPTIONS
 #     define __CL_ENABLE_EXCEPTIONS
 #  endif
-#  include <CL/cl.hpp>
+#  ifdef __APPLE__
+#    include <OpenCL/cl.hpp>
+#  else
+#    include <CL/cl.hpp>
+#  endif
 #endif
 
