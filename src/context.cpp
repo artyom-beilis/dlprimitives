@@ -78,6 +78,12 @@ namespace dlprim {
         return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1002;
         //return device_extensions().find("cl_amd_") != std::string::npos;
     }
+    bool Context::is_apple()
+    {
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1027f00;
+    }
     bool Context::is_intel()
     {
         if(is_cpu_context())
