@@ -238,10 +238,10 @@ namespace dlprim {
                 im2col = img;
             }
             template<typename DType>
-            static void copy_if(DType &img,DType &im2col,bool cond)
+            static void copy_if(DType *img,DType &im2col,bool cond)
             {
                 if(cond) {
-                    im2col = img;
+                    im2col = *img;
                 }
                 else {
                     im2col = DType();
@@ -260,10 +260,10 @@ namespace dlprim {
                 img += im2col;
             }
             template<typename DType>
-            static void copy_if(DType &img,DType &im2col,bool cond)
+            static void copy_if(DType *img,DType &im2col,bool cond)
             {
                 if(cond) {
-                    img += im2col;
+                    *img += im2col;
                 }
             }
             template<typename DType>
@@ -318,7 +318,7 @@ namespace dlprim {
                                 if(y >= 0 && y < src_rows) {
                                     for(int dx=0;dx < K ;dx++) {
                                         int x = x_pos + dx;
-                                        Op::copy_if(img[dx],*mat,(x >= 0 && x < src_cols));
+                                        Op::copy_if(img + dx,*mat,(x >= 0 && x < src_cols));
                                         mat++;
                                     }
                                 }
@@ -385,7 +385,7 @@ namespace dlprim {
                         if(y >= 0 && y < src_rows) {
                             for(int dx=0;dx < kern_w * dilate_w ;dx+= dilate_w) {
                                 int x = x_pos + dx;
-                                Op::copy_if(img[dx],*mat,(x >= 0 && x < src_cols));
+                                Op::copy_if(img + dx,*mat,(x >= 0 && x < src_cols));
                                 mat++;
                             }
                         }
