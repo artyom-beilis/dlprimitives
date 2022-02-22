@@ -26,8 +26,16 @@ namespace gpu {
                 }
             }
             else {
-                if(ctx.is_amd() && !actual_gemm) {
-					if(M >= 256 && N >= 256) {
+                if (ctx.is_apple()) {
+                    tile_size_m_ = 32;
+                    tile_size_n_ = 32;
+                    block_size_m_ = 4;
+                    block_size_n_ = 4;
+                    tile_size_k_ = 16;
+                    off_ = 0;
+                }
+                else if(ctx.is_amd() && !actual_gemm) {
+                    if(M >= 256 && N >= 256) {
                         tile_size_m_ = 96;
                         tile_size_n_ = 96;
                         block_size_m_ = 6;

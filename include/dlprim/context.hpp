@@ -381,6 +381,8 @@ public:
 
     /// checks if the device is AMD GPU
     bool is_amd();
+    /// checks if the device is Apple GPU
+    bool is_apple();
     /// checks if the device is NVidia GPU
     bool is_nvidia();
     /// checks if the device is Intel GPU
