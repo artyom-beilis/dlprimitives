@@ -220,6 +220,17 @@ void scale_and_add(__global float *p,float value,float scale)
 #ifndef BIAS
 #define BIAS 0
 #endif
+
+#ifndef TR_STRIDE_OFFSET
+#define TR_STRIDE_OFFSET 1
+#endif
+
+#if STRIDE_OFFSET > 0 || TR_STRIDE_OFFSET > 0
+#define PADDING_FACTOR 1
+#else
+#define PADDING_FACTOR 0
+#endif
+
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3(int B, int N,int C,int H,int W,
@@ -242,13 +253,13 @@ void winconv_3x3(int B, int N,int C,int H,int W,
     int half_H = (H+1)/2;
     int half_WG = half_W * half_H;
 
-    __local float wg_local_memory[(TILES_IN_WG + KERNELS_IN_WG + 16) * WG_K * 16];
+    __local float wg_local_memory[(TILES_IN_WG + KERNELS_IN_WG + (16*PADDING_FACTOR)) * WG_K * 16];
 
 #define l_tile_stride (TILES_IN_WG * WG_K + STRIDE_OFFSET)
 #define l_kern_stride (KERNELS_IN_WG * WG_K + STRIDE_OFFSET)
 
 #define l_tiles(a,b,c) wg_local_memory[(a)*l_tile_stride + (b)*TILES_IN_WG + (c)]
-#define l_kernels(a,b,c) wg_local_memory[(a)*l_kern_stride + (b)*KERNELS_IN_WG + (c) + (TILES_IN_WG*WG_K*16 + 32)]
+#define l_kernels(a,b,c) wg_local_memory[(a)*l_kern_stride + (b)*KERNELS_IN_WG + (c) + (TILES_IN_WG*WG_K*16 + (32*STRIDE_OFFSET))]
 
 
     // Loading data
@@ -292,7 +303,7 @@ void winconv_3x3(int B, int N,int C,int H,int W,
         }
     }
 
-    #define s_img_tile(k,t,indx) wg_local_memory[(k)*(TILES_IN_WG/2*16 + 1) + (t/2) * 16 + (indx)]
+    #define s_img_tile(k,t,indx) wg_local_memory[(k)*(TILES_IN_WG/2*16 + TR_STRIDE_OFFSET) + (t/2) * 16 + (indx)]
     
     __local float *l_tile_ptr = &l_tiles(0,l_tile_k,l_tile_rc);
     __local float *l_kern_ptr = &l_kernels(0,l_kern_k,l_kern_n);

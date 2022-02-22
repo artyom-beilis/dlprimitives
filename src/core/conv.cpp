@@ -3,6 +3,7 @@
 #include <dlprim/core/common.hpp>
 #include <dlprim/gpu/gemm.hpp>
 #include <dlprim/gpu/program_cache.hpp>
+#include <iostream>
 
 namespace dlprim {
 namespace core {
@@ -269,9 +270,16 @@ namespace core {
             config_(config)
         {
             int off = ctx.is_amd() ? 0 : 1;
+            int toff = 1;
+            int local_mem_size = ctx.device().getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+            if(local_mem_size < 40960) {
+                off = 0;
+                toff = 0;
+            }
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_fwd",
                                             "ACTIVATION",int(activation),
                                             "STRIDE_OFFSET",off,
+                                            "TR_STRIDE_OFFSET",toff,
                                             "BIAS",int(bias));
             conv_kernel_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
             conv_ = cl::Kernel(prog,"winconv_3x3");
@@ -296,7 +304,14 @@ namespace core {
             s_(ctx,config.dtype)
         {
             int off = ctx.is_amd() ? 0 : 1;
-            cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_bwd_data","STRIDE_OFFSET",off);
+            int toff = 1;
+            int local_mem_size = ctx.device().getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+            if(local_mem_size < 40960) {
+                off = 0;
+                toff = 0;
+            }
+            cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_bwd_data",
+                        "STRIDE_OFFSET",off,"TR_STRIDE_OFFSET",toff);
             conv_kernel_bwd_ = cl::Kernel(prog,"winconv_calc_gkgt_3x3");
             bw_conv_data_ = cl::Kernel(prog,"winconv_3x3_bwd_data");
         }
@@ -364,8 +379,16 @@ namespace core {
             int winograd_work_items = (config_.channels_in / 32) * (config_.channels_out / 32) * 256;
             reduce_k_ = winograd_work_items < ctx.estimated_core_count();
             int off = ctx.is_amd() ? 0 : 1;
+            int toff = 1;
+            int local_mem_size = ctx.device().getInfo<CL_DEVICE_LOCAL_MEM_SIZE>();
+            if(local_mem_size < 40960) {
+                off = 0;
+                toff = 0;
+            }
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"winograd_bwd_filter",
-                                                                            "IMG_H",h,"IMG_W",w,"STRIDE_OFFSET",off);
+                                                                            "IMG_H",h,"IMG_W",w,
+                                                                            "STRIDE_OFFSET",off,
+                                                                            "TR_STRIDE_OFFSET",toff);
             bw_conv_filter_ = cl::Kernel(prog,"winconv_3x3_bwd_filter");
         }
         virtual void enqueue(Tensor &x,Tensor &dK,Tensor &dy,Tensor &,float factor,ExecutionContext const &ec) 
