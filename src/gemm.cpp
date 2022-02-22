@@ -31,7 +31,7 @@ namespace gpu {
                     tile_size_n_ = 32;
                     block_size_m_ = 4;
                     block_size_n_ = 4;
-                    tile_size_k_ = 32;
+                    tile_size_k_ = 16;
                     off_ = 0;
                 }
                 else if(ctx.is_amd() && !actual_gemm) {
