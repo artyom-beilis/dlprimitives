@@ -26,7 +26,7 @@ namespace gpu {
                 }
             }
             else {
-		if (ctx.is_apple()) {
+                if (ctx.is_apple()) {
                     tile_size_m_ = 32;
                     tile_size_n_ = 32;
                     block_size_m_ = 4;
@@ -35,7 +35,7 @@ namespace gpu {
                     off_ = 0;
                 }
                 else if(ctx.is_amd() && !actual_gemm) {
-					if(M >= 256 && N >= 256) {
+                    if(M >= 256 && N >= 256) {
                         tile_size_m_ = 96;
                         tile_size_n_ = 96;
                         block_size_m_ = 6;
