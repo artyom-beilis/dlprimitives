@@ -123,6 +123,9 @@ namespace core {
         case 3: bind_cl_shape<3>(k,p,s); return;
         case 4: bind_cl_shape<4>(k,p,s); return;
         case 5: bind_cl_shape<5>(k,p,s); return;
+        case 6: bind_cl_shape<6>(k,p,s); return;
+        case 7: bind_cl_shape<7>(k,p,s); return;
+        case 8: bind_cl_shape<8>(k,p,s); return;
         default:
             {
                 std::ostringstream ss;
@@ -153,6 +156,9 @@ namespace core {
         case 3: range = cl::NDRange(ref[2],ref[1],ref[0]); break;
         case 4: range = cl::NDRange(ref[3]*ref[2],ref[1],ref[0]); break;
         case 5: range = cl::NDRange(ref[4]*ref[3],ref[2]*ref[1],ref[0]); break;
+        case 6: range = cl::NDRange(ref[5]*ref[4],ref[3]*ref[2],ref[1]*ref[0]); break;
+        case 7: range = cl::NDRange(ref[6]*ref[5]*ref[4],ref[3]*ref[2],ref[1]*ref[0]); break;
+        case 8: range = cl::NDRange(ref[7]*ref[6]*ref[5],ref[4]*ref[3]*ref[2],ref[1]*ref[0]); break;
         default:
             throw NotImplementedError("Invalid dimentsions count for broadcastes shape size " + std::to_string(ref.size()));
         }

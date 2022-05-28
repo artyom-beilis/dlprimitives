@@ -258,7 +258,7 @@ namespace dlprim {
     }
 
     /// Maximal number of dimensions in tensor
-    static constexpr int max_tensor_dim = 5;
+    static constexpr int max_tensor_dim = 8;
 
     /// internal flag
 	constexpr int forward_data = 1;

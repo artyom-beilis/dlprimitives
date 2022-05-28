@@ -35,6 +35,9 @@ namespace core {
         case 3: range = cl::NDRange(shape[2],shape[1],shape[0]); break;
         case 4: range = cl::NDRange(shape[3]*shape[2],shape[1],shape[0]); break;
         case 5: range = cl::NDRange(shape[4]*shape[3],shape[2]*shape[1],shape[0]); break;
+        case 6: range = cl::NDRange(shape[5]*shape[4],shape[3]*shape[2],shape[1]*shape[0]); break;
+        case 7: range = cl::NDRange(shape[6]*shape[5]*shape[4],shape[3]*shape[2],shape[1]*shape[0]); break;
+        case 8: range = cl::NDRange(shape[7]*shape[6]*shape[5],shape[4]*shape[3]*shape[2],shape[1]*shape[0]); break;
         default:
             throw NotImplementedError("Invalid dimentsions count for strided copy " + std::to_string(dims));
         }

@@ -54,9 +54,9 @@ int main(int argc,char **argv)
                 TEST(memcmp(xv,xv2,sizeof(float)*8) == 0);
             }
             {
-                for(int dims=1;dims<=5;dims++) {
-                    for(int strides_mask = 0;strides_mask < (1<<5);strides_mask++) {
-                        int sizes[5]={2,3,5,7,11};
+                for(int dims=1;dims<=dlprim::max_tensor_dim;dims++) {
+                    for(int strides_mask = 0;strides_mask < (1<<dlprim::max_tensor_dim);strides_mask++) {
+                        int sizes[dlprim::max_tensor_dim]={2,3,5,7,11,13,17,19};
                         Shape s=Shape::from_range(sizes+0,sizes+dims);
                         Shape src_s = s;
                         Shape strides_src=s,strides_tgt=s;
