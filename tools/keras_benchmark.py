@@ -1,3 +1,10 @@
+###############################################################################
+###
+### Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+###
+### MIT License, see LICENSE.TXT
+###
+###############################################################################
 import os
 #os.environ['KERAS_BACKEND']='plaidml.keras.backend'
 import time

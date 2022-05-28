@@ -1,3 +1,10 @@
+###############################################################################
+###
+### Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+###
+### MIT License, see LICENSE.TXT
+###
+###############################################################################
 """
 Main module for dlprim library, imports all classes from two modules:
 

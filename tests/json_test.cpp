@@ -1,9 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-//                                                                             
-//  Copyright (C) 2008-2012  Artyom Beilis (Tonkikh) <artyomtnk@yahoo.com>     
-//                                                                             
-//  See accompanying file COPYING.TXT file for licensing details.
-//
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
 ///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/json.hpp>
 #include "test.hpp"

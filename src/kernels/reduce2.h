@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #ifndef my_get_local_wg_id
 #define my_get_local_wg_id() ((get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0))
 #endif

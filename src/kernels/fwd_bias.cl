@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include "defs.h"
 __kernel void fwd_bias(int B,int F,int RC,
                        __global dtype *tensor,ulong tensor_offset,
