@@ -9,10 +9,6 @@
 #include <dlprim/onnx.hpp>
 #endif
 
-#ifdef WITH_CAFFE
-#include <dlprim/caffe.hpp>
-#endif
-
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include <string>
@@ -174,13 +170,6 @@ namespace dlprim {
         return r;
     }
 #endif
-#ifdef WITH_CAFFE
-    std::string caffe_net(CaffeModel &model)
-    {
-        std::ostringstream ss;
-        return model.network().save(dlprim::json::readable);
-    }
-#endif
 }
 
 
@@ -260,14 +249,6 @@ BOOST_PYTHON_MODULE(_pydlprim)
         def("set_batch",&dp::ONNXModel::set_batch,"Shortcut to update first dim of all inputs").
         def("load",&dp::ONNXModel::load,"Load model from file").
         def("build",&dp::ONNXModel::build,"Build network");
-
-#endif
-#ifdef WITH_CAFFE
-    bp::class_<dp::CaffeModel,bp::bases<dp::ModelBase>,boost::noncopyable >("CaffeModel",
-                "Caffe Model parser and importer, once it is loaded, Net.load can be called").
-        def(bp::init<>("Empty")).
-        add_property("network",&caffe_net,"Export network as string").
-        def("load",&dp::CaffeModel::load,"Load model from file");
 
 #endif
 
