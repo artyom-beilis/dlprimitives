@@ -87,6 +87,7 @@ Solvers: SGD, Adam
 |M1 Max     | Apple     | 32-core model                 |
 
 Devices Tested on Windows: AMD RX 560, NVidia GTX 960.
+Devices Tested on macOS: Apple M1 Max
 
 ## Other features
 
