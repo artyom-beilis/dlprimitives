@@ -12,6 +12,15 @@ option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
 option(USE_HDF "Compile with HDF support" ON)
 option(USE_SQLITE3 "Compile with sqlite3 support for kernel caching" ON)
 option(USE_ONNX "Compile with ONNX support" ON)
+option(USE_PYDLPRIM "Compile python interface for dlprimitives" ON)
+option(BUILD_CORE_ONLY "Build only dlprimitives core" OFF)
+
+if(BUILD_CORE_ONLY)
+    SET(USE_CL_HPP OFF)
+    SET(USE_HDF OFF)
+    SET(USE_ONNX OFF)
+    set(USE_PYDLPRIM OFF)
+endif()
 
 if(USE_CL_HPP)
     if(APPLE)
@@ -95,7 +104,10 @@ endif()
 file(GLOB CL_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.cl)
 file(GLOB CL_HEADERS  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.h)
 
-find_package(PythonLibs 3)
+if(NOT BUILD_CORE_ONLY)
+    find_package(PythonLibs 3)
+endif()
+
 if(PYTHONLIBS_FOUND)
     string(REPLACE "." ";" PLIB_VER_LIST ${PYTHONLIBS_VERSION_STRING})
     list(GET PLIB_VER_LIST 0 PLIB_VER_MAJOR)
@@ -123,20 +135,21 @@ else()
 endif()
 
 
-if(NOT CBLAS_LIB OR NOT CBLAS_PATH) 
-    set(EXTRA_SRC src/my_blas/my_cblas.cpp)
-    set(BLAS_LIB )
-    set(EXTRA_DEFS -DUSE_INTERNAL_BLAS)
-else()
-    set(EXTRA_SRC )
-    set(BLAS_LIB ${CBLAS_LIB})
-    include_directories("${CBLAS_PATH}")
-    set(EXTRA_DEFS )
+if(NOT BUILD_CORE_ONLY)
+
+    if(NOT CBLAS_LIB OR NOT CBLAS_PATH) 
+        set(EXTRA_SRC src/my_blas/my_cblas.cpp)
+        set(BLAS_LIB )
+        set(EXTRA_DEFS -DUSE_INTERNAL_BLAS)
+    else()
+        set(EXTRA_SRC )
+        set(BLAS_LIB ${CBLAS_LIB})
+        include_directories("${CBLAS_PATH}")
+        set(EXTRA_DEFS )
+    endif()
+
+    add_definitions(${EXTRA_DEFS})
 endif()
-
-add_definitions(${EXTRA_DEFS})
-
-
 
 message("=== Status ===")
 message("  OpenCL: include ${OCL_PATH}")
@@ -240,51 +253,59 @@ SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${LIBDIR}")
 
 if(WIN32)
 	add_library(dlprim_core STATIC ${DLPRIM_CORE_SRC})
-	add_library(dlprim STATIC ${DLPRIM_SRC})
 else()
 	add_library(dlprim_core SHARED ${DLPRIM_CORE_SRC})
-	add_library(dlprim SHARED ${DLPRIM_SRC})
 endif()
-		
 target_link_libraries(dlprim_core ${OCL_LIB})	
-target_link_libraries(dlprim dlprim_core ${OCL_LIB} ${BLAS_LIB})
-if(HDF5_FOUND)
-    target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
-endif()
 if(WITH_SQLITE3)
     target_link_libraries(dlprim_core ${SQLITE3_LIB})
 endif()
 
-set_target_properties(dlprim PROPERTIES 
-			PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
+if(NOT BUILD_CORE_ONLY)
+		
+    if(WIN32)
+        add_library(dlprim STATIC ${DLPRIM_SRC})
+    else()
+        add_library(dlprim SHARED ${DLPRIM_SRC})
+    endif()
 
-add_executable(test_context tests/test_context.cpp)
-add_executable(test_broadcast_reduce tests/test_broadcast_reduce.cpp)
-add_executable(test_util tests/test_util.cpp)
+    target_link_libraries(dlprim dlprim_core ${OCL_LIB} ${BLAS_LIB})
+    if(HDF5_FOUND)
+        target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
+    endif()
 
-target_link_libraries(test_context dlprim_core)
-target_link_libraries(test_util dlprim_core)
-target_link_libraries(test_broadcast_reduce dlprim_core)
+    set_target_properties(dlprim PROPERTIES 
+                PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
 
-add_executable(test_from_template tests/test_from_template.cpp)
-add_executable(test_net tests/test_net.cpp)
-add_executable(test_json tests/json_test.cpp)
-add_executable(dlprim_benchmark tools/benchmark.cpp)
-add_executable(image_predict examples/cpp/image_predict.cpp)
-add_executable(mnist tests/mnist.cpp)
-add_executable(train_mnist examples/cpp/train_mnist.cpp)
-add_executable(dlprim_flops tools/flops.cpp)
-add_executable(test_random tests/test_random.cpp)
+    add_executable(test_context tests/test_context.cpp)
+    add_executable(test_broadcast_reduce tests/test_broadcast_reduce.cpp)
+    add_executable(test_util tests/test_util.cpp)
 
-target_link_libraries(test_from_template dlprim)
-target_link_libraries(mnist dlprim)
-target_link_libraries(train_mnist dlprim)
-target_link_libraries(dlprim_benchmark dlprim)
-target_link_libraries(image_predict dlprim)
-target_link_libraries(test_json dlprim)
-target_link_libraries(dlprim_flops dlprim)
-target_link_libraries(test_net dlprim)
-target_link_libraries(test_random dlprim)
+    target_link_libraries(test_context dlprim_core)
+    target_link_libraries(test_util dlprim_core)
+    target_link_libraries(test_broadcast_reduce dlprim_core)
+
+    add_executable(test_from_template tests/test_from_template.cpp)
+    add_executable(test_net tests/test_net.cpp)
+    add_executable(test_json tests/json_test.cpp)
+    add_executable(dlprim_benchmark tools/benchmark.cpp)
+    add_executable(image_predict examples/cpp/image_predict.cpp)
+    add_executable(mnist tests/mnist.cpp)
+    add_executable(train_mnist examples/cpp/train_mnist.cpp)
+    add_executable(dlprim_flops tools/flops.cpp)
+    add_executable(test_random tests/test_random.cpp)
+
+    target_link_libraries(test_from_template dlprim)
+    target_link_libraries(mnist dlprim)
+    target_link_libraries(train_mnist dlprim)
+    target_link_libraries(dlprim_benchmark dlprim)
+    target_link_libraries(image_predict dlprim)
+    target_link_libraries(test_json dlprim)
+    target_link_libraries(dlprim_flops dlprim)
+    target_link_libraries(test_net dlprim)
+    target_link_libraries(test_random dlprim)
+
+endif()
 
 set(EXTRA_INSTALL )
 
@@ -320,28 +341,33 @@ if(BUILD_PYDLPRIM)
  
 endif()
 
-file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
+if(NOT BUILD_CORE_ONLY)
+    file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
 
-foreach(TEMPLATE ${TEST_TEMPLATES}) 
-    get_filename_component(TEST_NAME ${TEMPLATE} NAME_WE)
-    add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
-endforeach()
-add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
-add_test(test_net_nonopt test_net "-k" ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
-add_test(test_json test_json)
-add_test(test_random test_random ${TEST_DEV})
-add_test(test_context test_context ${TEST_DEV})
-add_test(test_util test_util ${TEST_DEV})
-add_test(test_broadcast_reduce test_broadcast_reduce ${TEST_DEV})
-
+    foreach(TEMPLATE ${TEST_TEMPLATES}) 
+        get_filename_component(TEST_NAME ${TEMPLATE} NAME_WE)
+        add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
+    endforeach()
+    add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
+    add_test(test_net_nonopt test_net "-k" ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
+    add_test(test_json test_json)
+    add_test(test_random test_random ${TEST_DEV})
+    add_test(test_context test_context ${TEST_DEV})
+    add_test(test_util test_util ${TEST_DEV})
+    add_test(test_broadcast_reduce test_broadcast_reduce ${TEST_DEV})
+endif()
 
 #################
 # Installation
 #################
 
+if(NOT BUILD_CORE_ONLY)
+    set(EXTRA_INSTALL dlprim dlprim_benchmark dlprim_flops ${EXTRA_INSTALL})
+endif()
+
 
 install(TARGETS 
-    dlprim_core dlprim dlprim_benchmark dlprim_flops ${EXTRA_INSTALL}
+    dlprim_core ${EXTRA_INSTALL}
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION ${LIBDIR}
 	ARCHIVE DESTINATION ${LIBDIR}
