@@ -44,7 +44,7 @@ def _prof_summary(report):
 def benchmark_model(model,batch,device,warm,iters,train,use_solver,profile):
 
     def _sync():
-        if device.find('opencl')==0:
+        if device.find('opencl')==0 or device.find('privateuseone')==0 or device.find('ocl')==0:
             torch.zeros((1,)).to(device)
         elif device.find('cuda')==0:
             torch.cuda.synchronize()
@@ -240,6 +240,6 @@ if __name__ == '__main__':
     p.add_argument('--iters',default=20,type=int)
     p.add_argument('images',nargs='*')
     r = p.parse_args()
-    if r.device.find('opencl')==0:
+    if r.device.find('ocl')==0 or r.device.find('privateuseone')==0:
         torch.ops.load_library("build/libpt_ocl.so")
     main(r)
