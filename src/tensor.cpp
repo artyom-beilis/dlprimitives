@@ -59,7 +59,7 @@ namespace dlprim {
         cpu_tensor_(false),
         offset_(offset),
         capacity_(s.total_size()*size_of_data_type(d)),
-        full_capacity_(capacity_)
+        full_capacity_(capacity_ + offset * size_of_data_type(d))
     {
         buffer_ = buffer;
     }
