@@ -58,9 +58,9 @@ In order to use python bindings  `export PYTHONPATH=/opt/dlprim/python` - accord
 Running benchmakrs on opencl platform:device 0:0
 
     # Inference
-    ./dlprim_benchmark 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
+    ./dlprim_benchmark 0:0 ../docs/nets_for_benchmark/resnet18-b16.js
     # Train
-    ./dlprim_benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
+    ./dlprim_benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.js
 
 
 ## Windows Notes
