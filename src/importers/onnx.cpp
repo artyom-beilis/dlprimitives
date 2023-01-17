@@ -109,7 +109,12 @@ namespace dlprim {
         if(!f)
             throw ValidationError("IO Error reading " + file_name);
         google::protobuf::io::CodedInputStream stream(reinterpret_cast<unsigned char *>(buffer.data()),length);
+// at least since protobuf 3.6.1, only the first argument the second one is ignored.
+#if GOOGLE_PROTOBUF_VERSION>=3006001
+        stream.SetTotalBytesLimit(std::numeric_limits<int>::max());
+#else
         stream.SetTotalBytesLimit(std::numeric_limits<int>::max(),std::numeric_limits<int>::max());
+#endif
         if(!d->model.MergePartialFromCodedStream(&stream))
             throw ValidationError("Protobuf Parsing Error " + file_name);
     }
