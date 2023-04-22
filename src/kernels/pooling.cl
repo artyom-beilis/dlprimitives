@@ -83,13 +83,13 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
              
              )
 {
-    int or = get_global_id(0);
+    int or_ = get_global_id(0);
     int oc = get_global_id(1);
     int bc = get_global_id(2);
-    if(bc >= BC || or >= out_H || oc >= out_W)
+    if(bc >= BC || or_ >= out_H || oc >= out_W)
         return;
 
-    int row0 = or * STRIDE_H - PAD_H;
+    int row0 = or_ * STRIDE_H - PAD_H;
     int col0 = oc * STRIDE_W - PAD_W;
     int row1 = row0 + POOL_H;
     int col1 = col0 + POOL_W;
@@ -144,9 +144,9 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
                                      min(col1,inp_W + PAD_W) - max(-PAD_W,col0)
                                      );
     }
-    tgt[or * out_W + oc] = val;
+    tgt[or_ * out_W + oc] = val;
     #if INDEX_MAX_SRC == 1
-    indx[or * out_W + oc] = index;
+    indx[or_ * out_W + oc] = index;
     #endif
 }
 
@@ -168,14 +168,14 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
              __global const dtype *tgt,ulong tgt_offset,
              __global const itype *indx,ulong indx_offset)
 {
-    int or = get_global_id(0);
+    int or_ = get_global_id(0);
     int oc = get_global_id(1);
     int bc = get_global_id(2);
 
-    if(bc >= BC || or >= out_H || oc >= out_W)
+    if(bc >= BC || or_ >= out_H || oc >= out_W)
         return;
 
-    int row0 = or * STRIDE_H - PAD_H;
+    int row0 = or_ * STRIDE_H - PAD_H;
     int col0 = oc * STRIDE_W - PAD_W;
     int row1 = row0 + POOL_H;
     int col1 = col0 + POOL_W;
@@ -184,8 +184,8 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
     src  += src_offset + bc * inp_H * inp_W;
     indx += indx_offset + bc * out_H * out_W;
 
-    dtype dy  =  tgt[or * out_W + oc];
-    itype pos = indx[or * out_W + oc];
+    dtype dy  =  tgt[or_ * out_W + oc];
+    itype pos = indx[or_ * out_W + oc];
 
     save_dx(src+pos,dy);
 }
@@ -198,14 +198,14 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
              __global const dtype *tgt,ulong tgt_offset,
              __global dtype *dx,ulong dx_offset)
 {
-    int or = get_global_id(0);
+    int or_ = get_global_id(0);
     int oc = get_global_id(1);
     int bc = get_global_id(2);
 
-    if(bc >= BC || or >= out_H || oc >= out_W)
+    if(bc >= BC || or_ >= out_H || oc >= out_W)
         return;
 
-    int row0 = or * STRIDE_H - PAD_H;
+    int row0 = or_ * STRIDE_H - PAD_H;
     int col0 = oc * STRIDE_W - PAD_W;
     int row1 = row0 + POOL_H;
     int col1 = col0 + POOL_W;
@@ -245,7 +245,7 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
         }
     }
     
-    dtype dy = tgt[or * out_W + oc];
+    dtype dy = tgt[or_ * out_W + oc];
 
     save_dx(dx+index,dy);
 }
@@ -257,13 +257,13 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
              __global const dtype *tgt,ulong tgt_offset,
              __global dtype *dx,ulong dx_offset)
 {
-    int or = get_global_id(0);
+    int or_ = get_global_id(0);
     int oc = get_global_id(1);
     int bc = get_global_id(2);
-    if(bc >= BC || or >= out_H || oc >= out_W)
+    if(bc >= BC || or_ >= out_H || oc >= out_W)
         return;
 
-    int row0 = or * STRIDE_H - PAD_H;
+    int row0 = or_ * STRIDE_H - PAD_H;
     int col0 = oc * STRIDE_W - PAD_W;
     int row1 = row0 + POOL_H;
     int col1 = col0 + POOL_W;
@@ -271,7 +271,7 @@ void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
     tgt += tgt_offset + bc * out_H * out_W;
     dx  += dx_offset  + bc * inp_H * inp_W;
 
-    dtype dy = tgt[or * out_W + oc];
+    dtype dy = tgt[or_ * out_W + oc];
     if(row0 >= 0 && col0 >= 0 && row1 <= inp_H && col1 <= inp_W) {
         dtype dy_norm = NORMALIZE_FULL(dy);
         dx += row0 * inp_W + col0;
