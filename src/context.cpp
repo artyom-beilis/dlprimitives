@@ -105,6 +105,12 @@ namespace dlprim {
         return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x10DE;
         //return device_extensions().find("cl_nv_") != std::string::npos;
     }
+    bool Context::is_imagination()
+    {
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1010;
+    }
 
     int Context::estimated_core_count()
     {

@@ -394,6 +394,8 @@ public:
     bool is_nvidia();
     /// checks if the device is Intel GPU
     bool is_intel();
+    /// checks if the device is Imagination GPU
+    bool is_imagination();
 
     /// Get OpenCL context object
     cl::Context &context()
