@@ -8,6 +8,8 @@
 #include <dlprim/core/bn.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 
+#include <iostream>
+
 namespace dlprim {
 namespace core {
     class BatchNormImpl : public BatchNormFwdBwd {
@@ -204,6 +206,29 @@ namespace core {
         {
             a = ws.sub_tensor_target_offset(0,Shape(features_),dt_);
             b = ws.sub_tensor_target_offset(features_,Shape(features_),dt_);
+        }
+
+        virtual void enqueue_forward_get_rstd(
+                                            Tensor &x,Tensor &y,
+                                            Tensor &mean,Tensor &var,float eps,Tensor &rstd,
+                                            Tensor &ws,ExecutionContext const &e)
+        {
+            DLPRIM_CHECK(ws.memory_size() >= ws_);
+            Tensor b = ws.sub_tensor_target_offset(0,Shape(features_),dt_);
+            int p = 0;
+            mean_var_to_a_b_.setArg(p++,features_);
+            mean_var_to_a_b_.setArg(p++,eps);
+
+            mean.set_arg(mean_var_to_a_b_,p);
+            var.set_arg(mean_var_to_a_b_,p);
+            rstd.set_arg(mean_var_to_a_b_,p);
+            b.set_arg(mean_var_to_a_b_,p);
+
+            auto e1=e.generate_series_context(0,2);
+            auto e2=e.generate_series_context(1,2);
+            e.queue().enqueueNDRangeKernel(mean_var_to_a_b_,cl::NullRange,cl::NDRange(features_),cl::NullRange,e1.events(),e1.event("mean_to_ab"));
+            forward_ab(x,y,rstd,b,e2);
+
         }
         virtual void enqueue_forward_direct(Tensor &x,Tensor &y,
                                             Tensor &mean,Tensor &var,float eps,
@@ -482,6 +507,64 @@ namespace core {
                 backward_data_test(dx,dy,var,null_,new_ws,eps,dx_factor,e2);
             }
         }
+
+        virtual void enqueue_backward_rstd(  Tensor &x,Tensor &dy,
+                                             Tensor &mean,Tensor &rstd,
+                                             Tensor &dx,float dx_factor,
+                                             Tensor &ws,ExecutionContext const &e)
+        {
+            Tensor dyx_sum,dy_sum,new_ws;
+            split_ws_to_a_b_rest(ws,dyx_sum,dy_sum,new_ws);
+            calc_sums(x,dy,new_ws,dyx_sum,dy_sum,e.generate_series_context(0,2));
+            auto e2 = e.generate_series_context(1,2);
+            backward_data_rstd(x,dx,dy,mean,rstd,dy_sum,dyx_sum,new_ws,dx_factor,e2);
+        }
+        
+        void backward_data_rstd(Tensor &x,Tensor &dx,Tensor &dy,
+                                 Tensor &mean,Tensor &rstd,
+                                 Tensor &dy_sum,Tensor &dyx_sum,
+                                 Tensor &ws,
+                                 float scale,ExecutionContext const &e)
+        {
+            auto e1 = e.generate_series_context(0,2);
+            auto e2 = e.generate_series_context(1,2);
+            
+            Tensor  x_factor = ws.sub_tensor_target_offset(0*features_,Shape(features_),dt_);
+            Tensor dy_factor = ws.sub_tensor_target_offset(1*features_,Shape(features_),dt_);
+            Tensor  b_offset = ws.sub_tensor_target_offset(2*features_,Shape(features_),dt_);
+            int batches = dx.shape()[0];
+            int hw = get_plane_size(dx.shape());
+            int total = batches*hw;
+            int p=0;
+            compute_backward_factors_.setArg(p++,features_);
+            compute_backward_factors_.setArg(p++,total);
+            compute_backward_factors_.setArg(p++,-1.0f); // use rstd instead of var
+            mean.set_arg(compute_backward_factors_,p);
+            rstd.set_arg(compute_backward_factors_,p);
+            dy_sum.set_arg(compute_backward_factors_,p);
+            dyx_sum.set_arg(compute_backward_factors_,p);
+            null_.set_arg(compute_backward_factors_,p);
+            x_factor.set_arg(compute_backward_factors_,p);
+            dy_factor.set_arg(compute_backward_factors_,p);
+            b_offset.set_arg(compute_backward_factors_,p);
+
+            e.queue().enqueueNDRangeKernel(compute_backward_factors_,
+                                   cl::NullRange,cl::NDRange(features_),cl::NullRange,
+                                   e1.events(),e1.event("compute_backward_factors"));
+            p=0;
+            backward_data_.setArg(p++,batches);
+            backward_data_.setArg(p++,features_);
+            backward_data_.setArg(p++,hw);
+            x.set_arg(backward_data_,p);
+            dy.set_arg(backward_data_,p);
+            x_factor.set_arg(backward_data_,p);
+            dy_factor.set_arg(backward_data_,p);
+            b_offset.set_arg(backward_data_,p);
+            dx.set_arg(backward_data_,p);
+            backward_data_.setArg(p++,scale);
+            enqueue3D(backward_data_,batches,hw,e2,"backward_data");
+        }
+
     private:
         int features_;
         size_t ws_;

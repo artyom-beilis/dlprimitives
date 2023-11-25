@@ -100,7 +100,7 @@ void combine_mean_var_with_gamma_beta(
 __kernel
 void compute_backward_factors(int N,int M,float eps,
                               __global float const *mean,ulong  mean_offset,
-                              __global float const *var, ulong  var_offset,
+                              __global float const *varrstd, ulong  varrstd_offset,
                               __global float const *dy_sum, ulong  dy_sum_offset,
                               __global float const *dyx_sum,ulong  dyx_sum_offset,
                               __global float const *gamma_in,ulong  gamma_in_offset,
@@ -115,21 +115,26 @@ void compute_backward_factors(int N,int M,float eps,
     dy_factor += dy_factor_offset;
     offset += offset_offset; 
     mean += mean_offset;
-    var  += var_offset;
+    varrstd  += varrstd_offset;
     if(gamma_in)
         gamma_in += gamma_in_offset;
     dyx_sum += dyx_sum_offset;
     dy_sum  += dy_sum_offset;
 
     float one_by_M = 1.0f / M;
-    float sqrtsig = sqrt(var[i] + eps);
+    float rsqrtsig;
+    if(eps < 0)
+        rsqrtsig = varrstd[i];
+    else
+        rsqrtsig = 1.0f / sqrt(varrstd[i] + eps);
+
     float gamma=1.0f;
     if(gamma_in)
         gamma = gamma_in[i];
     float mu = mean[i];
     float dys = dy_sum[i];
-    float dsig = -0.5 * gamma * (dyx_sum[i] - mu * dys) / (sqrtsig * sqrtsig * sqrtsig);
-    float gamma_div_sigsqrt = gamma / sqrtsig;
+    float dsig = -0.5 * gamma * (dyx_sum[i] - mu * dys) * (rsqrtsig * rsqrtsig * rsqrtsig);
+    float gamma_div_sigsqrt = gamma * rsqrtsig;
     float dmu = -dys * gamma_div_sigsqrt;
     float F_dy = gamma_div_sigsqrt;
     float F_x  = 2*dsig * one_by_M;
