@@ -209,17 +209,17 @@ namespace dlprim {
             bool unsig = (dt & (3 << 3)) == (3<<3);
             std::string prefix;
             switch(dt) {
-            case int64_data: return "LONG";
-            case uint64_data: return "ULONG";
+            case int64_data:  prefix = "LONG"; break;
+            case uint64_data: prefix = "ULONG"; break;
 
-            case int32_data: return "INT";
-            case uint32_data: return "UINT";
+            case int32_data:  prefix = "INT"; break;
+            case uint32_data: prefix = "UINT"; break;
 
-            case int16_data: return "SHRT";
-            case uint16_data: return "USHRT";
+            case int16_data:  prefix = "SHRT"; break;
+            case uint16_data: prefix = "USHRT"; break;
 
-            case int8_data: return "CHAR";
-            case uint8_data: return "UCHAR";
+            case int8_data:   prefix = "CHAR"; break;
+            case uint8_data:  prefix = "UCHAR"; break;
             default:
                 throw NotImplementedError("Unsupported data type");
             }
