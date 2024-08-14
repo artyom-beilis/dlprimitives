@@ -56,6 +56,7 @@ namespace dlprim {
         void seed(std::uint64_t s)
         {
             seed_ = s;
+            sequence_ = 0;
         }
         std::uint64_t seed() const
         {

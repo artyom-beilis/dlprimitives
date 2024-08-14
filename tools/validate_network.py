@@ -206,7 +206,7 @@ def get_config():
 
 
 def main(args):
-    m = getattr(torchvision.models,args.model)(pretrained = True)
+    m = getattr(torchvision.models,args.model)(weights = 'DEFAULT')
     #print("Mean",m.bn1.running_mean.tolist()[:4])
     #print("Var",m.bn1.running_var.tolist()[:4])
     #print("W",m.bn1.weight.tolist()[:4])
