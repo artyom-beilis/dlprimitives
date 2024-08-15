@@ -15,6 +15,7 @@ option(USE_SQLITE3 "Compile with sqlite3 support for kernel caching" ON)
 option(USE_ONNX "Compile with ONNX support" ON)
 option(USE_PYDLPRIM "Compile python interface for dlprimitives" ON)
 option(BUILD_CORE_ONLY "Build only dlprimitives core" OFF)
+option(DLPRIM_STATIC_BUILD "Build static version only" OFF)
 
 if(BUILD_CORE_ONLY)
     SET(USE_CL_HPP OFF)
@@ -262,8 +263,11 @@ set(DLPRIM_SRC
 
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${LIBDIR}")
 
-if(WIN32)
+if(WIN32 OR DLPRIM_STATIC_BUILD)
 	add_library(dlprim_core STATIC ${DLPRIM_CORE_SRC})
+    if(NOT WIN32)
+        set_target_properties(dlprim_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    endif()
 else()
 	add_library(dlprim_core SHARED ${DLPRIM_CORE_SRC})
 endif()
