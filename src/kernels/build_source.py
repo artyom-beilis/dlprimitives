@@ -11,7 +11,7 @@ import os
 import argparse
 import sys
 
-re_inc = re.compile('\s*#\s*include\s*"([^"]*)"\s')
+re_inc = re.compile(r'\s*#\s*include\s*"([^"]*)"\s')
 
 def preprocess_includes(src_file,search_dirs,is_src=True):
     result = []
