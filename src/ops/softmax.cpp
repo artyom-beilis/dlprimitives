@@ -63,7 +63,7 @@ SoftmaxWithLoss::SoftmaxWithLoss(Context &ctx,SoftmaxConfig const &) :
 void Softmax::setup(std::vector<TensorSpecs> const &in,std::vector<TensorSpecs> &out,std::vector<TensorSpecs> &par,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
-    DLPRIM_CHECK(in[0].shape().size() == 2);
+    DLPRIM_CHECK(in[0].shape().size() == 2 || in[0].shape().size() == 3);
     DLPRIM_CHECK(in[0].dtype() == float_data);
     out = in;
     par.clear();
@@ -112,7 +112,7 @@ void SoftmaxWithLoss::setup_kernel(int sm_range)
 void Softmax::reshape(std::vector<Shape> const &in,std::vector<Shape> &out,size_t &ws)
 {
     DLPRIM_CHECK(in.size()==1);
-    DLPRIM_CHECK(in[0].size() == 2);
+    DLPRIM_CHECK(in[0].size() == 2 || in[0].size() == 3);
     out = in;
     ws = 0;
 }
@@ -189,29 +189,35 @@ void SoftmaxWithLoss::backward_cpu_loss(Tensor &x,Tensor &dx,Tensor &label,Tenso
 void Softmax::forward_cpu(Tensor &input,Tensor &output)
 {
     Shape in_shape = input.shape();
-    float *in  = input.data<float>();
-    float *out = output.data<float>();
+    if(in_shape.size() == 2)
+        in_shape = Shape(in_shape[0],in_shape[1],1);
+    float *in0 = input.data<float>();
+    float *out0 = output.data<float>();
+    int step = in_shape[2];
     for(int i=0;i<int(in_shape[0]);i++) {
-        float maxv = in[0];
-        for(int j=1;j<int(in_shape[1]);j++)
-            maxv = std::max(in[j],maxv);
-        float sum = 0.0f;
-        if(cfg_.log) {
-            for(int j=0;j<int(in_shape[1]);j++) 
-                sum += expf(in[j] - maxv);
-            float factor = -logf(sum);
-            for(int j=0;j<int(in_shape[1]);j++) 
-                out[j] = in[j] - maxv + factor;
+        for(int k=0;k<int(in_shape[2]);k++) {
+            int offset = i*in_shape[1]*in_shape[2] + k;
+            float *in = in0   + offset;
+            float *out = out0 + offset;
+            float maxv = in[0];
+            for(int j=1;j<int(in_shape[1]);j++)
+                maxv = std::max(in[j*step],maxv);
+            float sum = 0.0f;
+            if(cfg_.log) {
+                for(int j=0;j<int(in_shape[1]);j++) 
+                    sum += expf(in[j*step] - maxv);
+                float factor = -logf(sum);
+                for(int j=0;j<int(in_shape[1]);j++) 
+                    out[j*step] = in[j*step] - maxv + factor;
+            }
+            else {
+                for(int j=0;j<int(in_shape[1]);j++) 
+                    sum += out[j*step] = expf(in[j*step] - maxv);
+                float factor = 1.0f/sum;
+                for(int j=0;j<int(in_shape[1]);j++) 
+                    out[j*step] *= factor;
+            }
         }
-        else {
-            for(int j=0;j<int(in_shape[1]);j++) 
-                sum += out[j] = expf(in[j] - maxv);
-            float factor = 1.0f/sum;
-            for(int j=0;j<int(in_shape[1]);j++) 
-                out[j] *= factor;
-        }
-        in += in_shape[1];
-        out+= in_shape[1];
     }
 }
 
@@ -256,7 +262,7 @@ void Softmax::forward(std::vector<Tensor> &input,std::vector<Tensor> &output, st
 {
     DLPRIM_CHECK(input.size()==1);
     DLPRIM_CHECK(output.size()==1); 
-    DLPRIM_CHECK(input[0].shape().size()==2);
+    DLPRIM_CHECK(input[0].shape().size()==2 || input[0].shape().size()==3);
     DLPRIM_CHECK(input[0].shape() == output[0].shape());
     DLPRIM_CHECK(input[0].dtype() == dtype_);
     DLPRIM_CHECK(output[0].dtype() == dtype_);
@@ -272,6 +278,9 @@ void Softmax::backward_cpu(Tensor &tdx,Tensor &ty,Tensor &tdy,float accum)
 {
     int batch = tdx.shape()[0];
     int chan = tdx.shape()[1];
+    int step = 1;
+    if(tdx.shape().size()==3)
+        step = tdx.shape()[2];
     float *dx = tdx.data<float>();
     float const *dy =tdy.data<float>();
     float const *y = ty.data<float>();
@@ -282,23 +291,31 @@ void Softmax::backward_cpu(Tensor &tdx,Tensor &ty,Tensor &tdy,float accum)
 
     if(cfg_.log) {
         for(int b=0;b<batch;b++) {
-            float sum_dy = 0;
-            for(int c=0;c<chan;c++) {
-                sum_dy += dy[b*chan+c];
-            }
-            for(int c=0;c<chan;c++) {
-                dx[b*chan + c] += dy[b*chan + c] - expf(y[b*chan + c]) * sum_dy;
+            for(int b2=0;b2<step;b2++) {
+                float sum_dy = 0;
+                for(int c=0;c<chan;c++) {
+                    int pos = (b*chan+c)*step + b2;
+                    sum_dy += dy[pos];
+                }
+                for(int c=0;c<chan;c++) {
+                    int pos = (b*chan+c)*step + b2;
+                    dx[pos] += dy[pos] - expf(y[pos]) * sum_dy;
+                }
             }
         }
     }
     else {
         for(int b=0;b<batch;b++) {
-            float sum_ydy = 0;
-            for(int c=0;c<chan;c++) {
-                sum_ydy += y[b*chan + c] * dy[b*chan+c];
-            }
-            for(int c=0;c<chan;c++) {
-                dx[b*chan + c] += (dy[b*chan + c] - sum_ydy) * y[b*chan + c];
+            for(int b2=0;b2<step;b2++) {
+                float sum_ydy = 0;
+                for(int c=0;c<chan;c++) {
+                    int pos = (b*chan+c)*step + b2;
+                    sum_ydy += y[pos] * dy[pos];
+                }
+                for(int c=0;c<chan;c++) {
+                    int pos = (b*chan+c)*step + b2;
+                    dx[pos] += (dy[pos] - sum_ydy) * y[pos];
+                }
             }
         }
     }

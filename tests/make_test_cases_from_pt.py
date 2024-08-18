@@ -161,30 +161,31 @@ def make_softmax(log=False):
         sm = torch.nn.LogSoftmax(dim=1)
     else:
         sm = torch.nn.Softmax(dim=1)
-    for b in [1,2,5,10,50,100,120]:
-        for f in [1,5,31,32,33,63,64,65,100,1000,2000]:
-            case = {
-                "in_shapes"  : [[b,f]],
-                "out_shapes" : [[b,f]],
-            }
-            if b <= 5 and f <= 32:
-                inp = torch.randn(b,f)
-                inp.requires_grad = train
-                out = sm(inp)
-                case["in_tensors"] = [inp.reshape((-1,)).tolist()]
-                case["out_tensors"] = [out.reshape((-1,)).tolist()]
-                if train:
-                    dout = torch.randn(out.shape)
-                    out.backward(dout,retain_graph=True)
-                    case["out_diffs"] = [dout.reshape((-1,)).tolist()]
-                    case["in_diffs"] = [inp.grad.reshape((-1)).tolist()]
-            else:
-                case["use_cpu_reference"]=True
-            if f > 1000:
-                case['eps'] = 3e-3
-            elif f > 100:
-                case['eps'] = 1e-3
-            cases.append(case)
+    for d2 in [[],[1],[5],[10]]:
+        for b in [1,2,5,10,50,100,120]:
+            for f in [1,5,31,32,33,63,64,65,100,1000,2000]:
+                case = {
+                    "in_shapes"  : [[b,f] + d2],
+                    "out_shapes" : [[b,f] + d2],
+                }
+                if b <= 5 and f <= 32:
+                    inp = torch.randn(b,f,*d2)
+                    inp.requires_grad = train
+                    out = sm(inp)
+                    case["in_tensors"] = [inp.reshape((-1,)).tolist()]
+                    case["out_tensors"] = [out.reshape((-1,)).tolist()]
+                    if train:
+                        dout = torch.randn(out.shape)
+                        out.backward(dout,retain_graph=True)
+                        case["out_diffs"] = [dout.reshape((-1,)).tolist()]
+                        case["in_diffs"] = [inp.grad.reshape((-1)).tolist()]
+                else:
+                    case["use_cpu_reference"]=True
+                if f > 1000:
+                    case['eps'] = 3e-3
+                elif f > 100:
+                    case['eps'] = 1e-3
+                cases.append(case)
     return report
 
 def make_eltwise():
