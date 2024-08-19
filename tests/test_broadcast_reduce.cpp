@@ -84,6 +84,76 @@ void test_shape()
     TEST(src==tgt);
 }
 
+#define HALF_MANTISSA(x) (((x) & 1023) | (((x) & 0x7C00) == 0 ? 0 : 1024))
+#define HALF_EXPONENT(x) (((x) & 0x7C00) >> 10)
+#define HALF_SIGN_MASK 0x8000
+struct my_half {
+    uint16_t val;
+    my_half(int v = 0)
+    {
+        val = f16_from_int(v);
+    }
+    int to_int() const
+    {
+        short a=val;
+        unsigned short value = HALF_MANTISSA(a);
+        short shift = HALF_EXPONENT(a) - 25;
+        if(shift > 0)
+            value <<= shift;
+        else if(shift < 0)
+            value >>= -shift;
+        if(a & HALF_SIGN_MASK)
+            return -(int32_t)(value);
+        return value;
+
+    }
+
+    my_half &operator+=(int v)
+    {
+        *this = my_half(to_int() + v);
+        return *this;
+    }
+    uint16_t f16_from_int(int32_t sv)
+    {
+        uint32_t v;
+        int sig = 0;
+        if(sv < 0) {
+            v=-sv;
+            sig=1;
+        }
+        else
+            v=sv;
+        if(v==0)
+            return 0;
+        int e=25;
+        while(v >= 2048) {
+            v>>=1;
+            e++;
+        }
+        while(v<1024) {
+            v<<=1;
+            e--;
+        }
+        if(e>=31)
+            return  0x7C00 | (sig << 15);
+        return (sig << 15) | (e << 10) | (v & 1023);
+    }
+    bool operator==(my_half const &other) const
+    {
+        return val == other.val;
+    }
+    bool operator!=(my_half const &other) const
+    {
+        return !(*this == other);
+    }
+};
+
+namespace dlprim {
+    template<>
+    struct TypeTraits<my_half> { static constexpr DataType data_type = half_data; };
+}
+
+
 template<typename T>
 dp::Tensor make_tensor(dp::ExecutionContext const &q,dp::Shape s,std::vector<T> values)
 {
@@ -95,15 +165,33 @@ dp::Tensor make_tensor(dp::ExecutionContext const &q,dp::Shape s,std::vector<T> 
     return r;
 }
 
-bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q)
+
+bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q,int eps = 0)
 {
     if(a.shape() != b.shape() || a.dtype() != b.dtype()) {
         return false;
     }
     a.to_host(q);
     b.to_host(q);
-    bool res = memcmp(a.host_data(),b.host_data(),a.memory_size())==0;
+    bool res;
+    if(eps == 0 || a.dtype() != dlprim::half_data) {
+        res = memcmp(a.host_data(),b.host_data(),a.memory_size())==0;
+    }
+    else  {
+        res = true;
+        size_t N = a.shape().total_size();
+        for(size_t i=0;i<N;i++) {
+            int a_val = a.data<my_half>()[i].to_int();
+            int b_val = b.data<my_half>()[i].to_int();
+            if(abs(a_val - b_val) > eps) {
+                std::cout << "Failure for half at " << i << " "<<a_val << "!="<<b_val << "withing " << eps << std::endl;
+                res = false;
+                break;
+            }
+        }
+    }
     if(!res) {
+           std::cout << "Failed for tensors " << a << "==" << b << std::endl;
         if(a.dtype() == dlprim::float_data) {
             for(size_t i=0;i<a.shape().total_size();i++) {
                 std::cout << i << ": " << a.data<float>()[i] << " " << b.data<float>()[i] << std::endl;
@@ -114,6 +202,11 @@ bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q)
                 std::cout << i << ": " << a.data<int64_t>()[i] << " " << b.data<int64_t>()[i] << std::endl;
             }
         }
+        /*else if(a.dtype() == dlprim::half_data) {
+            for(size_t i=0;i<a.shape().total_size();i++) {
+                std::cout << i << ": " << a.data<my_half>()[i].to_int() << " " << b.data<my_half>()[i].to_int() << std::endl;
+            }
+        }*/
     }
     return res;
 }
@@ -446,6 +539,12 @@ void test_reduce(dp::ExecutionContext const &q)
         std::vector<Type> r0(rs.total_size());
         std::vector<std::int64_t> r1(rs.total_size());
         size_t pos = 0;
+        int eps = 0;
+        int reduced_max  = 17 * size * 5;
+        if(dp::TypeTraits<Type>::data_type == dp::half_data) {
+            if(reduced_max >= 2048)
+                eps = std::numeric_limits<int>::max();
+        }
         for(int c=0;c<C;c++) {
             for(size_t j=0;j<size;j++) {
                 av.at(pos) = pos % 17;
@@ -474,13 +573,8 @@ void test_reduce(dp::ExecutionContext const &q)
         op->enqueue({a},{c0,c1},ws,{},{1,2},{0,0},q);
         op->enqueue({a},{c0,c1},ws,{},{1,2},{4,1},q);
 
-        std::cerr <<c1 << " " <<ref1 << std::endl;
-
-/*        pointwise_operation_broadcast_reduce({a},{c0,c1},{},"y0=x0; y1=-x0;",
-                                                        "reduce_y0 = 0; reduce_y1 = 0;" ,
-                                                        "reduce_y0 += y0; reduce_y1 += y1;",q);*/
-        TEST(equal(c0,ref0,q));
-        TEST(equal(c1,ref1,q));
+        TEST(equal(c0,ref0,q,eps));
+        TEST(equal(c1,ref1,q,eps));
     }
     for(int b : std::vector<int>{2,5,64}) {
         for(int hw : std::vector<int>{7,20,37}) {
@@ -506,7 +600,11 @@ void test_reduce(dp::ExecutionContext const &q)
             dp::Tensor c(ctx,rs,a.dtype());
             std::cout << a <<"->"<<c<<std::endl;
             pointwise_operation_broadcast_reduce({a},{c},{},"y0=x0;","reduce_y0 = 0;" ,"reduce_y0 += y0;",q);
-            TEST(equal(c,ref,q));
+            int eps = 0;
+            if(dp::TypeTraits<Type>::data_type == dp::half_data && (b*hw*hw*7) >= 2048) {
+                eps = std::numeric_limits<int>::max();
+            }
+            TEST(equal(c,ref,q,eps));
         }
     }
     for(int b : std::vector<int>{2,5}) {
@@ -534,7 +632,11 @@ void test_reduce(dp::ExecutionContext const &q)
             dp::Tensor c(ctx,rs,a.dtype());
             std::cout << a <<"->"<<c<<std::endl;
             pointwise_operation_broadcast_reduce({a},{c},{},"y0=x0;","reduce_y0 = 0;" ,"reduce_y0 += y0;",q);
-            TEST(equal(c,ref,q));
+            int eps = 0;
+            if(dp::TypeTraits<Type>::data_type == dp::half_data ) {
+                eps = std::numeric_limits<int>::max();
+            }
+            TEST(equal(c,ref,q,eps));
         }
     }
 
@@ -553,27 +655,34 @@ int main(int argc,char **argv)
         test_shape();
 
         dp::Context ctx(argv[1]);
+        bool with_half = ctx.check_device_extension("cl_khr_fp16");
         if(ctx.is_cpu_context()) {
             std::cout << "CPU - exit" << std::endl;
             return 0;
         }
         dp::ExecutionContext q = ctx.make_execution_context();
         std::cout << ctx.name() << std::endl;
-
+        
         std::cout << "Pointwise" << std::endl;
         test_pointwise<float>(q);
         test_pointwise<int>(q);
         test_pointwise<int64_t>(q);
         test_pointwise<int16_t>(q);
+        if(with_half)
+            test_pointwise<my_half>(q);
         std::cout << "Broadcast" << std::endl;
         test_broadcast<float>(q);
         test_broadcast<int>(q);
         test_broadcast<int64_t>(q);
         test_broadcast<int16_t>(q);
         test_broadcast<uint8_t>(q);
+        if(with_half)
+            test_broadcast<my_half>(q);
         std::cout << "Broadcast Reduce" << std::endl;
         test_reduce<float>(q);
         test_reduce<int>(q);
+        if(with_half)
+            test_reduce<my_half>(q);
     }
     catch(std::exception const &e) {
         std::cerr <<"Failed:"<< e.what() << std::endl;

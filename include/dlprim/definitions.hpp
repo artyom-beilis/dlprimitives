@@ -230,7 +230,7 @@ namespace dlprim {
         }
         throw NotImplementedError("Unsupported data type");
     }
-    inline std::string data_type_to_opencl_type(DataType dt,bool io_type=false)
+    inline std::string data_type_to_opencl_type(DataType dt,bool io_type=false,bool kernel_param = false)
     {
         switch(dt) {
         case double_data: return "double";
@@ -241,7 +241,7 @@ namespace dlprim {
         case int32_data: return "int";
         case uint32_data: return "uint";
 
-        case half_data: return "half";
+        case half_data: return (kernel_param ? "float" : "half");
         case bfloat16_data: return (io_type ? "ushort" : "float" );
         case int16_data: return "short";
         case uint16_data: return "ushort";
@@ -251,6 +251,10 @@ namespace dlprim {
         default:
             throw NotImplementedError("Unsupported data type");
         }
+    }
+    inline std::string data_type_to_opencl_param_type(DataType dt)
+    {
+        return data_type_to_opencl_type(dt,false,true);
     }
 
     constexpr int size_of_data_type(DataType d)

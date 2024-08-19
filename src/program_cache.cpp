@@ -71,6 +71,7 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
     std::string ocl_version = ctx.platform().getInfo<CL_PLATFORM_VERSION>();
     if(ocl_version.substr(7,1) >= "2") 
 	    ss << "-cl-std=CL2.0 ";
+    bool enable_half = ctx.check_device_extension("cl_khr_fp16");
     for(size_t i=0;i<params.size();i++) {
         if(i > 0)
             ss<<" ";
@@ -81,6 +82,10 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
         else {
             ss << "-D" << params[i].name <<"=" <<params[i].value;
         }
+    }
+    if(enable_half) {
+        prepend << "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n";
+        combine=true;
     }
     std::string const &code = (combine ? prepend.str() + source_text : source_text);
     std::string sparams = ss.str();

@@ -20,6 +20,7 @@ namespace core {
         switch(dt) {
         case  double_data:  k.setArg(p++,double(value)); break;
         case  float_data:   k.setArg(p++,float(value)); break;
+        case  half_data:    k.setArg(p++,float(value)); break; // half goes as float to kernel parameter
         case  int64_data:   k.setArg(p++,cl_long(value)); break;
         case  int32_data:   k.setArg(p++,cl_int(value)); break;
         case  int16_data:   k.setArg(p++,cl_short(value)); break;
@@ -69,8 +70,11 @@ namespace core {
             loads<<"dtype y"<<i<<";";
             saves<<"py"<<i<<"[index]=y"<<i<<"; ";
         }
+
+        std::string param_dtype = data_type_to_opencl_param_type(ref_type);
+
         for(size_t i=0;i<ws.size();i++) {
-            params<<", dtype w" <<i;
+            params<<", " << param_dtype << " w" <<i;
         }
 
         std::ostringstream code_fixed;
@@ -209,6 +213,7 @@ namespace core {
 
         shrink_broadcast_ranges(shapes);
 
+
         DataType target_type = ys[0].dtype();
         Context ctx(e);
         Shape ref = shapes[xs.size()]; // ys[0]
@@ -220,7 +225,7 @@ namespace core {
         for(size_t i=0;i<xs.size();i++) {
             strides[i] = shapes[i].broadcast_strides(ref);
         }
-
+        
         std::ostringstream params,loads,saves;
         for(size_t i=0;i<xs.size();i++) {
             std::string type = data_type_to_opencl_type(xs[i].dtype());
@@ -238,7 +243,7 @@ namespace core {
         loads << "typedef " << data_type_to_opencl_type(target_type) <<  " target_type;\\\n";
 
         for(size_t i=0;i<ws.size();i++) {
-            std::string type = data_type_to_opencl_type(dts[i]);
+            std::string type = data_type_to_opencl_param_type(dts[i]);
             params<<", "<<type<< " w" <<i;
             loads<<"typedef " << type << " typeof_w" << i << ";\\\n";
         }
@@ -453,9 +458,11 @@ namespace core {
 
             for(size_t i=0;i<ys.size();i++) {
                 std::string type = data_type_to_opencl_type(ys[i].dtype());
+                std::string ptype = data_type_to_opencl_param_type(ys[i].dtype());
+                std::string suffix_out = "(" + type + "," + ptype + "," + std::to_string(i) + ") ";
                 std::string suffix = "(" + type + "," + std::to_string(i) + ") ";
                 types << "typedef " << type << " typeof_y" << i <<";\\\n";
-                PARAMS << "PARAM_OUTPUT" << suffix;
+                PARAMS << "PARAM_OUTPUT" << suffix_out;
                 REDUCE_INIT_ALL << "REDUCE_INIT"<<suffix << ";\\\n";
                 LOAD_REDUCE_ALL << "LOAD_REDUCE("<<i<<");\\\n";
                 SAVE_REDUCE_ALL << "SAVE_REDUCE("<<i<<");\\\n";
@@ -466,7 +473,7 @@ namespace core {
             REDUCE_INIT_ALL << format_code(reduce_init) << "\n";
 
             for(size_t i=0;i<params_count_;i++) {
-                std::string type = data_type_to_opencl_type(target_type_);
+                std::string type = data_type_to_opencl_param_type(target_type_);
                 PARAMS<<", "<<type << " w" <<i;
                 types << "typedef " << type << " typeof_w" << i <<";\\\n";
             }
@@ -540,7 +547,7 @@ namespace core {
 #ifdef DEBUG_2STAGE
             std::cerr << "Items per thread/wg_size/nd_range:" << items_per_wi << "/" << wg_size << "/" << nd_range<< std::endl;
 #endif            
-            
+           
             cl::Program const &prog = gpu::Cache::instance().get_program(ctx,  "pointwise_broadcast_reduce",
                                                                                "REDUCE_DIMS",reduce_dims.size(),
                                                                                "SMALL_REDUCTION",small_reduction,
