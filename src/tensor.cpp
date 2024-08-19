@@ -83,7 +83,7 @@ namespace dlprim {
     void Tensor::reshape(Shape const &new_shape)
     {
         if(new_shape.total_size() > capacity_)
-            throw ValidationError("respae: new size is larger than original");
+            throw ValidationError("reshape: new size is larger than original");
         specs_->shape(new_shape);
     }
 
