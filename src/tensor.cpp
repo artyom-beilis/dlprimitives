@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/tensor.hpp>
 
 #include <iostream>
@@ -52,7 +59,7 @@ namespace dlprim {
         cpu_tensor_(false),
         offset_(offset),
         capacity_(s.total_size()*size_of_data_type(d)),
-        full_capacity_(capacity_)
+        full_capacity_(capacity_ + offset * size_of_data_type(d))
     {
         buffer_ = buffer;
     }
@@ -76,7 +83,7 @@ namespace dlprim {
     void Tensor::reshape(Shape const &new_shape)
     {
         if(new_shape.total_size() > capacity_)
-            throw ValidationError("respae: new size is larger than original");
+            throw ValidationError("reshape: new size is larger than original");
         specs_->shape(new_shape);
     }
 

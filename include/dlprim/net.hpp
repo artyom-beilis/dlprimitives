@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <dlprim/operator.hpp>
 #include <map>
@@ -6,6 +13,7 @@
 
 namespace dlprim {
     class SharedResource;
+    class ModelBase;
 
     ///
     /// Major object used for inference
@@ -25,6 +33,10 @@ namespace dlprim {
         Net &operator=(Net &&) = default;
         Net(Net &&) = default;
 
+        ///
+        /// Load from external model, shortcut to load_from_json(mode.network()) + setup() + load_parameters(model)
+        ///
+        void load_model(ModelBase &model);
         ///
         /// Configure network graph from json
         ///
@@ -56,6 +68,10 @@ namespace dlprim {
         /// Load parameters from file name can be either DLP or HDF5 format
         ///
         void load_parameters(std::string const &name,bool allow_missing=false);
+        ///
+        /// Load parameters from external model
+        ///
+        void load_parameters(ModelBase &model,bool allow_missing=false);
 
         ///
         /// Save network parameters to DLP format
@@ -265,6 +281,7 @@ namespace dlprim {
         void setup_ws();
         void mark_backpropagating_edges();
         void allocate_tensors();
+        void allocate_aliases();
         bool is_loss(std::string const &name);
         void allocate_optimized_chunks(bool forward_only);
         void tensor_use_list(std::vector<std::list<std::string> > &start,
@@ -281,6 +298,7 @@ namespace dlprim {
         std::map<std::string,unsigned> connections_index_;
 
         Tensor workspace_;
+        std::map<std::string,std::string> alias_sources_;
         std::map<std::string,Tensor> tensors_;
         std::map<std::string,Tensor> tensors_diff_;
 

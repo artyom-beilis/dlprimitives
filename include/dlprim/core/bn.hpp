@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <dlprim/tensor.hpp>
 #include <dlprim/context.hpp>
@@ -101,6 +108,17 @@ namespace core {
                                             Tensor &mean,Tensor &var,float eps,
                                             Tensor &ws,ExecutionContext const &e) = 0;
         ///
+        /// Peform forward computation as y = (x-mean) / sqrt(var + eps), save 1/sqrt(var + eps) as rstd
+        ///
+        /// Useful for pytorch that uses rstd for LayerNorm output
+        ///
+        /// Note mean/var can be taken from batch or from global running stats as per user request
+        ///
+        virtual void enqueue_forward_get_rstd(  Tensor &x,Tensor &y,
+                                                Tensor &mean,Tensor &var,float eps,
+                                                Tensor &rstd,Tensor &ws,
+                                                ExecutionContext const &e) = 0;
+        ///
         /// Peform forward computation as y = (x-mean) / sqrt(var + eps) * gamma + beta 
         ///
         /// Notes:
@@ -152,6 +170,20 @@ namespace core {
                                              Tensor &mean,Tensor &var,
                                              Tensor &dx,float dx_factor,
                                              float eps,
+                                             Tensor &ws,ExecutionContext const &e) = 0;
+
+        ///
+        /// Perform backpropogation calculations for BN without affine addtition Gamma/Beta and using rstd instread of var
+        ///
+        /// assumes that mean/std are always used - no testing mode
+        ///
+        /// dy - top gradient for backpropogation
+        /// dx - calculate backpropogation on X 
+        /// ws - worksspace 
+        ///
+        virtual void enqueue_backward_rstd(  Tensor &x,Tensor &dy,
+                                             Tensor &mean,Tensor &rstd,
+                                             Tensor &dx,float dx_factor,
                                              Tensor &ws,ExecutionContext const &e) = 0;
 
         static std::unique_ptr<BatchNormFwdBwd> create(Context &ctx,Shape const &s,DataType dt=float_data);

@@ -1,7 +1,15 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/net.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/shared_resource.hpp>
 #include <dlprim/ops/initialization.hpp>
+#include <dlprim/model.hpp>
 #include <sstream>
 #include <fstream>
 #include <set>
@@ -56,6 +64,7 @@ namespace dlprim {
     {
         json::value header;
         json::value &tensors = header["tensors"];
+        tensors = json::object();
         size_t start_pos = 0;
         for(auto  &pr : parameters_) {
             std::string name = pr.first;
@@ -89,6 +98,13 @@ namespace dlprim {
         if(!f) {
             throw ValidationError("I/O error in saving to " + fname);
         }
+    }
+
+    void Net::load_model(ModelBase &model)
+    {
+        load_from_json(model.network());
+        setup();
+        load_parameters(model);
     }
 
 #ifdef DISABLE_HDF5
@@ -230,6 +246,27 @@ namespace dlprim {
             throw ValidationError("Unidentified majic number for " + file_name);
         }
     }
+
+    void Net::load_parameters(ModelBase &model,bool allow_missing)
+    {
+        for(auto  &pr : parameters_) {
+            std::string name = pr.first;
+            Tensor &tensor = pr.second;
+            Tensor value = model.get_parameter(name);
+            if(value.shape().size() == 0) {
+                if(allow_missing)
+                    continue;
+                throw ValidationError("No parameter " + name + " was found");
+            }
+            if(tensor.shape() != value.shape() || tensor.dtype() != value.dtype()) {
+                std::ostringstream err;
+                err << "Expected " << tensor << " parameter, got " << value << " for " << name;
+                throw ValidationError(err.str());
+            }
+            memcpy(tensor.host_data(),value.host_data(),tensor.memory_size());
+        }
+        copy_parameters_to_device();
+    }
     void Net::load_parameters(std::istream &f,bool allow_missing)
     {
         json::value v;
@@ -364,35 +401,53 @@ namespace dlprim {
                             " then self/in-place operations ");
                 }
             }
-            if(frozen) {
-                for(auto &spec : conn.parameter_specs) {
-                    spec.freeze();
+            if(conn.op->alias_generator()) {
+                if(inputs.size() != outputs.size()) {
+                    throw ValidationError("Inputs need to have same size for operator " + name);
                 }
-            }
-            unsigned params_no = conn.parameter_specs.size();
-            if(params_no < parameters.size()) {
-                std::ostringstream ss;
-                ss << "Too many parameter names for operaror " << name << " expecting " << params_no << " got " << parameters.size();
-                throw ValidationError(ss.str());
-            }
-            conn.parameter_names = parameters;
-            conn.parameter_names.resize(params_no);
-            for(size_t i=0;i<conn.parameter_names.size();i++) {
-                std::string &pname = conn.parameter_names[i];
-                if(pname.empty() || pname == "auto") {
-                    conn.parameter_names[i] = name + "." + std::to_string(i);
-                }
-                auto p = parameter_specs_.find(pname);
-                if(p==parameter_specs_.end()) {
-                    parameter_specs_[pname] = conn.parameter_specs[i];
-                }
-                else {
-                    if(p->second != conn.parameter_specs[i]) {
-                        std::ostringstream ss;
-                        ss << "Conflicting requirements for parameters specifications " << p->second << " vs " 
-                           << conn.parameter_specs[i] << " for " << pname;
-                        throw ValidationError(ss.str());
+                for(size_t i=0;i<inputs.size();i++) {
+                    if(conn.input_specs[i].dtype() != conn.output_specs[i].dtype()
+                       || conn.input_specs[i].shape().total_size() != conn.output_specs[i].shape().total_size())
+                    {
+                        throw ValidationError("Alias operator need to have tensors of same type and size, only shape may be altered for "+ name);
                     }
+                    std::string src = inputs[i];
+                    std::map<std::string,std::string>::iterator p;
+                    while((p=alias_sources_.find(src))!=alias_sources_.end())
+                        src = p->second;
+                    alias_sources_[outputs[i]]=src;
+                }
+            }
+        }
+
+        if(frozen) {
+            for(auto &spec : conn.parameter_specs) {
+                spec.freeze();
+            }
+        }
+        unsigned params_no = conn.parameter_specs.size();
+        if(params_no < parameters.size()) {
+            std::ostringstream ss;
+            ss << "Too many parameter names for operaror " << name << " expecting " << params_no << " got " << parameters.size();
+            throw ValidationError(ss.str());
+        }
+        conn.parameter_names = parameters;
+        conn.parameter_names.resize(params_no);
+        for(size_t i=0;i<conn.parameter_names.size();i++) {
+            std::string &pname = conn.parameter_names[i];
+            if(pname.empty() || pname == "auto") {
+                conn.parameter_names[i] = name + "." + std::to_string(i);
+            }
+            auto p = parameter_specs_.find(pname);
+            if(p==parameter_specs_.end()) {
+                parameter_specs_[pname] = conn.parameter_specs[i];
+            }
+            else {
+                if(p->second != conn.parameter_specs[i]) {
+                    std::ostringstream ss;
+                    ss << "Conflicting requirements for parameters specifications " << p->second << " vs " 
+                       << conn.parameter_specs[i] << " for " << pname;
+                    throw ValidationError(ss.str());
                 }
             }
         }
@@ -498,7 +553,14 @@ namespace dlprim {
             used_at[n] = std::make_pair(0,last);
         for(int i=0;i<int(connections_.size());i++) {
             for(int dir=0;dir<2;dir++) {
-                for(auto const &name : (dir == 0 ? connections_[i].input_names : connections_[i].output_names)) {
+                for(auto const &tensor_name : (dir == 0 ? connections_[i].input_names : connections_[i].output_names)) {
+                    std::string name;
+                    auto p = alias_sources_.find(tensor_name);
+                    if(p != alias_sources_.end())
+                        name = p->second;
+                    else
+                        name = tensor_name;
+
                     if(used_at.find(name) == used_at.end()) {
                         used_at[name] = std::make_pair(i,i);
                     }
@@ -574,6 +636,8 @@ namespace dlprim {
         tensors_.clear();
         tensors_diff_.clear();
         for(auto const &ts : tensor_specs_) {
+            if(alias_sources_.count(ts.first) > 0)
+                continue;
             int cid = chunks_mapping[ts.first];
             auto base_tensor = memory_[cid];
             Tensor actual_tensor = base_tensor.sub_tensor(0,ts.second.shape(),ts.second.dtype());
@@ -585,6 +649,7 @@ namespace dlprim {
                 tensors_diff_[ts.first ] = actual_tensor;
             }
         }
+        allocate_aliases();
 
     }
     void Net::allocate_chunks()
@@ -593,12 +658,32 @@ namespace dlprim {
         tensors_diff_.clear();
         memory_.clear();
         bool train = mode_ == CalculationsMode::train;
+        // normal
         for(auto const &ts : tensor_specs_) {
+            if(alias_sources_.count(ts.first) != 0)
+                continue;
             tensors_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
             if(train)
                 tensors_diff_[ts.first ] = Tensor(ctx_,ts.second.shape(),ts.second.dtype());
         }
+        allocate_aliases();
     }
+
+    void Net::allocate_aliases()
+    {
+        bool train = mode_ == CalculationsMode::train;
+        // alias
+        for(auto const &ts : tensor_specs_) {
+            auto p = alias_sources_.find(ts.first);
+            if(p==alias_sources_.end())
+                continue;
+            std::string src_name = p->second;
+            tensors_[ts.first ] = tensors_[src_name].alias(ts.second.shape());
+            if(train)
+                tensors_diff_[ts.first ] = tensors_diff_[src_name].alias(ts.second.shape());
+        }
+    }
+
     void Net::allocate_tensors()
     {
         tensors_.clear();

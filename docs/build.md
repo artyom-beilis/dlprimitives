@@ -11,11 +11,13 @@ Mandatory:
 Recommended:
 
 - OpenBLAS for CPU only inference/training 
+- Sqlite3 for caching of compiled kernels for non-NVidia GPUs to improve startup times
 
 Optional:
 
-- HDF5 C++ bindings for model loading/saving in HDF5 format instead of internal
 - boost python and boost numpy - for python bindings
+- Google protobuf for ONNX support
+- HDF5 C++ bindings for model loading/saving in HDF5 format instead of internal
 
 
 ## Building
@@ -39,7 +41,7 @@ Some OpenCL programs use older header `CL/cl.hpp`, in order to make dlprimitives
 or
     ctest
 
-By default ctest used `0:0` GPU - 0 platform, 0 device if you want to change it to another one, lets say platofm 1 and device 0, pass parameter to cmake: `-DTEST_DEV="1:0"`
+By default ctest used `0:0` GPU - 0 platform, 0 device if you want to change it to another one, lets say platform 1 and device 0, pass parameter to cmake: `-DTEST_DEV="1:0"`
 
 
 ## Installation
@@ -56,9 +58,9 @@ In order to use python bindings  `export PYTHONPATH=/opt/dlprim/python` - accord
 Running benchmakrs on opencl platform:device 0:0
 
     # Inference
-    ./dlprim_benchmark 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
+    ./dlprim_benchmark 0:0 ../docs/nets_for_benchmark/resnet18-b16.js
     # Train
-    ./dlprim_benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.json
+    ./dlprim_benchmark -b 0:0 ../docs/nets_for_benchmark/resnet18-b16.js
 
 
 ## Windows Notes

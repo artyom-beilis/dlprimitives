@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <dlprim/opencl_include.hpp>
 #include <dlprim/definitions.hpp>
@@ -381,10 +388,14 @@ public:
 
     /// checks if the device is AMD GPU
     bool is_amd();
+    /// checks if the device is Apple GPU
+    bool is_apple();
     /// checks if the device is NVidia GPU
     bool is_nvidia();
     /// checks if the device is Intel GPU
     bool is_intel();
+    /// checks if the device is Imagination GPU
+    bool is_imagination();
 
     /// Get OpenCL context object
     cl::Context &context()

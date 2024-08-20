@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/context.hpp>
 #include <dlprim/tensor.hpp>
 #include <dlprim/core/pointwise.hpp>
@@ -8,12 +15,24 @@ namespace dp = dlprim;
 
 void test_shape()
 {
-    std::cout << "Tesh Shape" << std::endl;
+    std::cout << "Test Shape" << std::endl;
     dp::Shape s(2,3,4);
     TEST(s.unsqueeze(0) == dp::Shape(1,2,3,4));
     TEST(s.unsqueeze(3) == dp::Shape(2,3,4,1));
     TEST(s.unsqueeze(1) == dp::Shape(2,1,3,4));
     TEST(s.unsqueeze(-1) == dp::Shape(2,3,4,1));
+
+    TEST(dp::Shape(2,4,1,1).squeeze() == dp::Shape(2,4));
+    TEST(dp::Shape(2,4,1,1).squeeze({ 2, 3}) == dp::Shape(2,4));
+    TEST(dp::Shape(2,4,1,1).squeeze({-1,-2}) == dp::Shape(2,4));
+    TEST(dp::Shape(2,1,4,1).squeeze() == dp::Shape(2,4));
+    TEST(dp::Shape(2,1,4,1).squeeze({ 1,-1}) == dp::Shape(2,4));
+    TEST(dp::Shape(2,1,4,1).squeeze({ 1, 3}) == dp::Shape(2,4));
+
+    TEST(dp::Shape(2,3,4).reshape({0,-1}) == dp::Shape(2,12));
+    TEST(dp::Shape(2,3,4).reshape({-1,12}) == dp::Shape(2,12));
+    TEST(dp::Shape(2,3,4).reshape({2,12}) == dp::Shape(2,12));
+    TEST(dp::Shape(2,3,4).reshape({-1,4}) == dp::Shape(6,4));
 
     std::cout << "Broadcasting" << std::endl;
     TEST(dp::broadcast(dp::Shape(2,3,4),dp::Shape(3,4)) == dp::Shape(2,3,4));
@@ -65,6 +84,76 @@ void test_shape()
     TEST(src==tgt);
 }
 
+#define HALF_MANTISSA(x) (((x) & 1023) | (((x) & 0x7C00) == 0 ? 0 : 1024))
+#define HALF_EXPONENT(x) (((x) & 0x7C00) >> 10)
+#define HALF_SIGN_MASK 0x8000
+struct my_half {
+    uint16_t val;
+    my_half(int v = 0)
+    {
+        val = f16_from_int(v);
+    }
+    int to_int() const
+    {
+        short a=val;
+        unsigned short value = HALF_MANTISSA(a);
+        short shift = HALF_EXPONENT(a) - 25;
+        if(shift > 0)
+            value <<= shift;
+        else if(shift < 0)
+            value >>= -shift;
+        if(a & HALF_SIGN_MASK)
+            return -(int32_t)(value);
+        return value;
+
+    }
+
+    my_half &operator+=(int v)
+    {
+        *this = my_half(to_int() + v);
+        return *this;
+    }
+    uint16_t f16_from_int(int32_t sv)
+    {
+        uint32_t v;
+        int sig = 0;
+        if(sv < 0) {
+            v=-sv;
+            sig=1;
+        }
+        else
+            v=sv;
+        if(v==0)
+            return 0;
+        int e=25;
+        while(v >= 2048) {
+            v>>=1;
+            e++;
+        }
+        while(v<1024) {
+            v<<=1;
+            e--;
+        }
+        if(e>=31)
+            return  0x7C00 | (sig << 15);
+        return (sig << 15) | (e << 10) | (v & 1023);
+    }
+    bool operator==(my_half const &other) const
+    {
+        return val == other.val;
+    }
+    bool operator!=(my_half const &other) const
+    {
+        return !(*this == other);
+    }
+};
+
+namespace dlprim {
+    template<>
+    struct TypeTraits<my_half> { static constexpr DataType data_type = half_data; };
+}
+
+
 template<typename T>
 dp::Tensor make_tensor(dp::ExecutionContext const &q,dp::Shape s,std::vector<T> values)
 {
@@ -76,15 +165,33 @@ dp::Tensor make_tensor(dp::ExecutionContext const &q,dp::Shape s,std::vector<T> 
     return r;
 }
 
-bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q)
+
+bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q,int eps = 0)
 {
     if(a.shape() != b.shape() || a.dtype() != b.dtype()) {
         return false;
     }
     a.to_host(q);
     b.to_host(q);
-    bool res = memcmp(a.host_data(),b.host_data(),a.memory_size())==0;
+    bool res;
+    if(eps == 0 || a.dtype() != dlprim::half_data) {
+        res = memcmp(a.host_data(),b.host_data(),a.memory_size())==0;
+    }
+    else  {
+        res = true;
+        size_t N = a.shape().total_size();
+        for(size_t i=0;i<N;i++) {
+            int a_val = a.data<my_half>()[i].to_int();
+            int b_val = b.data<my_half>()[i].to_int();
+            if(abs(a_val - b_val) > eps) {
+                std::cout << "Failure for half at " << i << " "<<a_val << "!="<<b_val << "withing " << eps << std::endl;
+                res = false;
+                break;
+            }
+        }
+    }
     if(!res) {
+           std::cout << "Failed for tensors " << a << "==" << b << std::endl;
         if(a.dtype() == dlprim::float_data) {
             for(size_t i=0;i<a.shape().total_size();i++) {
                 std::cout << i << ": " << a.data<float>()[i] << " " << b.data<float>()[i] << std::endl;
@@ -95,6 +202,11 @@ bool equal(dp::Tensor a,dp::Tensor b,dp::ExecutionContext const &q)
                 std::cout << i << ": " << a.data<int64_t>()[i] << " " << b.data<int64_t>()[i] << std::endl;
             }
         }
+        /*else if(a.dtype() == dlprim::half_data) {
+            for(size_t i=0;i<a.shape().total_size();i++) {
+                std::cout << i << ": " << a.data<my_half>()[i].to_int() << " " << b.data<my_half>()[i].to_int() << std::endl;
+            }
+        }*/
     }
     return res;
 }
@@ -188,6 +300,78 @@ void test_broadcast(dp::ExecutionContext const &q)
            14, 15, 15, 16
         });
         dp::Tensor c(ctx,dp::Shape(2,2,3,3,2),a.dtype());
+        std::cout << a <<"+"<<b<<"->"<<c<<std::endl;
+        pointwise_operation_broadcast({a,b},{c},{},"y0=x0+x1;",q);
+        TEST(equal(c,ref,q));
+    }
+    {
+        auto a=make_tensor<Type>(q,dp::Shape(1,2,1,3,1,2),{0,1,2,3,4,5,6,7,8,9,10,11});
+        auto b=make_tensor<Type>(q,dp::Shape(2,1,3,1,2,1),{0,1,2,3,4,5,6,7,8,9,10,11});
+        auto ref=make_tensor<Type>(q,dp::Shape(2,2,3,3,2,2),{
+                0,  1,  1,  2,  2,  3,  3,  4,  4,  5,  5,  6,  2,  3,  3,  4,  4,
+                5,  5,  6,  6,  7,  7,  8,  4,  5,  5,  6,  6,  7,  7,  8,  8,  9,
+                9, 10,  6,  7,  7,  8,  8,  9,  9, 10, 10, 11, 11, 12,  8,  9,  9,
+                10, 10, 11, 11, 12, 12, 13, 13, 14, 10, 11, 11, 12, 12, 13, 13, 14,
+                14, 15, 15, 16,  6,  7,  7,  8,  8,  9,  9, 10, 10, 11, 11, 12,  8,
+                9,  9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 10, 11, 11, 12, 12, 13,
+                13, 14, 14, 15, 15, 16, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17,
+                18, 14, 15, 15, 16, 16, 17, 17, 18, 18, 19, 19, 20, 16, 17, 17, 18,
+                18, 19, 19, 20, 20, 21, 21, 22
+        });
+        dp::Tensor c(ctx,dp::Shape(2,2,3,3,2,2),a.dtype());
+        std::cout << a <<"+"<<b<<"->"<<c<<std::endl;
+        pointwise_operation_broadcast({a,b},{c},{},"y0=x0+x1;",q);
+        TEST(equal(c,ref,q));
+    }
+    {
+        auto a=make_tensor<Type>(q,dp::Shape(1,2,1,3,1,2,1),{0,1,2,3,4,5,6,7,8,9,10,11});
+        auto b=make_tensor<Type>(q,dp::Shape(2,1,3,1,2,1,2),{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23});
+        auto ref=make_tensor<Type>(q,dp::Shape(2,2,3,3,2,2,2),{
+                0,  1,  1,  2,  2,  3,  3,  4,  2,  3,  3,  4,  4,  5,  5,  6,  4,
+                5,  5,  6,  6,  7,  7,  8,  4,  5,  5,  6,  6,  7,  7,  8,  6,  7,
+                7,  8,  8,  9,  9, 10,  8,  9,  9, 10, 10, 11, 11, 12,  8,  9,  9,
+                10, 10, 11, 11, 12, 10, 11, 11, 12, 12, 13, 13, 14, 12, 13, 13, 14,
+                14, 15, 15, 16,  6,  7,  7,  8,  8,  9,  9, 10,  8,  9,  9, 10, 10,
+                11, 11, 12, 10, 11, 11, 12, 12, 13, 13, 14, 10, 11, 11, 12, 12, 13,
+                13, 14, 12, 13, 13, 14, 14, 15, 15, 16, 14, 15, 15, 16, 16, 17, 17,
+                18, 14, 15, 15, 16, 16, 17, 17, 18, 16, 17, 17, 18, 18, 19, 19, 20,
+                18, 19, 19, 20, 20, 21, 21, 22, 12, 13, 13, 14, 14, 15, 15, 16, 14,
+                15, 15, 16, 16, 17, 17, 18, 16, 17, 17, 18, 18, 19, 19, 20, 16, 17,
+                17, 18, 18, 19, 19, 20, 18, 19, 19, 20, 20, 21, 21, 22, 20, 21, 21,
+                22, 22, 23, 23, 24, 20, 21, 21, 22, 22, 23, 23, 24, 22, 23, 23, 24,
+                24, 25, 25, 26, 24, 25, 25, 26, 26, 27, 27, 28, 18, 19, 19, 20, 20,
+                21, 21, 22, 20, 21, 21, 22, 22, 23, 23, 24, 22, 23, 23, 24, 24, 25,
+                25, 26, 22, 23, 23, 24, 24, 25, 25, 26, 24, 25, 25, 26, 26, 27, 27,
+                28, 26, 27, 27, 28, 28, 29, 29, 30, 26, 27, 27, 28, 28, 29, 29, 30,
+                28, 29, 29, 30, 30, 31, 31, 32, 30, 31, 31, 32, 32, 33, 33, 34
+        });
+        dp::Tensor c(ctx,dp::Shape(2,2,3,3,2,2,2),a.dtype());
+        std::cout << a <<"+"<<b<<"->"<<c<<std::endl;
+        pointwise_operation_broadcast({a,b},{c},{},"y0=x0+x1;",q);
+        TEST(equal(c,ref,q));
+    }
+    {
+        auto a=make_tensor<Type>(q,dp::Shape(1,2,1,2, 1,2,1,2),{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15});
+        auto b=make_tensor<Type>(q,dp::Shape(2,1,2,1, 2,1,2,1),{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15});
+        auto ref=make_tensor<Type>(q,dp::Shape(2,2,2,2, 2,2,2,2),{
+                0,  1,  1,  2,  2,  3,  3,  4,  2,  3,  3,  4,  4,  5,  5,  6,  4,
+                5,  5,  6,  6,  7,  7,  8,  6,  7,  7,  8,  8,  9,  9, 10,  4,  5,
+                5,  6,  6,  7,  7,  8,  6,  7,  7,  8,  8,  9,  9, 10,  8,  9,  9,
+                10, 10, 11, 11, 12, 10, 11, 11, 12, 12, 13, 13, 14,  8,  9,  9, 10,
+                10, 11, 11, 12, 10, 11, 11, 12, 12, 13, 13, 14, 12, 13, 13, 14, 14,
+                15, 15, 16, 14, 15, 15, 16, 16, 17, 17, 18, 12, 13, 13, 14, 14, 15,
+                15, 16, 14, 15, 15, 16, 16, 17, 17, 18, 16, 17, 17, 18, 18, 19, 19,
+                20, 18, 19, 19, 20, 20, 21, 21, 22,  8,  9,  9, 10, 10, 11, 11, 12,
+                10, 11, 11, 12, 12, 13, 13, 14, 12, 13, 13, 14, 14, 15, 15, 16, 14,
+                15, 15, 16, 16, 17, 17, 18, 12, 13, 13, 14, 14, 15, 15, 16, 14, 15,
+                15, 16, 16, 17, 17, 18, 16, 17, 17, 18, 18, 19, 19, 20, 18, 19, 19,
+                20, 20, 21, 21, 22, 16, 17, 17, 18, 18, 19, 19, 20, 18, 19, 19, 20,
+                20, 21, 21, 22, 20, 21, 21, 22, 22, 23, 23, 24, 22, 23, 23, 24, 24,
+                25, 25, 26, 20, 21, 21, 22, 22, 23, 23, 24, 22, 23, 23, 24, 24, 25,
+                25, 26, 24, 25, 25, 26, 26, 27, 27, 28, 26, 27, 27, 28, 28, 29, 29,
+                30            
+        });
+        dp::Tensor c(ctx,dp::Shape(2,2,2,2, 2,2,2,2),a.dtype());
         std::cout << a <<"+"<<b<<"->"<<c<<std::endl;
         pointwise_operation_broadcast({a,b},{c},{},"y0=x0+x1;",q);
         TEST(equal(c,ref,q));
@@ -355,6 +539,12 @@ void test_reduce(dp::ExecutionContext const &q)
         std::vector<Type> r0(rs.total_size());
         std::vector<std::int64_t> r1(rs.total_size());
         size_t pos = 0;
+        int eps = 0;
+        int reduced_max  = 17 * size * 5;
+        if(dp::TypeTraits<Type>::data_type == dp::half_data) {
+            if(reduced_max >= 2048)
+                eps = std::numeric_limits<int>::max();
+        }
         for(int c=0;c<C;c++) {
             for(size_t j=0;j<size;j++) {
                 av.at(pos) = pos % 17;
@@ -383,13 +573,8 @@ void test_reduce(dp::ExecutionContext const &q)
         op->enqueue({a},{c0,c1},ws,{},{1,2},{0,0},q);
         op->enqueue({a},{c0,c1},ws,{},{1,2},{4,1},q);
 
-        std::cerr <<c1 << " " <<ref1 << std::endl;
-
-/*        pointwise_operation_broadcast_reduce({a},{c0,c1},{},"y0=x0; y1=-x0;",
-                                                        "reduce_y0 = 0; reduce_y1 = 0;" ,
-                                                        "reduce_y0 += y0; reduce_y1 += y1;",q);*/
-        TEST(equal(c0,ref0,q));
-        TEST(equal(c1,ref1,q));
+        TEST(equal(c0,ref0,q,eps));
+        TEST(equal(c1,ref1,q,eps));
     }
     for(int b : std::vector<int>{2,5,64}) {
         for(int hw : std::vector<int>{7,20,37}) {
@@ -415,7 +600,11 @@ void test_reduce(dp::ExecutionContext const &q)
             dp::Tensor c(ctx,rs,a.dtype());
             std::cout << a <<"->"<<c<<std::endl;
             pointwise_operation_broadcast_reduce({a},{c},{},"y0=x0;","reduce_y0 = 0;" ,"reduce_y0 += y0;",q);
-            TEST(equal(c,ref,q));
+            int eps = 0;
+            if(dp::TypeTraits<Type>::data_type == dp::half_data && (b*hw*hw*7) >= 2048) {
+                eps = std::numeric_limits<int>::max();
+            }
+            TEST(equal(c,ref,q,eps));
         }
     }
     for(int b : std::vector<int>{2,5}) {
@@ -443,7 +632,11 @@ void test_reduce(dp::ExecutionContext const &q)
             dp::Tensor c(ctx,rs,a.dtype());
             std::cout << a <<"->"<<c<<std::endl;
             pointwise_operation_broadcast_reduce({a},{c},{},"y0=x0;","reduce_y0 = 0;" ,"reduce_y0 += y0;",q);
-            TEST(equal(c,ref,q));
+            int eps = 0;
+            if(dp::TypeTraits<Type>::data_type == dp::half_data ) {
+                eps = std::numeric_limits<int>::max();
+            }
+            TEST(equal(c,ref,q,eps));
         }
     }
 
@@ -462,27 +655,34 @@ int main(int argc,char **argv)
         test_shape();
 
         dp::Context ctx(argv[1]);
+        bool with_half = ctx.check_device_extension("cl_khr_fp16");
         if(ctx.is_cpu_context()) {
             std::cout << "CPU - exit" << std::endl;
             return 0;
         }
         dp::ExecutionContext q = ctx.make_execution_context();
         std::cout << ctx.name() << std::endl;
-
+        
         std::cout << "Pointwise" << std::endl;
         test_pointwise<float>(q);
         test_pointwise<int>(q);
         test_pointwise<int64_t>(q);
         test_pointwise<int16_t>(q);
+        if(with_half)
+            test_pointwise<my_half>(q);
         std::cout << "Broadcast" << std::endl;
         test_broadcast<float>(q);
         test_broadcast<int>(q);
         test_broadcast<int64_t>(q);
         test_broadcast<int16_t>(q);
         test_broadcast<uint8_t>(q);
+        if(with_half)
+            test_broadcast<my_half>(q);
         std::cout << "Broadcast Reduce" << std::endl;
         test_reduce<float>(q);
         test_reduce<int>(q);
+        if(with_half)
+            test_reduce<my_half>(q);
     }
     catch(std::exception const &e) {
         std::cerr <<"Failed:"<< e.what() << std::endl;

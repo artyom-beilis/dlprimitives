@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include "defs.h"
 #include "atomic.h"
 
@@ -213,6 +220,17 @@ inline void store_local(__local float *l_val,int strd,float16 v)
 #error
 #endif
 
+#ifndef TR_STRIDE_OFFSET
+#define TR_STRIDE_OFFSET 1
+#endif
+
+#if STRIDE_OFFSET > 0 || TR_STRIDE_OFFSET > 0
+#define PADDING_FACTOR 1
+#else
+#define PADDING_FACTOR 0
+#endif
+
+
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3_bwd_filter(int B, int N,int C,
@@ -230,13 +248,13 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
     #define half_H  ((IMG_H+1)/2)
     #define half_WG (half_W * half_H)
 
-    __local float wg_local_memory[(XTILES_IN_WG + YTILES_IN_WG + 16) * WG_K * 16];
+    __local float wg_local_memory[(XTILES_IN_WG + YTILES_IN_WG + 16 * PADDING_FACTOR) * WG_K * 16];
 
 #define l_xtile_stride (XTILES_IN_WG * WG_K + STRIDE_OFFSET)
 #define l_ytile_stride (YTILES_IN_WG * WG_K + STRIDE_OFFSET)
 
 #define l_xtiles(a,b,c) wg_local_memory[(a)*l_xtile_stride + (b)*XTILES_IN_WG + (c)]
-#define l_ytiles(a,b,c) wg_local_memory[(a)*l_ytile_stride + (b)*YTILES_IN_WG + (c) + (XTILES_IN_WG*WG_K*16 + 32)]
+#define l_ytiles(a,b,c) wg_local_memory[(a)*l_ytile_stride + (b)*YTILES_IN_WG + (c) + (XTILES_IN_WG*WG_K*16 + 32 * STRIDE_OFFSET)]
 
 
     // Loading data
@@ -249,7 +267,7 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
     int wg_ch_in  = get_group_id(0) * XTILES_IN_WG;
     int wg_ch_out = get_global_id(1) * YTILES_IN_WG; 
 
-    #define s_img_tile(k,t,indx) wg_local_memory[(k)*(XTILES_IN_WG/2*16 + 1) + (t/2) * 16 + (indx)]
+    #define s_img_tile(k,t,indx) wg_local_memory[(k)*(XTILES_IN_WG/2*16 + TR_STRIDE_OFFSET) + (t/2) * 16 + (indx)]
     
     __local float *l_xtile_ptr = &l_xtiles(0,l_xtile_k,l_xtile_c);
     __local float *l_ytile_ptr = &l_ytiles(0,l_ytile_k,l_ytile_n);

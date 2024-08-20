@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #ifndef REDUCE_DIMS
 #error "REDUCE_DIMS must be defined"
 #endif
@@ -141,9 +148,9 @@ inline bool valid_pos(Shape pos,Shape limits)
 
 #define PARAM_INPUT(type,I) ,__global type const *px##I,ulong px##I##_offset,Shape xstrides##I
 #if TWO_STAGE_REDUCTION == 1
-#define PARAM_OUTPUT(type,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I
+#define PARAM_OUTPUT(type,ptype,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I
 #else
-#define PARAM_OUTPUT(type,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I,type alpha##I,type beta##I
+#define PARAM_OUTPUT(type,ptype,I) ,__global type *py##I,ulong py##I##_offset,Shape ystrides##I,ptype alpha##I,ptype beta##I
 #endif
 #define PAPAM_WEIGHT(type,I) ,type w##I
 

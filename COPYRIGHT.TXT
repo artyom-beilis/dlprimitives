@@ -1,0 +1,8 @@
+Copyright (c) 2021-2022 Artyom Beilis
+
+All source code (with exceptions listed below) is licensed under MIT license (see LICENSE.TXT)
+
+Exceptions:
+
+- src/sha1.hpp licensed under Boost license v1 - see specific copyrights in the file 
+

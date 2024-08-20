@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/net.hpp>
 #include <dlprim/json.hpp>
 #include <dlprim/solvers/adam.hpp>
@@ -40,11 +47,20 @@ bool compare_tensors(std::string const &name,Tensor &act,Tensor &ref,float eps =
 int main(int argc,char **argv)
 {
     if(argc < 4) {
-        std::cerr << "Usage ./test_net device net.json weights.json" << std::endl;
+        std::cerr << "Usage ./test_net [-k] device net.json weights.json" << std::endl;
+        std::cerr << "   -k - keep intermediate tensors, don't optimize memory reuse "<<std::endl;
         return 1;
+    }
+    bool keep = false;
+    if(argv[1] == std::string("-k")) {
+        argv++;
+        argc--;
+        keep=true;
     }
     dp::Context ctx(argv[1]);
     dp::Net net(ctx);
+    if(keep)
+        net.keep_intermediate_tensors(keep);
     std::cout << "Testing for " << ctx.name() << std::endl;
     net.mode(dp::CalculationsMode::train);
     net.load_from_json_file(argv[2]);

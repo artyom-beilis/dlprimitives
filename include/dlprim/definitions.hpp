@@ -1,4 +1,12 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #pragma once
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 
@@ -14,8 +22,9 @@
 #		define DLPRIM_API
 #	endif
 #else // ELF BINARIES
-#	define DLPRIM_API
-#endif
+#	define DLPRIM_API  __attribute__((visibility("default")))
+#endif     
+
 
 ///
 /// Mane namespace
@@ -200,17 +209,17 @@ namespace dlprim {
             bool unsig = (dt & (3 << 3)) == (3<<3);
             std::string prefix;
             switch(dt) {
-            case int64_data: return "LONG";
-            case uint64_data: return "ULONG";
+            case int64_data:  prefix = "LONG"; break;
+            case uint64_data: prefix = "ULONG"; break;
 
-            case int32_data: return "INT";
-            case uint32_data: return "UINT";
+            case int32_data:  prefix = "INT"; break;
+            case uint32_data: prefix = "UINT"; break;
 
-            case int16_data: return "SHRT";
-            case uint16_data: return "USHRT";
+            case int16_data:  prefix = "SHRT"; break;
+            case uint16_data: prefix = "USHRT"; break;
 
-            case int8_data: return "CHAR";
-            case uint8_data: return "UCHAR";
+            case int8_data:   prefix = "CHAR"; break;
+            case uint8_data:  prefix = "UCHAR"; break;
             default:
                 throw NotImplementedError("Unsupported data type");
             }
@@ -221,7 +230,7 @@ namespace dlprim {
         }
         throw NotImplementedError("Unsupported data type");
     }
-    inline std::string data_type_to_opencl_type(DataType dt,bool io_type=false)
+    inline std::string data_type_to_opencl_type(DataType dt,bool io_type=false,bool kernel_param = false)
     {
         switch(dt) {
         case double_data: return "double";
@@ -232,7 +241,7 @@ namespace dlprim {
         case int32_data: return "int";
         case uint32_data: return "uint";
 
-        case half_data: return "half";
+        case half_data: return (kernel_param ? "float" : "half");
         case bfloat16_data: return (io_type ? "ushort" : "float" );
         case int16_data: return "short";
         case uint16_data: return "ushort";
@@ -243,6 +252,10 @@ namespace dlprim {
             throw NotImplementedError("Unsupported data type");
         }
     }
+    inline std::string data_type_to_opencl_param_type(DataType dt)
+    {
+        return data_type_to_opencl_type(dt,false,true);
+    }
 
     constexpr int size_of_data_type(DataType d)
     {
@@ -250,7 +263,7 @@ namespace dlprim {
     }
 
     /// Maximal number of dimensions in tensor
-    static constexpr int max_tensor_dim = 5;
+    static constexpr int max_tensor_dim = 8;
 
     /// internal flag
 	constexpr int forward_data = 1;

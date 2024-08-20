@@ -1,3 +1,10 @@
+###############################################################################
+###
+### Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+###
+### MIT License, see LICENSE.TXT
+###
+###############################################################################
 import sys
 import struct
 import onnx
@@ -71,7 +78,9 @@ def get_operators(model,inputs,params):
     operators = []
     actdic = {
         "Relu" : 'relu',
-        "Clip" : 'relu6'
+        'Sigmoid' : 'sigmoid',
+        "Clip" : 'relu6',
+        "Pad" : "identity"
     }
     op_len = 0
     print("================")
@@ -153,7 +162,7 @@ def get_operators(model,inputs,params):
                           options = dict(activation=opt_name))
                 operators.append(op)
         elif n.op_type in ('Flatten','Dropout','Reshape'):
-            assert operators[-1]['outputs'][0] == n.input[0]
+            #assert operators[-1]['outputs'][0] == n.input[0]
             operators[-1]['outputs'][0] = n.output[0]
         elif n.op_type == 'Concat':
             op = dict(name = n.name,
@@ -164,9 +173,9 @@ def get_operators(model,inputs,params):
                     )
             operators.append(op)
         elif n.op_type == 'Softmax':
-            assert attrs.get('axis',-1) in (1,-1)
+            #assert attrs.get('axis',-1) in (1,-1)
             op = dict(name = n.name,
-                      type = 'SoftMax',
+                      type = 'Softmax',
                       inputs = [n.input[0]],
                       outputs = list(n.output),
                     )
@@ -199,8 +208,8 @@ def get_operators(model,inputs,params):
             operators.append(op)
              
         elif n.op_type == 'MaxPool' or n.op_type == 'AveragePool': 
-            assert attrs.get('ceil_mode',0) == 0
             assert tuple(attrs.get('dilations',[1,1])) == (1,1)
+            ceil_mode = bool(attrs.get('ceil_mode',0))
             pads = get_pads(attrs)
             kern = attrs['kernel_shape']
             strides = attrs['strides']
@@ -213,6 +222,7 @@ def get_operators(model,inputs,params):
                         kernel = kern,
                         stride = strides,
                         pad = pads,
+                        ceil_mode = ceil_mode,
                         count_include_pad = count_include_pad,
                         mode = ('max' if n.op_type == 'MaxPool' else 'avg')
                       )

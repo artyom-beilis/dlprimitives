@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 /// vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
 #include <dlprim/context.hpp>
 #include <sstream>
@@ -78,6 +85,12 @@ namespace dlprim {
         return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1002;
         //return device_extensions().find("cl_amd_") != std::string::npos;
     }
+    bool Context::is_apple()
+    {
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1027f00;
+    }
     bool Context::is_intel()
     {
         if(is_cpu_context())
@@ -92,10 +105,19 @@ namespace dlprim {
         return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x10DE;
         //return device_extensions().find("cl_nv_") != std::string::npos;
     }
+    bool Context::is_imagination()
+    {
+        if(is_cpu_context())
+            return false;
+        return device().getInfo<CL_DEVICE_VENDOR_ID>() == 0x1010;
+    }
 
     int Context::estimated_core_count()
     {
         int cu = device().getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>();
+        if(is_apple())
+            // TODO: detect Apple8+ generation, then return cu * 512
+            return cu * 256;
         if(is_nvidia())
             return cu * 128;
         if(is_amd())

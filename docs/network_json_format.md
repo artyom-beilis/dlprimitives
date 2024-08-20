@@ -52,8 +52,9 @@ Each operator has following fields:
 - `type` - type of operation, string, for example "Activation"
 - `inputs` - list of input tensors - must be either outputs of one of previous operators or one of inputs - list of strings
 - `outputs` - list of generated tensors, can be same as input for in-place operations - list of strings. 
-- `frozen` - boolean flag that marks the operator as not-participating in gradient descend, for example for transfer learning. Default is `false`
+- `frozen` - boolean flag that marks the operator as not-participating in gradient descent, for example for transfer learning. Default is `false`
 - `options` - object operation specific parameters
+- `params` - list of strings, optional non standard name of parameters for imported data/parameter sharing
 
 For example:
 
@@ -100,7 +101,7 @@ Parameters:
 
 Parameters:
 
-- `activation` - string, one of standard activation names
+- `activation` - string, one of standard activation names, relu, tanh, sigmoid, relu6, identity
 
 ### Elementwise
 
@@ -198,6 +199,68 @@ Parameters
 - `end` - end index of slice, default end 
 
 For example: `{ "begin":1, "end":2","dim":1 }` - slice green channel
+
+### Flatten
+
+Flattens the shape to `[batch,features]` no parameters
+
+### Squeeze
+
+Squeezes the shape
+
+- `all` default true if dims empty otherwise false, squeeze all 1 dimensions
+- `dims` - list dimension to squeeze, negative counted from end
+
+### Reshape
+
+Reshapes the tensor
+
+- `dims` - list of ints new dimension, 0 - keep same as origin, -1 deduce from others
+
+
+### Reduction
+
+Performs reduction over different axes
+
+Parameters:
+
+- `method` - string, default `sum`. Options `sum`: sum, `sumsq`: sum of squares, `abssum`: L1 norm, `mean` - average value
+- `keep_dim` - boolean, default true, whether to keep dimension. For result in reduction of shape [2,3,4] over axes 1,2, the output will have shape [2,1,1] of `keep_dim` is true and otherwise it will be [2]
+- `output_scale` - float, default 1, multiply result after reduction by factor
+- `dims` - list of ints, dimensions to reduce over, may be negative, can't be specified together with `start_axis`, 
+- `start_axis` - integer, default 0 - first axis to reduce till end, for example if `start_axis==1` and input shape is [2,3,4], result shape will be [2,1,1]. Can't specify both `start_axis`and `dims`
+
+### Threshold
+
+Compute `x > threshold ? 1 : 0`
+
+Parameters
+
+- `threshold`, default 0
+
+### Hardtanh
+
+Compute `max(min_val,min(max_val,x))`
+
+Parameters
+
+- `min_val`, default -1
+- `max_val , default 1
+
+
+### Abs
+
+Compute `abs(x)`, no parameters
+
+
+### Parameter
+
+Special layer with no inputs that produces output of its only paramerer
+
+- `shape` - list of ints - output shape
+- `dtype` - string, default float - type of output tensor
+- `is_trainable` - boolean default true, backpropagate gradients to parameter
+
 
 ## Standard Activations
 

@@ -1,3 +1,10 @@
+###############################################################################
+###
+### Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+###
+### MIT License, see LICENSE.TXT
+###
+###############################################################################
 import numpy as np
 import torch
 A = np.array([[1,1,1,0],[0,1,-1,-1]]).T.astype(np.float32).copy()

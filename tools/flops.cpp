@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/context.hpp>
 #include <dlprim/tensor.hpp>
 #include <dlprim/gpu/program_cache.hpp>
@@ -241,6 +248,27 @@ public:
 
         return met;
     }
+    void rand(dp::Tensor &t,float sigma)
+    {
+        if(t.dtype() == dp::float_data || t.dtype() == dp::half_data || t.dtype() == dp::bfloat16_data) {
+            dp::core::fill_random(t,seed_,seq_,dp::core::rnd_normal,0,sigma,ec_);
+            seq_ += (t.shape().total_size() + 3)/4;
+        }
+        else {
+            size_t n=t.shape().total_size();
+            if(t.dtype() == dp::int64_data) {
+                int64_t *p=t.data<int64_t>();
+                for(size_t i=0;i<n;i++)
+                    p[i] = i%17;
+            }
+            else if(t.dtype() == dp::int16_data) {
+                int16_t *p=t.data<int16_t>();
+                for(size_t i=0;i<n;i++)
+                    p[i] = i%17;
+            }
+            t.to_device(ec_);
+        }
+    }
 
 #ifdef CUDA_TEST
     Metrics test_gemm(int warm,int calc,int m,int n,int k,bool ta,bool tb)
@@ -352,27 +380,6 @@ public:
 
         return met;
     }
-    void rand(dp::Tensor &t,float sigma)
-    {
-        if(t.dtype() == dp::float_data || t.dtype() == dp::half_data || t.dtype() == dp::bfloat16_data) {
-            dp::core::fill_random(t,seed_,seq_,dp::core::rnd_normal,0,sigma,ec_);
-            seq_ += (t.shape().total_size() + 3)/4;
-        }
-        else {
-            size_t n=t.shape().total_size();
-            if(t.dtype() == dp::int64_data) {
-                int64_t *p=t.data<int64_t>();
-                for(size_t i=0;i<n;i++)
-                    p[i] = i%17;
-            }
-            else if(t.dtype() == dp::int16_data) {
-                int16_t *p=t.data<int16_t>();
-                for(size_t i=0;i<n;i++)
-                    p[i] = i%17;
-            }
-            t.to_device(ec_);
-        }
-    }
 #endif
 
     struct ConvBM {
@@ -398,6 +405,19 @@ do{                                                          \
 	}                                                        \
 }while(0)
 
+    template<typename T>
+    void get_first(T *v,int n)
+    {
+        static size_t constexpr mem_limit = 1024ull*1024*256;
+        for(int i=0;i<n;i++) {
+            if(v[i].memory < mem_limit) {
+                v[0] = v[i];
+                return;
+            }
+        }
+        v[0]=v[n-1];
+    }
+    
     Metrics test_conv(int warm,int calc,int op,int batch,ConvBM const &bm)
     {
         cudnnHandle_t handle;
@@ -427,11 +447,11 @@ do{                                                          \
         check(cudnnSetTensor4dDescriptor(Y_d,CUDNN_TENSOR_NCHW,CUDNN_DATA_FLOAT,batch,bm.c_out,o_size,o_size));
 
 
+        static constexpr int max_algo = 4;
 
-
-        cudnnConvolutionFwdAlgoPerf_t perf_fwd;
-        cudnnConvolutionBwdDataAlgoPerf_t perf_bwd_data;
-        cudnnConvolutionBwdFilterAlgoPerf_t perf_bwd_filter;
+        cudnnConvolutionFwdAlgoPerf_t perf_fwd[max_algo];
+        cudnnConvolutionBwdDataAlgoPerf_t perf_bwd_data[max_algo];
+        cudnnConvolutionBwdFilterAlgoPerf_t perf_bwd_filter[max_algo];
         int algs = 0;
         size_t ws = 0;
         char const *aname = nullptr;
@@ -439,9 +459,10 @@ do{                                                          \
 
         switch(op) {
         case dp::forward_data:
-		    check(cudnnFindConvolutionForwardAlgorithm(handle,X_d,M_d,desc,Y_d,1,&algs,&perf_fwd));
-            ws = perf_fwd.memory;
-            algo_id = perf_fwd.algo;
+		    check(cudnnGetConvolutionForwardAlgorithm_v7(handle,X_d,M_d,desc,Y_d,max_algo,&algs,perf_fwd));
+            get_first(perf_fwd,algs);
+            ws = perf_fwd[0].memory;
+            algo_id = perf_fwd[0].algo;
             {
                 static char const *names[] = {
                     "IMPLICIT_GEMM",
@@ -454,14 +475,15 @@ do{                                                          \
                     "WINOGRAD_NONFUSED"
 
                 };
-                if(algo_id < sizeof(names)/sizeof(names[0]))
+                if(algo_id < int(sizeof(names)/sizeof(names[0])))
                     aname = names[algo_id];
             }
             break;
         case dp::backward_data:
-		    check(cudnnFindConvolutionBackwardDataAlgorithm(handle,M_d,Y_d,desc,X_d,1,&algs,&perf_bwd_data));
-            ws = perf_bwd_data.memory;
-            algo_id = perf_bwd_data.algo;
+		    check(cudnnGetConvolutionBackwardDataAlgorithm_v7(handle,M_d,Y_d,desc,X_d,max_algo,&algs,perf_bwd_data));
+            get_first(perf_bwd_data,algs);
+            ws = perf_bwd_data[0].memory;
+            algo_id = perf_bwd_data[0].algo;
             {
                 static char const *names[] = {
                     "0" /* non-deterministic */,
@@ -471,14 +493,15 @@ do{                                                          \
                         "WINOGRAD",
                         "WINOGRAD_NONFUSED"
                 };
-                if(algo_id < sizeof(names)/sizeof(names[0]))
+                if(algo_id < int(sizeof(names)/sizeof(names[0])))
                     aname = names[algo_id];
             }
             break;
         case dp::backward_param:
-		    check(cudnnFindConvolutionBackwardFilterAlgorithm(handle,X_d,Y_d,desc,M_d,1,&algs,&perf_bwd_filter));
-            ws = perf_bwd_filter.memory;
-            algo_id = perf_bwd_filter.algo;
+		    check(cudnnGetConvolutionBackwardFilterAlgorithm_v7(handle,X_d,Y_d,desc,M_d,max_algo,&algs,perf_bwd_filter));
+            get_first(perf_bwd_filter,algs);
+            ws = perf_bwd_filter[0].memory;
+            algo_id = perf_bwd_filter[0].algo;
             {
                 static char const *names[] = {
                     "0" /* non-deterministic */,
@@ -489,14 +512,14 @@ do{                                                          \
                         "WINOGRAD_NONFUSED",
                         "FFT_TILING"
                 };
-                if(algo_id < sizeof(names)/sizeof(names[0]))
+                if(algo_id < int(sizeof(names)/sizeof(names[0])))
                     aname = names[algo_id];
             }
             break;
         default:
             throw std::runtime_error("Invalid conv op");
         }
-        
+
         float *X=nullptr,*Y=nullptr,*M=nullptr;
         void *W=nullptr;
         cudaMalloc((void**)&X,in_shape.total_size()*sizeof(float));
@@ -521,14 +544,14 @@ do{                                                          \
             float beta  = 0.0;
             switch(op) {
                 case dp::forward_data:
-                    check(cudnnConvolutionForward(handle,&alpha,X_d,X,M_d,M,desc,perf_fwd.algo,W,ws,&beta,Y_d,Y));
+                    check(cudnnConvolutionForward(handle,&alpha,X_d,X,M_d,M,desc,perf_fwd[0].algo,W,ws,&beta,Y_d,Y));
                     break;
                 case dp::backward_data:
-                    check(cudnnConvolutionBackwardData(handle,&alpha,M_d,M,Y_d,Y,desc,perf_bwd_data.algo,W,ws,&beta,X_d,X));
+                    check(cudnnConvolutionBackwardData(handle,&alpha,M_d,M,Y_d,Y,desc,perf_bwd_data[0].algo,W,ws,&beta,X_d,X));
                     break;
                 case dp::backward_param:
                     beta = 1.0;
-                    check(cudnnConvolutionBackwardFilter(handle,&alpha,X_d,X,Y_d,Y,desc,perf_bwd_filter.algo,W,ws,&beta,M_d,M));
+                    check(cudnnConvolutionBackwardFilter(handle,&alpha,X_d,X,Y_d,Y,desc,perf_bwd_filter[0].algo,W,ws,&beta,M_d,M));
                     break;
             }
         }
@@ -876,18 +899,26 @@ int main(int argc,char **argv)
     int gemm_index = -1;
     int conv_index = -1;
     int br_index = -1;
+    static constexpr int run_all  = 0;
+    static constexpr int run_gemm = 1;
+    static constexpr int run_conv = 2;
+    static constexpr int run_broadcast = 3;
+    int test = run_all;
     if(argv[1][0] == '-') {
        if(argv[1][1] == 'g') {
             gemm_index = atoi(argv[1]+2);
+            test=run_gemm;
             argv++;
             argc--;
         }
         else if(argv[1][1] == 'c') {
+            test=run_conv;
             conv_index = atoi(argv[1]+2);
             argv++;
             argc--;
         }
         else if(argv[1][1] == 'b') {
+            test=run_broadcast;
             br_index = atoi(argv[1]+2);
             argv++;
             argc--;
@@ -921,18 +952,19 @@ int main(int argc,char **argv)
     }
 #endif
     Benchmarker bm(argv[1],fs,scale);
-    if(br_index == -1 && conv_index == -1 && gemm_index == -1) {
-        bm.run_br_bm(br_index);
+    if(test == run_all) {
         bm.run_gemm_bm(gemm_index);
         bm.run_conv_bm(conv_index);
+        bm.run_br_bm(br_index);
     }
-    else {
-        if(br_index != -1)
-            bm.run_br_bm(br_index);
-        if(conv_index!=-1)
-            bm.run_gemm_bm(gemm_index);
-        if(gemm_index!=-1)
-            bm.run_conv_bm(conv_index);
+    else if(test == run_broadcast) {
+        bm.run_br_bm(br_index);
+    }
+    else if(test == run_gemm) {
+        bm.run_gemm_bm(gemm_index);
+    }
+    else if(test == run_conv) {
+        bm.run_conv_bm(conv_index);
     }
 }
 

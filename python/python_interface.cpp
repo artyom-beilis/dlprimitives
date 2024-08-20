@@ -1,9 +1,21 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/context.hpp>
 #include <dlprim/tensor.hpp>
 #include <dlprim/net.hpp>
 #include <dlprim/solvers/adam.hpp>
 #include <dlprim/solvers/sgd.hpp>
 #include <dlprim/json.hpp>
+
+#ifdef WITH_ONNX
+#include <dlprim/onnx.hpp>
+#endif
+
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include <string>
@@ -22,6 +34,19 @@ namespace dlprim {
         return l;
     }
 
+    static bp::dict map_shape(std::map<std::string,dp::Shape> const &s)
+    {
+        bp::dict r;
+        for(auto const &pair : s) {
+            std::vector<int> shape(pair.second.begin(),pair.second.end());
+            bp::list l;
+            for(int i:shape)
+                l.append(i);
+            r[pair.first] = l;
+        }
+        return r;
+    }
+
     static bp::list net_get_input_names(Net &n)
     {
         return vec_to_plist(n.input_names());
@@ -37,7 +62,7 @@ namespace dlprim {
         Shape nd_shape = Shape::from_range(ar.get_shape(),ar.get_shape()+n);
         std::string np_type = bp::extract<std::string>(bp::str(ar.get_dtype()));
         DataType np_dt = string_to_data_type(np_type);
-        TensorSpecs ns(nd_shape,np_dt);
+        TensorSpecs ns(nd_shape,np_dt,t.is_trainable());
         if(t.specs() != ns) {
             std::ostringstream msg;
             msg << "numpy array and tensor have different shapes/types tensor="  << t.specs() << " ndarray=" << ns; 
@@ -130,6 +155,28 @@ namespace dlprim {
         else
             n.mode(CalculationsMode::predict);
     }
+#ifdef WITH_ONNX
+    std::string onnx_net(ONNXModel &model)
+    {
+        std::ostringstream ss;
+        return model.network().save(dlprim::json::readable);
+    }
+    bp::dict onnx_input_shapes(ONNXModel &model)
+    {
+        return map_shape(model.input_shapes());
+    }
+    bp::dict onnx_dynamic_axes(ONNXModel &model)
+    {
+        bp::dict r;
+        for(auto const &p : model.dynamic_axes()) {
+            bp::list axes;
+            for(auto const &axis : p.second)
+                axes.append(axis);
+            r[p.first] = axes;
+        }
+        return r;
+    }
+#endif
 }
 
 
@@ -159,6 +206,7 @@ BOOST_PYTHON_MODULE(_pydlprim)
         export_values();
    
     bp::class_<cl::CommandQueue>("CommandQueue","Wrapper of cl::CommandQueue");
+
  
     bp::class_<Context>("Context","Context of computations - represents OpenCL device, platform and context, it is passed to all object"
                 "that are created during the process").
@@ -195,6 +243,21 @@ BOOST_PYTHON_MODULE(_pydlprim)
         def("to_host",to_host,"Enqueue copy tensor to host to a numpy array and wait for completion. numpy array must have same shape, type as tensor and must be contiguous, operation is always synchronous").
         add_property("shape",dp::get_shape,"Returns tensor shape").
         add_property("dtype",&dp::Tensor::dtype,"Returns tensor type");
+    
+    bp::class_<dp::ModelBase>("ModelBase",bp::no_init);
+#ifdef WITH_ONNX
+    bp::class_<dp::ONNXModel,bp::bases<dp::ModelBase>,boost::noncopyable >("ONNXModel",
+                "ONNX Model parser and importer, once it is loaded, Net.load can be called").
+        def(bp::init<>("Empty")).
+        add_property("network",&onnx_net,"Export network as string").
+        add_property("input_shapes",&onnx_input_shapes,"input shapes - to update in needed before loading").
+        add_property("dynamic_axes",&onnx_dynamic_axes,"list of dynamic axes per input, for example {'data':[0]}").
+        def("set_dynamic_axis",&dp::ONNXModel::set_dynamic_axis,"Modify dynamic shape - set maximal limit an axis for input, if the shape isn't fixed rises a error").
+        def("set_batch",&dp::ONNXModel::set_batch,"Shortcut to update first dim of all inputs").
+        def("load",&dp::ONNXModel::load,"Load model from file").
+        def("build",&dp::ONNXModel::build,"Build network");
+
+#endif
 
     bp::class_<dp::Net,boost::noncopyable>("Net",
             R"xxxxx(Central class that represents network for training and inference
@@ -269,7 +332,8 @@ BOOST_PYTHON_MODULE(_pydlprim)
             "Load parameters from file, either HDF5 or DLP format. If second argument - ignore missing parameter, if true and parameter value does not exists in file it isn't considered a error, useful for transfer learning").
         def("load_parameters",net_load_parameters,"same as self.load_parameters(file,False)").
         def("save_parameters",&Net::save_parameters,"save nework parameters to DLP format").
-        def("save_parameters_to_hdf5",&Net::save_parameters_to_hdf5,"save nework parameters to HDF5 format");
+        def("save_parameters_to_hdf5",&Net::save_parameters_to_hdf5,"save nework parameters to HDF5 format").
+        def("load_model",&Net::load_model,"Load external model");
 
     using solvers::Adam;
     bp::class_<Adam>("Adam","Adam optimizer",bp::init<Context &>("Create optimizer from context")).

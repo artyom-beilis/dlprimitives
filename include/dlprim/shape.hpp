@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <array>
 #include <vector>
@@ -23,6 +30,9 @@ namespace dlprim {
         Shape(size_t b,size_t c,size_t h): shape_({b,c,h}),size_(3) {}
         Shape(size_t b,size_t c,size_t h,size_t w): shape_({b,c,h,w}),size_(4) {}
         Shape(size_t b,size_t c,size_t d,size_t h,size_t w): shape_({b,c,d,h,w}),size_(5) {}
+        Shape(size_t d1,size_t d2,size_t d3,size_t d4,size_t d5,size_t d6): shape_({d1,d2,d3,d4,d5,d6}),size_(6) {}
+        Shape(size_t d1,size_t d2,size_t d3,size_t d4,size_t d5,size_t d6,size_t d7): shape_({d1,d2,d3,d4,d5,d6,d7}),size_(7) {}
+        Shape(size_t d1,size_t d2,size_t d3,size_t d4,size_t d5,size_t d6,size_t d7,size_t d8): shape_({d1,d2,d3,d4,d5,d6,d7,d8}),size_(8) {}
        
         ///
         /// Initialize from pair of iterators
@@ -121,11 +131,30 @@ namespace dlprim {
         /// Add dimention=1 at axis location, for example for Shape(2,3).unsqueeze(0) == Shape(1,2,3)
         ///
         Shape unsqueeze(int axis) const;
+        
+        ///
+        /// Remove dimesnions containing 1 that appear at dims, for example  Shape(4,5,1,1).squeeze({2,3}) = Shape(4,5)
+        ///
+        /// if dim values is negative it is counted from end
+        ///
+        /// Note for all i in `[0:dims.size)` it is required shape[dim[i]] == 1
+        ///
+        ///
+        Shape squeeze(std::vector<int> dims) const;
+        
+        ///
+        /// Remove dimesnions containing 1 that appear at dims, for example  Shape(4,5,1,1).squeeze() = Shape(4,5)
+        ///
+        Shape squeeze() const;
 
         ///
         /// Compute strides needed for broadcasting this shape to target shape
         ///
         Shape broadcast_strides(Shape const &target) const;
+        ///
+        /// Reshape, to dims, if dim[i] == 0 the dim is preserverd, if dim[i] == -1 it is calculated from the rest of dimensions
+        ///        
+        Shape reshape(std::vector<int> const &dims) const;
 
         size_t const *begin() const
         {

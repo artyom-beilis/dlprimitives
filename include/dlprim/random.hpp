@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #pragma once
 #include <cstdint>
 #include <array>
@@ -49,6 +56,7 @@ namespace dlprim {
         void seed(std::uint64_t s)
         {
             seed_ = s;
+            sequence_ = 0;
         }
         std::uint64_t seed() const
         {

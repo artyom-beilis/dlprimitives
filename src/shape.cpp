@@ -1,5 +1,13 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/shape.hpp>
 #include <iostream>
+#include <algorithm>
 
 namespace dlprim {
     Shape Shape::unsqueeze(int axis) const
@@ -17,6 +25,83 @@ namespace dlprim {
         r.size_ = size_ + 1;
         return r;
     }
+
+    Shape Shape::reshape(std::vector<int> const &dims) const
+    {
+        std::vector<int> rshape;
+        int calc_axis = -1;
+        for(int i=0;i<int(dims.size());i++) {
+            if(dims[i] == -1) {
+                if(calc_axis != -1)
+                    throw ValidationError("At most one index may be -1 in reshape");
+                calc_axis = i;
+                rshape.push_back(1);
+            }
+            else if(dims[i] == 0) {
+                if(i >= size())
+                    throw ValidationError("0 reshape for index too large");
+                rshape.push_back(shape_[i]);
+            }
+            else {
+                rshape.push_back(dims[i]);
+            }
+        }
+        if(calc_axis != -1) {
+            size_t provided = 1;
+            for(auto const &d : rshape)
+                provided *= d;
+            if(total_size() % provided != 0 || total_size() < provided)
+                throw ValidationError("Can't computed deduced shape, original shape isn't multiple of provided");
+            rshape[calc_axis] = total_size() / provided;
+        }
+        Shape res = from_range(rshape.begin(),rshape.end());
+        if(res.total_size() != total_size()) {
+            std::ostringstream ss;
+            ss << "Reshape from " << *this << " to " << res << " invalid total size" << std::endl;
+            throw ValidationError(ss.str());
+        }
+        return res;
+    }
+    
+    dlprim::Shape Shape::squeeze() const
+    {
+        std::vector<int> dims;
+        for(int i=0;i<size();i++)
+            if(shape_[i] == 1)
+                dims.push_back(i);
+        return squeeze(dims);
+    }
+
+    Shape Shape::squeeze(std::vector<int> dims) const
+    {
+        std::vector<size_t> squeezed;
+
+        for(auto &axis : dims) {
+            if (axis < 0) {
+                axis = axis + size();
+            }
+            DLPRIM_CHECK(axis < size());
+        }
+        std::sort(dims.begin(),dims.end());
+
+        int pos = 0;
+        for(int i=0;i<size();i++) {
+            if(pos < int(dims.size()) && i==dims[pos]) {
+                DLPRIM_CHECK(shape_[i] == 1);
+                pos++;
+            }
+            else {
+                squeezed.push_back(shape_[i]);
+            }
+        }
+        auto squeezed_shape = dlprim::Shape::from_range(squeezed.begin(),squeezed.end());
+        if(squeezed_shape.size() == 0) {
+            squeezed_shape = dlprim::Shape(1);
+        }
+        DLPRIM_CHECK(squeezed_shape.total_size() == total_size());
+        return squeezed_shape;
+    }
+
     Shape Shape::broadcast_strides(Shape const &target) const
     {
         DLPRIM_CHECK(size() <= target.size());

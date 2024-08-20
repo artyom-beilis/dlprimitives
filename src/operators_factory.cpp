@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/operator.hpp>
 #include <dlprim/functions.hpp>
 #include <dlprim/operators.hpp>
@@ -80,6 +87,24 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         }
     },
     {
+        "Flatten", 
+        [](Context &ctx,json::value const &p) {
+            return new Flatten(ctx,FlattenConfig::from_json(p));
+        }
+    },
+    {
+        "Squeeze", 
+        [](Context &ctx,json::value const &p) {
+            return new Squeeze(ctx,SqueezeConfig::from_json(p));
+        }
+    },
+    {
+        "Reshape", 
+        [](Context &ctx,json::value const &p) {
+            return new Reshape(ctx,ReshapeConfig::from_json(p));
+        }
+    },
+    {
         "Concat", 
         [](Context &ctx,json::value const &p) {
             return new Concat(ctx,ConcatConfig::from_json(p));
@@ -90,7 +115,37 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
         [](Context &ctx,json::value const &p) {
             return new Slice(ctx,SliceConfig::from_json(p));
         }
-    }
+    },
+    {
+        "Threshold", 
+        [](Context &ctx,json::value const &p) {
+            return new Threshold(ctx,ThresholdConfig::from_json(p));
+        }
+    },
+    {
+        "Abs", 
+        [](Context &ctx,json::value const &p) {
+            return new Abs(ctx,AbsConfig::from_json(p));
+        }
+    },
+    {
+        "Hardtanh", 
+        [](Context &ctx,json::value const &p) {
+            return new Hardtanh(ctx,HardtanhConfig::from_json(p));
+        }
+    },
+    {
+        "Reduction", 
+        [](Context &ctx,json::value const &p) {
+            return new Reduction(ctx,ReductionConfig::from_json(p));
+        }
+    },
+    {
+        "Parameter", 
+        [](Context &ctx,json::value const &p) {
+            return new Parameter(ctx,ParameterConfig::from_json(p));
+        }
+    },
 };
     
 std::unique_ptr<Operator> create_by_name(Context &ctx,

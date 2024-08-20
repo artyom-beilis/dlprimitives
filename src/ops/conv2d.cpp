@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/ops/conv2d.hpp>
 #include <dlprim/cpu/cpu_ops.hpp>
 #include <dlprim/ops/scal.hpp>
@@ -71,8 +78,6 @@ namespace dlprim {
     {
         DLPRIM_CHECK(config_.channels_out > 0);
         DLPRIM_CHECK(dtype_==float_data);
-        DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
-        DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
         out_h_ = out_w_ = 0;
         in_h_ = in_w_ = 0;
         bs_ = 0;
@@ -240,10 +245,10 @@ namespace dlprim {
                 im2col = img;
             }
             template<typename DType>
-            static void copy_if(DType &img,DType &im2col,bool cond)
+            static void copy_if(DType *img,DType &im2col,bool cond)
             {
                 if(cond) {
-                    im2col = img;
+                    im2col = *img;
                 }
                 else {
                     im2col = DType();
@@ -262,10 +267,10 @@ namespace dlprim {
                 img += im2col;
             }
             template<typename DType>
-            static void copy_if(DType &img,DType &im2col,bool cond)
+            static void copy_if(DType *img,DType &im2col,bool cond)
             {
                 if(cond) {
-                    img += im2col;
+                    *img += im2col;
                 }
             }
             template<typename DType>
@@ -320,7 +325,7 @@ namespace dlprim {
                                 if(y >= 0 && y < src_rows) {
                                     for(int dx=0;dx < K ;dx++) {
                                         int x = x_pos + dx;
-                                        Op::copy_if(img[dx],*mat,(x >= 0 && x < src_cols));
+                                        Op::copy_if(img + dx,*mat,(x >= 0 && x < src_cols));
                                         mat++;
                                     }
                                 }
@@ -387,7 +392,7 @@ namespace dlprim {
                         if(y >= 0 && y < src_rows) {
                             for(int dx=0;dx < kern_w * dilate_w ;dx+= dilate_w) {
                                 int x = x_pos + dx;
-                                Op::copy_if(img[dx],*mat,(x >= 0 && x < src_cols));
+                                Op::copy_if(img + dx,*mat,(x >= 0 && x < src_cols));
                                 mat++;
                             }
                         }
@@ -562,16 +567,7 @@ namespace dlprim {
 
     Shape TransposedConvolution2D::get_output_shape(Shape const &in)
     {
-        DLPRIM_CHECK(in.size() == 4);
-        int batch = in[0];
-        DLPRIM_CHECK(int(in[1]) == config_.channels_in);
-        int ihw[2] = { int(in[2]), int(in[3]) };
-        int ohw[2];
-        for(int i=0;i<2;i++)        
-            ohw[i] = (ihw[i] - 1) * config_.stride[i] - 2 * config_.pad[i] + config_.dilate[i] * (config_.kernel[i] - 1) + config_.output_pad[i] + 1;
-        DLPRIM_CHECK(ohw[0] > 0);
-        DLPRIM_CHECK(ohw[1] > 0);
-        return Shape(batch,config_.channels_out,ohw[0],ohw[1]);
+        return core::Conv2DBase::get_output_shape_transposed(config_,in,config_.output_pad);
     }
 
     int TransposedConvolution2D::get_im2col_width()
@@ -595,8 +591,6 @@ namespace dlprim {
     {
         DLPRIM_CHECK(config_.channels_out > 0);
         DLPRIM_CHECK(dtype_==float_data);
-        DLPRIM_CHECK(config_.channels_in  % config_.groups == 0);
-        DLPRIM_CHECK(config_.channels_out % config_.groups == 0);
         out_h_ = out_w_ = 0;
         in_h_ = in_w_ = 0;
         bs_ = 0;

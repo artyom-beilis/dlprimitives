@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include "defs.h"
 
 __kernel void copy(
@@ -14,8 +21,17 @@ __kernel void copy(
 #if DIMS >= 5
                 ulong d4,ulong s4,ulong t4,
 #endif
-                __global dtype const *src,ulong src_offset,
-                __global dtype *tgt,ulong tgt_offset)
+#if DIMS >= 6
+                ulong d5,ulong s5,ulong t5,
+#endif
+#if DIMS >= 7
+                ulong d6,ulong s6,ulong t6,
+#endif
+#if DIMS >= 8
+                ulong d7,ulong s7,ulong t7,
+#endif
+                __global dtype_src const *src,ulong src_offset,
+                __global dtype_tgt *tgt,ulong tgt_offset)
 {
         src+=src_offset;
         tgt+=tgt_offset;
@@ -71,6 +87,68 @@ __kernel void copy(
             ulong i3  = i34 / d4;
             ulong i4  = i34 % d4;
             tgt[i0*t0 + i1*t1 + i2*t2 + i3*t3 + i4*t4] = src[i0*s0 + i1*s1 + i2*s2 + i3*s3 + i4*s4];
+        #elif DIMS == 6
+            ulong i45 = get_global_id(0);
+            ulong i23 = get_global_id(1);
+            ulong i01 = get_global_id(2);
+            if(i01 >= d0*d1)
+                return;
+            if(i23 >= d2*d3)
+                return;
+            if(i45 >= d4*d5)
+                return;
+            ulong i0  = i01 / d1;
+            ulong i1  = i01 % d1;
+            ulong i2  = i23 / d3;
+            ulong i3  = i23 % d3;
+            ulong i4  = i45 / d5;
+            ulong i5  = i45 % d5;
+
+            tgt[i0*t0 + i1*t1 + i2*t2 + i3*t3 + i4*t4 + i5*t5] = src[i0*s0 + i1*s1 + i2*s2 + i3*s3 + i4*s4 + i5*s5];
+        #elif DIMS == 7
+            ulong i456 = get_global_id(0);
+            ulong i23  = get_global_id(1);
+            ulong i01  = get_global_id(2);
+            if(i01 >= d0*d1)
+                return;
+            if(i23 >= d2*d3)
+                return;
+            if(i456 >= d4*d5*d6)
+                return;
+            ulong i0  = i01 / d1;
+            ulong i1  = i01 % d1;
+            ulong i2  = i23 / d3;
+            ulong i3  = i23 % d3;
+            ulong i4  = i456 / (d5*d6);
+            ulong i56 = i456 % (d5*d6);
+            ulong i5  = i56 / d6;
+            ulong i6  = i56 % d6;
+
+            tgt[i0*t0 + i1*t1 + i2*t2 + i3*t3 + i4*t4 + i5*t5 + i6*t6] = src[i0*s0 + i1*s1 + i2*s2 + i3*s3 + i4*s4 + i5*s5 + i6*s6];
+        #elif DIMS == 8
+            ulong i567 = get_global_id(0);
+            ulong i234 = get_global_id(1);
+            ulong i01  = get_global_id(2);
+            if(i01 >= d0*d1)
+                return;
+            if(i234 >= d2*d3*d4)
+                return;
+            if(i567 >= d5*d6*d7)
+                return;
+            ulong i0  = i01 / d1;
+            ulong i1  = i01 % d1;
+
+            ulong i2  = i234 / (d3*d4);
+            ulong i34 = i234 % (d3*d4);
+            ulong i3  = i34 / d4;
+            ulong i4  = i34 % d4;
+
+            ulong i5  = i567 / (d6*d7);
+            ulong i67 = i567 % (d6*d7);
+            ulong i6  = i67 / d7;
+            ulong i7  = i67 % d7;
+
+            tgt[i0*t0 + i1*t1 + i2*t2 + i3*t3 + i4*t4 + i5*t5 + i6*t6 + i7*t7] = src[i0*s0 + i1*s1 + i2*s2 + i3*s3 + i4*s4 + i5*s5 + i6*s6 + i7*s7];
         #else
         #error "Unsupported dims"
         #endif

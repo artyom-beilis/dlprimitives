@@ -7,22 +7,53 @@ if(NOT WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall")
 endif()
 
-option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/cl2.hpp" OFF)
+option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/opencl.hpp" OFF)
+option(USE_CL2_HPP "Use older CL/cl2.hpp instead of CL/opencl.hpp" OFF)
 option(USE_INTERNAL_BLAS "Use Internal Blas" OFF)
 option(USE_HDF "Compile with HDF support" ON)
 option(USE_ONEDNN "Enable support of Intel OneDNN" ON)
+option(USE_SQLITE3 "Compile with sqlite3 support for kernel caching" ON)
+option(USE_ONNX "Compile with ONNX support" ON)
+option(USE_PYDLPRIM "Compile python interface for dlprimitives" ON)
+option(BUILD_CORE_ONLY "Build only dlprimitives core" OFF)
+option(DLPRIM_STATIC_BUILD "Build static version only" OFF)
+
+if(BUILD_CORE_ONLY)
+    SET(USE_CL_HPP OFF)
+    SET(USE_HDF OFF)
+    SET(USE_ONNX OFF)
+    set(USE_PYDLPRIM OFF)
+endif()
 
 if(USE_CL_HPP)
-    find_path(OCL_PATH CL/cl.hpp)
+    if(APPLE)
+        find_path(OCL_PATH OpenCL/cl.hpp)
+    else()
+        find_path(OCL_PATH CL/cl.hpp)
+    endif()
     set(DLPRIM_USE_CL1_HPP 1)
-else()
-    find_path(OCL_PATH CL/cl2.hpp)
+    set(DLPRIM_USE_CL2_HPP 0)
+elseif(USE_CL2_HPP)
+    if(APPLE)
+        find_path(OCL_PATH OpenCL/cl2.hpp)
+    else()
+        find_path(OCL_PATH CL/cl2.hpp)
+    endif()
     set(DLPRIM_USE_CL1_HPP 0)
+    set(DLPRIM_USE_CL2_HPP 1)
+else()
+    if(APPLE)
+        find_path(OCL_PATH OpenCL/opencl.hpp)
+    else()
+        find_path(OCL_PATH CL/opencl.hpp)
+    endif()
+    set(DLPRIM_USE_CL1_HPP 0)
+    set(DLPRIM_USE_CL2_HPP 0)
 endif()
 
 if(USE_ONEDNN)
-    find_path(ONEDNN_INCLUDE oneapi/dnnl/dnnl.hpp HINT /opt/oneDNN/include/)
-    find_library(ONEDNN_LIB  dnnl  HINT /opt/oneDNN/lib/)
+    find_path(ONEDNN_INCLUDE oneapi/dnnl/dnnl.hpp HINT /opt/onednn/include/)
+    find_library(ONEDNN_LIB  dnnl  HINT /opt/onednn/lib/)
     if(ONEDNN_INCLUDE AND ONEDNN_LIB)
         set(WITH_ONEDNN ON)
         include_directories(${ONEDNN_INCLUDE})
@@ -35,6 +66,30 @@ endif()
 
 
 find_library(OCL_LIB OpenCL) 
+
+set(WITH_SQLITE3 OFF)
+if (USE_SQLITE3)
+    find_path(SQLITE3_PATH sqlite3.h)
+    find_library(SQLITE3_LIB sqlite3)
+    if(SQLITE3_PATH AND SQLITE3_LIB)
+        include_directories(${SQLITE3_PATH})
+        set(WITH_SQLITE3 ON)
+    endif()
+endif()
+
+if(USE_ONNX)
+    find_package(Protobuf)
+    if(PROTOBUF_FOUND)
+        if(USE_ONNX)
+            set(WITH_ONNX ON)
+        endif()
+    else()
+        set(WITH_ONNX OFF)
+    endif()
+else()
+    set(WITH_ONNX OFF)
+endif()
+
 
 configure_file(config.cmake.hpp dlprim/config.hpp)
 set(DLPRIM_PUBLIC_HEADERS ${CMAKE_CURRENT_BINARY_DIR}/dlprim/config.hpp)
@@ -76,8 +131,11 @@ endif()
 file(GLOB CL_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.cl)
 file(GLOB CL_HEADERS  ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels/*.h)
 
-find_package(PythonLibs 3)
-if(PYTHONLIBS_FOUND)
+if(NOT BUILD_CORE_ONLY)
+    find_package(PythonLibs 3)
+endif()
+
+if(PYTHONLIBS_FOUND AND NOT BUILD_CORE_ONLY)
     string(REPLACE "." ";" PLIB_VER_LIST ${PYTHONLIBS_VERSION_STRING})
     list(GET PLIB_VER_LIST 0 PLIB_VER_MAJOR)
     list(GET PLIB_VER_LIST 1 PLIB_VER_MINOR)
@@ -104,20 +162,21 @@ else()
 endif()
 
 
-if(NOT CBLAS_LIB OR NOT CBLAS_PATH) 
-    set(EXTRA_SRC src/my_blas/my_cblas.cpp)
-    set(BLAS_LIB )
-    set(EXTRA_DEFS -DUSE_INTERNAL_BLAS)
-else()
-    set(EXTRA_SRC )
-    set(BLAS_LIB ${CBLAS_LIB})
-    include_directories("${CBLAS_PATH}")
-    set(EXTRA_DEFS )
+if(NOT BUILD_CORE_ONLY)
+
+    if(NOT CBLAS_LIB OR NOT CBLAS_PATH) 
+        set(EXTRA_SRC src/my_blas/my_cblas.cpp)
+        set(BLAS_LIB )
+        set(EXTRA_DEFS -DUSE_INTERNAL_BLAS)
+    else()
+        set(EXTRA_SRC )
+        set(BLAS_LIB ${CBLAS_LIB})
+        include_directories("${CBLAS_PATH}")
+        set(EXTRA_DEFS )
+    endif()
+
+    add_definitions(${EXTRA_DEFS})
 endif()
-
-add_definitions(${EXTRA_DEFS})
-
-
 
 message("=== Status ===")
 message("  OpenCL: include ${OCL_PATH}")
@@ -144,6 +203,18 @@ else()
     message("  oneDNN: None")
 endif()
     
+if(WITH_SQLITE3)
+    message("  Sqlite3: include ${SQLITE3_PATH}")
+    message("           lib ${SQLITE3_LIB}")
+else()
+    message("  Sqlite3: disabled")
+endif()
+
+if(WITH_ONNX)
+    message("  Protobuf: ${PROTOBUF_VERSION}, ${Protobuf_VERSION}")
+else()
+    message("  Protobuf (onnx): disabled")
+endif()
 
 if(BUILD_PYDLPRIM)
     message("  Python dlprim: enabled")
@@ -212,59 +283,90 @@ set(DLPRIM_SRC
         src/ops/nll_loss.cpp
         src/ops/mse_loss.cpp
         src/ops/initialization.cpp
+        src/ops/reshape.cpp
+        src/ops/pointwise.cpp
+        src/ops/reduction.cpp
+        src/ops/parameter.cpp
         ${EXTRA_SRC}
         )
 
 SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${LIBDIR}")
 
-if(WIN32)
+if(WIN32 OR DLPRIM_STATIC_BUILD)
 	add_library(dlprim_core STATIC ${DLPRIM_CORE_SRC})
-	add_library(dlprim STATIC ${DLPRIM_SRC})
+    if(NOT WIN32)
+        set_target_properties(dlprim_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    endif()
 else()
 	add_library(dlprim_core SHARED ${DLPRIM_CORE_SRC})
-	add_library(dlprim SHARED ${DLPRIM_SRC})
 endif()
-		
 target_link_libraries(dlprim_core ${OCL_LIB})	
-target_link_libraries(dlprim dlprim_core ${OCL_LIB} ${BLAS_LIB})
 if(WITH_ONEDNN)
     target_link_libraries(dlprim_core ${ONEDNN_LIB})
 endif()
-if(HDF5_FOUND)
-    target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
+if(WITH_SQLITE3)
+    target_link_libraries(dlprim_core ${SQLITE3_LIB})
 endif()
 
-set_target_properties(dlprim PROPERTIES 
-			PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
+if(NOT BUILD_CORE_ONLY)
+		
+    if(WIN32)
+        add_library(dlprim STATIC ${DLPRIM_SRC})
+    else()
+        add_library(dlprim SHARED ${DLPRIM_SRC})
+    endif()
 
-add_executable(test_context tests/test_context.cpp)
-add_executable(test_broadcast_reduce tests/test_broadcast_reduce.cpp)
-add_executable(test_util tests/test_util.cpp)
+    target_link_libraries(dlprim dlprim_core ${OCL_LIB} ${BLAS_LIB})
+    if(HDF5_FOUND)
+        target_link_libraries(dlprim ${HDF5_LIBRARIES} hdf5_cpp) 
+    endif()
 
-target_link_libraries(test_context dlprim_core)
-target_link_libraries(test_util dlprim_core)
-target_link_libraries(test_broadcast_reduce dlprim_core)
+    set_target_properties(dlprim PROPERTIES 
+                PUBLIC_HEADER "${DLPRIM_PUBLIC_HEADERS}")
 
-add_executable(test_from_template tests/test_from_template.cpp)
-add_executable(test_net tests/test_net.cpp)
-add_executable(test_json tests/json_test.cpp)
-add_executable(dlprim_benchmark tools/benchmark.cpp)
-add_executable(image_predict examples/cpp/image_predict.cpp)
-add_executable(mnist tests/mnist.cpp)
-add_executable(train_mnist examples/cpp/train_mnist.cpp)
-add_executable(dlprim_flops tools/flops.cpp)
-add_executable(test_random tests/test_random.cpp)
+    add_executable(test_context tests/test_context.cpp)
+    add_executable(test_broadcast_reduce tests/test_broadcast_reduce.cpp)
+    add_executable(test_util tests/test_util.cpp)
 
-target_link_libraries(test_from_template dlprim)
-target_link_libraries(mnist dlprim)
-target_link_libraries(train_mnist dlprim)
-target_link_libraries(dlprim_benchmark dlprim)
-target_link_libraries(image_predict dlprim)
-target_link_libraries(test_json dlprim)
-target_link_libraries(dlprim_flops dlprim)
-target_link_libraries(test_net dlprim)
-target_link_libraries(test_random dlprim)
+    target_link_libraries(test_context dlprim_core)
+    target_link_libraries(test_util dlprim_core)
+    target_link_libraries(test_broadcast_reduce dlprim_core)
 
+    add_executable(test_from_template tests/test_from_template.cpp)
+    add_executable(test_net tests/test_net.cpp)
+    add_executable(test_json tests/json_test.cpp)
+    add_executable(dlprim_benchmark tools/benchmark.cpp)
+    add_executable(image_predict examples/cpp/image_predict.cpp)
+    add_executable(mnist tests/mnist.cpp)
+    add_executable(train_mnist examples/cpp/train_mnist.cpp)
+    add_executable(dlprim_flops tools/flops.cpp)
+    add_executable(test_random tests/test_random.cpp)
+
+    target_link_libraries(test_from_template dlprim)
+    target_link_libraries(mnist dlprim)
+    target_link_libraries(train_mnist dlprim)
+    target_link_libraries(dlprim_benchmark dlprim)
+    target_link_libraries(image_predict dlprim)
+    target_link_libraries(test_json dlprim)
+    target_link_libraries(dlprim_flops dlprim)
+    target_link_libraries(test_net dlprim)
+    target_link_libraries(test_random dlprim)
+
+endif()
+
+set(EXTRA_INSTALL )
+
+if(WITH_ONNX)
+    include_directories(${PROTOBUF_INCLUDE_DIRS})
+    include_directories(${CMAKE_CURRENT_BINARY_DIR})
+    protobuf_generate_cpp(ONNX_PROTO_SRCS ONNX_PROTO_HDRS proto/onnx.proto)
+    add_library(dlprim_onnx SHARED src/importers/onnx.cpp ${ONNX_PROTO_SRCS} ${ONNX_PROTO_HDRS}) 
+    set_target_properties(dlprim_onnx PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    target_link_libraries(dlprim_onnx dlprim ${PROTOBUF_LITE_LIBRARIES})
+    add_executable(onnx_predict examples/cpp/onnx_predict.cpp)
+    target_link_libraries(onnx_predict dlprim dlprim_onnx)
+    set(EXTRA_INSTALL ${EXTRA_INSTALL} dlprim_onnx)
+endif()
 
 if(BUILD_PYDLPRIM)
     add_library(pydlprim SHARED python/python_interface.cpp)
@@ -276,6 +378,9 @@ if(BUILD_PYDLPRIM)
     include_directories(${Boost_INCLUDE_DIRS})
     include_directories(${PYTHON_INCLUDE_DIRS})
     target_link_libraries(pydlprim dlprim ${BNUMPY_LIB} ${BPYTHON_LIB} ${PYTHON_LIBRARIES})
+    if(WITH_ONNX)
+        target_link_libraries(pydlprim dlprim_onnx)
+    endif()
     file(GLOB PY_SOURCES  ${CMAKE_CURRENT_SOURCE_DIR}/python/dlprim/*.py)
     install(FILES ${PY_SOURCES} DESTINATION python/dlprim)
     install(TARGETS pydlprim
@@ -283,28 +388,33 @@ if(BUILD_PYDLPRIM)
  
 endif()
 
+if(NOT BUILD_CORE_ONLY)
+    file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
 
-file(GLOB TEST_TEMPLATES  ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_case_*.json)
-
-foreach(TEMPLATE ${TEST_TEMPLATES}) 
-    get_filename_component(TEST_NAME ${TEMPLATE} NAME_WE)
-    add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
-endforeach()
-add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
-add_test(test_json test_json)
-add_test(test_random test_random ${TEST_DEV})
-add_test(test_context test_context ${TEST_DEV})
-add_test(test_util test_util ${TEST_DEV})
-add_test(test_broadcast_reduce test_broadcast_reduce ${TEST_DEV})
-
+    foreach(TEMPLATE ${TEST_TEMPLATES}) 
+        get_filename_component(TEST_NAME ${TEMPLATE} NAME_WE)
+        add_test("test_${TEST_NAME}" test_from_template ${TEST_DEV} ${TEMPLATE})
+    endforeach()
+    add_test(test_net test_net ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
+    add_test(test_net_nonopt test_net "-k" ${TEST_DEV} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_net.json ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weights.json)
+    add_test(test_json test_json)
+    add_test(test_random test_random ${TEST_DEV})
+    add_test(test_context test_context ${TEST_DEV})
+    add_test(test_util test_util ${TEST_DEV})
+    add_test(test_broadcast_reduce test_broadcast_reduce ${TEST_DEV})
+endif()
 
 #################
 # Installation
 #################
 
+if(NOT BUILD_CORE_ONLY)
+    set(EXTRA_INSTALL dlprim dlprim_benchmark dlprim_flops ${EXTRA_INSTALL})
+endif()
+
 
 install(TARGETS 
-    dlprim_core dlprim dlprim_benchmark dlprim_flops
+    dlprim_core ${EXTRA_INSTALL}
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION ${LIBDIR}
 	ARCHIVE DESTINATION ${LIBDIR}

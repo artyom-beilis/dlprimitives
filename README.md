@@ -14,7 +14,7 @@ of any operating systems other than Linux.
 multiple GPU architectures.
 - Create an inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
 - Create minimalistic deep-learning framework as POC of capabilities and performance.
-- Integrate to existing large scale deep learing projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
+- Integrate to existing large scale deep learning projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
 
 Please note this is only work in progress - first and preliminary stages.
 
@@ -30,6 +30,13 @@ Integration with existing frameworks:
     
     <https://github.com/artyom-beilis/caffe/tree/opencl_dlprim>
 
+## Integration With ONNX
+
+ONNX Model loading and inference tested on following imagenet networks:
+
+- Pytorch, opsets 9, 11, 13: `alexnet`, `vgg16`, `resnet18`, `resnext50_32x4d`, `wide_resnet50_2`, `efficientnet_b0`, `efficientnet_b4`, `regnet_y_400mf`, `squeezenet1_0`, `mobilenet_v2`, `densenet121`
+- MXNet: `vgg11_bn`, `alexnet`, `mobilenetv2_0.25`, `mobilenet0.25`, `densenet121`, `resnet18_v1`, `squeezenet1.0`
+- Tensorflow, limited initial support, channel first: `resnet50`, `densenet121`
 
 ## Documentation 
 
@@ -38,40 +45,33 @@ Is published under <http://dlprimitives.org/docs/>
 
 ## Features Matrix
 
-|Operator               |Features                               | Computation       |
-|-----------------------|---------------------------------------|-------------------|
-|Softmax, LogSoftmax    |                                       | Fwd,Bwd           |
-|NLLLoss                |                                       | Fwd,Bwd           |
-|MSELoss                |                                       | Fwd,Bwd           |
-|SoftmaxWithLoss        |                                       | Fwd,Bwd           |
-|Elementwise            | ax+by, max(ax,by), ax\*y, broadcasting| Fwd,Bwd           |
-|Concat                 |                                       | Fwd,Bwd           |
-|Slice                  |                                       | Fwd,Bwd           |
-|MaxPool2d              |                                       | Fwd,Bwd           |
-|AvgPool2d              |                                       | Fwd,Bwd           |
-|GlobalMaxPool2d        |                                       | Fwd,Bwd           |
-|GlobalAvgPool2d        |                                       | Fwd,Bwd           |
-|Inner Product          |                                       | Fwd,Bwd           |
-|BatchNorm              |                                       | Fwd,Bwd           | 
-|Conv2d                 | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
-|TransposedConv2d       | GEMM, Winograd, Depthwise Separable   | Fwd,Bwd           |
-|Activation             | relu, sigmoid, tanh, relu6            | Fwd,Bwd           |
+|Operator               |Features                               | Comment    |
+|-----------------------|---------------------------------------|------------|
+|Softmax                | Softmax, LogSoftmax                   |            |
+|NLLLoss                |                                       |            |
+|MSELoss                |                                       |            |
+|SoftmaxWithLoss        |                                       |            |
+|Elementwise            | ax+by, max(ax,by), ax\*y, broadcasting|            |
+|Concat                 |                                       |            |
+|Slice                  |                                       |            |
+|Pooling2D              | max, average                          |            |
+|GlobalPooling          | max, average                          | 2D only    |
+|GlobalAvgPool2d        |                                       |            |
+|InnerProduct           |                                       |            |
+|BatchNorm              |                                       |            | 
+|Reshape                |                                       |            |
+|Squeeze                |                                       |            |                                
+|Flatten                |                                       |            | 
+|Threshold              |                                       |            | 
+|Hardtanh               |                                       |            | 
+|Abs                    |                                       |            | 
+|Parameter              |                                       |ֹUtility     | 
+|Reduction              | Sum, Mean, Sum Squares, L1            |            |
+|Convolution2D          | GEMM, Winograd, Depthwise Separable   |            |
+|TransposedConvolution2D| GEMM, Winograd, Depthwise Separable   |            |
+|Activation             | relu, sigmoid, tanh, relu6            |            |
 
 Solvers: SGD, Adam
-
-## Validated Networks
-
-| Network       | Source of model       | Operation     |
-|---------------|-----------------------|---------------|
-| AlexNet       | torchvision.models    | Inference     |
-| VGG16         | torchvision.models    | Inference     |
-| ResNet50      | torchvision.models    | Inference     |
-| ResNet18      | torchvision.models    | Inference     |
-| MobileNet v2  | torchvision.models    | Inference     |
-
-The networks were exported from pytorch to ONNX and imported for DLPrimitives.
-Results compared with sample images. Note currently only inference validated,
-backpropogation is convered by per-layer regression.
 
 ## Tested GPUs
 
@@ -84,10 +84,13 @@ backpropogation is convered by per-layer regression.
 |GTX 1080   | NVidia    |                               |
 |RTX 2060S  | NVidia    |                               |
 |MaliG52 MC2| ARM       | performance not optimised yet |
+|M1 Max     | Apple     | 32-core model                 |
 
 Devices Tested on Windows: AMD RX 560, NVidia GTX 960.
+
+Devices Tested on macOS: Apple M1 Max.
 
 ## Other features
 
 - Network object for inference
-- ONNX to DlPrimitives model converter
+- ONNX to DLPrimitives model converter

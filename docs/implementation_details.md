@@ -47,7 +47,7 @@ principles and practice of parallel programming. 2020.
 
 In comparison to the paper: dlprim uses 32x8 tiles block instead of 64x8
 since it generic OpenCL implementation for different GPUs
-that can't optimize registers as efficienlty as manually written
+that can't optimize registers as efficiently as manually written
 assembly.
 
 

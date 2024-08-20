@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+///
+/// Copyright (c) 2021-2022 Artyom Beilis <artyomtnk@yahoo.com>
+///
+/// MIT License, see LICENSE.TXT
+///
+///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/core/activation.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 
@@ -11,7 +18,7 @@ namespace core {
         cl::Kernel k(prog,"activation");
 
         int p=0;
-        int size = x.shape().total_size();
+        cl_ulong size = x.shape().total_size();
         k.setArg(p++,size);
         x.set_arg(k,p);
         y.set_arg(k,p);
@@ -29,7 +36,7 @@ namespace core {
         
         
         int p=0;
-        int size = y.shape().total_size();
+        cl_ulong size = y.shape().total_size();
         k.setArg(p++,size);
         y.set_arg(k,p);
         dy.set_arg(k,p);

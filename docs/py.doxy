@@ -3,7 +3,7 @@
 
 # Building and Using
 
-In order to build dlprimitives with python inteface you need to have boost-python3 and boost-numpy3 installed duing build.
+In order to build dlprimitives with python inteface you need to have boost-python3 and boost-numpy3 installed during the build.
 
 Upon installation the file can be found under python directory. For example if you install dlprimitives to `/opt/dlprimitives` than
 the directory `/opt/dlprimitives/python` will be created and it need to be added to PYTHONPATH
@@ -19,7 +19,7 @@ For example
 
 # Reference Documenatation
 
-[Reference documentation](dlprim.html) is build using pydoc
+[Reference documentation](dlprim.html) is built using pydoc
 
 
 */

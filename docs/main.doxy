@@ -17,7 +17,7 @@ of any operating systems other than Linux.
 multiple GPU architectures.
 - Create an inference library with minimal dependencies for efficient inference on any modern GPU, similar to TensorRT or MIGraphX.
 - Create minimalistic deep-learning framework as POC of capabilities and performance.
-- _Long Shot_: Integrate to existing large scale deep learing projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
+- _Long Shot_: Integrate to existing large scale deep learning projects like PyTorch, TF, MXNet such that vendor independent open-source OpenCL API will be first class citizen for deep learning.
 
 ## Important Documentation Pages
 
