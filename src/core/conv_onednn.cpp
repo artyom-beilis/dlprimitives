@@ -32,6 +32,9 @@ namespace core {
             engine_ = dnnl::ocl_interop::make_engine(ctx.device()(),ctx.context()());
 
             dnnl::memory::dims strides(config_.stride,config_.stride+2);
+            dnnl::memory::dims dilate(config_.dilate,config_.dilate+2);
+            dilate[0]-=1;
+            dilate[1]-=1;
             dnnl::memory::dims pad(config_.pad,config_.pad+2);
 
             Shape y_shape = Conv2DBase::get_output_shape(config_,config_.shape);
@@ -53,6 +56,7 @@ namespace core {
             TensorSpecs w(w_shape_,config_.dtype);
             TensorSpecs b(Shape(config_.channels_out),config_.dtype);
 
+            #if 0
             auto conv_desc = dnnl::convolution_forward::desc(
                                 dnnl::prop_kind::forward_training,
                                 dnnl::algorithm::convolution_auto,
@@ -63,6 +67,19 @@ namespace core {
                                 strides,pad,pad);
             
             auto conv_pd = dnnl::convolution_forward::primitive_desc(conv_desc,engine_);
+            #endif
+            auto conv_pd = dnnl::convolution_forward::primitive_desc(
+                            engine_,
+                            dnnl::prop_kind::forward_training,
+                            dnnl::algorithm::convolution_auto,
+                            mem_desc(x,tag::nchw),
+                            mem_desc(w,w_tag_),
+                            (bias ? mem_desc(b,tag::a) : dnnl::memory::desc()),
+                            mem_desc(y,tag::nchw),
+                            strides,
+                            dilate,
+                            pad,pad);
+
             conv_prim_ = dnnl::convolution_forward(conv_pd);
         }
 
@@ -117,8 +134,8 @@ namespace core {
     {
         if(!ctx.is_intel())
             return false;
-        if(config.dilate[0] != 1 || config.dilate[1] != 1)
-            return false;
+        /*if(config.dilate[0] != 1 || config.dilate[1] != 1)
+            return false;*/
         if(activation != StandardActivations::identity)
             return false;
         return true;

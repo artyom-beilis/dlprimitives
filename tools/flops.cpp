@@ -787,6 +787,7 @@ do{                                                          \
                                 m.flops * 1e-9, flops_per,
                                 m.bps * 1e-9, bandw_per,
                                 m.algo);
+                    break;
                 }
             }
         }

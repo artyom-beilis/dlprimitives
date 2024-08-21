@@ -720,7 +720,12 @@ namespace core {
 #ifdef WITH_ONEDNN        
         bool onednn = is_fwd_onednn_compatible(ctx,config,activation);
         if(onednn && (algo == "intel_onednn" || auto_algo)) {
-            return fwd_onednn_create(ctx,config,bias,activation);
+            try {
+                return fwd_onednn_create(ctx,config,bias,activation);
+            }
+            catch(std::exception const &e) {
+                std::cerr << "Creating of onednn conv, failed, falling back to standard one" << std::endl;
+            }
         }
 #endif        
         if((algo == "winograd" && win) || (auto_algo && win_recommended)) {
