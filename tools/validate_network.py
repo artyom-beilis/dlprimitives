@@ -45,7 +45,9 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver,profile):
 
     def _sync():
         if device.find('opencl')==0 or device.find('privateuseone')==0 or device.find('ocl')==0:
-            torch.zeros((1,)).to(device)
+            torch.ocl.synchronize()
+        elif device.find('xpu')==0:
+            torch.xpu.synchronize()
         elif device.find('cuda')==0:
             torch.cuda.synchronize()
 
@@ -148,8 +150,8 @@ def export_model(model,batch,path,opset,ir,train):
     if train:
         extra =dict( training=torch.onnx.TrainingMode.TRAINING,do_constant_folding=False)
     else:
-        extra = {}
-    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset,do_constant_folding=True,**extra)
+        extra = dict(do_constant_folding=True)
+    torch.onnx.export(model,inp,path,input_names = ["data"],output_names=["prob"],opset_version=opset,**extra)
     import onnx
     #from onnx import version_converter
     model = onnx.load_model(path)
