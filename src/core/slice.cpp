@@ -6,13 +6,15 @@
 ///
 ///////////////////////////////////////////////////////////////////////////////
 #include <dlprim/core/common.hpp>
+#include <dlprim/core/pointwise.hpp>
 #include <dlprim/gpu/program_cache.hpp>
 namespace dlprim {
 namespace core {
     SliceCopy::SliceCopy(Context &ctx,DataType dtype) :dtype_(dtype)
     {
-        DLPRIM_CHECK(dtype == float_data);
-        cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"copy");
+        cl::Program const &prog = gpu::Cache::instance().get_program(ctx,"copy",
+                                "dtype",data_type_to_opencl_type(dtype_)
+                                );
         cl::Kernel k(prog,"copy");
         kernel_ =  k;
     }
@@ -42,7 +44,7 @@ namespace core {
         kernel_.setArg(p++,cl_ulong(s[2]));
         target.set_arg(kernel_,p);
         source.set_arg(kernel_,p);
-        kernel_.setArg(p++,scale);
+        bind_as_dtype(kernel_,p,scale,dtype_);
 
         q.queue().enqueueNDRangeKernel(kernel_,cl::NullRange,cl::NDRange(s[2],slice,s[0]),cl::NullRange,q.events(),q.event("slice_copy"));
     }
