@@ -242,4 +242,6 @@ if __name__ == '__main__':
     r = p.parse_args()
     if r.device.find('ocl')==0 or r.device.find('privateuseone')==0:
         import pytorch_ocl
+    if r.device.find('xpu')==0:
+        import intel_extension_for_pytorch
     main(r)
