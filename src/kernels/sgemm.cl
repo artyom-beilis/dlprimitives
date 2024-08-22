@@ -250,11 +250,15 @@
 #endif
 
 
+#ifndef BATCH_GEMM
+#define BATCH_GEMM 0
+#endif
+
 #ifndef REDUCE_K
 #define REDUCE_K 1
 #endif
 
-#if GROUPS == 1 && REDUCE_K == 1
+#if GROUPS == 1 && REDUCE_K == 1 && BATCH_GEMM == 0
 #define DIM_M 0
 #define DIM_N 1
 #define DIM_G 2
@@ -298,10 +302,26 @@ __attribute__((reqd_work_group_size(BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N, 1)))
 #else
 __attribute__((reqd_work_group_size(1,BLOCKS_IN_TILE_M, BLOCKS_IN_TILE_N)))
 #endif
-void    sgemm(    int M,int N,int K,
-        __global const float * restrict A,ulong offset_A,int lda,
-        __global const float * restrict B,ulong offset_B,int ldb,
-        __global float * restrict C,ulong offset_C,int ldc,
+void    sgemm(    
+#if BATCH_GEMM == 1
+        int batches,
+#endif        
+        int M,int N,int K,
+        __global const float * restrict A,ulong offset_A,
+#if BATCH_GEMM == 1
+        int batch_stride_a,
+#endif                
+        int lda,
+        __global const float * restrict B,ulong offset_B,
+#if BATCH_GEMM == 1
+        int batch_stride_b,
+#endif                
+        int ldb,
+        __global float * restrict C,ulong offset_C,
+#if BATCH_GEMM == 1
+        int batch_stride_c,
+#endif                
+        int ldc,
         float beta_factor
 #if BIAS != 0
         , __global const float * restrict bias,ulong offset_bias
@@ -311,6 +331,14 @@ void    sgemm(    int M,int N,int K,
     A += offset_A;
     B += offset_B;
     C += offset_C;
+#if BATCH_GEMM == 1 
+    int batch_id = get_global_id(DIM_G);
+    if(batch_id >= batches)
+        return;
+    A += batch_stride_a * batch_id;
+    B += batch_stride_b * batch_id;
+    C += batch_stride_c * batch_id;
+#endif    
 
 #if CONVGEMM > 0 && GROUPS > 1
     if(get_global_id(DIM_G) >= REDUCE_K * GROUPS)

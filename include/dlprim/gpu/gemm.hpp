@@ -39,6 +39,26 @@ namespace gpu {
                           int size_of_c,
                           ExecutionContext const &e) = 0;
 
+        static void batch_sgemm(
+                          DataType dt,
+                          bool trans_a,bool trans_b,
+                          int Batch, // number of matrices
+                          int M,int N,int K,
+                          cl::Buffer &a,
+                          cl_ulong offset_a, 
+                          int batch_stride_a,
+                          int lda,
+                          cl::Buffer &b,
+                          cl_ulong offset_b,
+                          int batch_stride_b,
+                          int ldb,
+                          cl::Buffer &c,
+                          cl_ulong offset_c,
+                          int batch_stride_c,
+                          int ldc,
+                          float beta,
+                          ExecutionContext const &e);
+
         static std::unique_ptr<GEMM> get_optimal_gemm(
             Context &ctx,DataType dtype,
             bool trans_a,bool trans_b,
@@ -60,6 +80,8 @@ namespace gpu {
             int im2col_chan = 0);
         
     };
+
+
 
 }
 }
