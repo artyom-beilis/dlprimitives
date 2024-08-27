@@ -46,7 +46,8 @@ namespace core {
                                         std::vector<double>  weights,
                                         std::vector<DataType> weights_types,
                                         std::string const &code,
-                                        ExecutionContext const &e);
+                                        ExecutionContext const &e,
+                                        bool shrink_dims=true);
     ///
     /// Perform pointwise operation with both boradcasting and reduction
     ///

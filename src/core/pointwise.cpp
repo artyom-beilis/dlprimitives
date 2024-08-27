@@ -199,7 +199,8 @@ namespace core {
                                         std::vector<double> ws,
                                         std::vector<DataType> dts,
                                         std::string const &code,
-                                        ExecutionContext const &e)
+                                        ExecutionContext const &e,
+                                        bool shrink_dims)
     {
         DLPRIM_CHECK(!xs.empty());
         DLPRIM_CHECK(!ys.empty());
@@ -211,7 +212,8 @@ namespace core {
         for(size_t j=0;j<ys.size();j++)
             shapes[j+xs.size()] = ys[j].shape();
 
-        shrink_broadcast_ranges(shapes);
+        if(shrink_dims)
+            shrink_broadcast_ranges(shapes);
 
 
         DataType target_type = ys[0].dtype();
