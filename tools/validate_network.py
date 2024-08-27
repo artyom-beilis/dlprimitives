@@ -76,48 +76,49 @@ def benchmark_model(model,batch,device,warm,iters,train,use_solver,profile):
     if use_solver:
         optimizer = torch.optim.Adam(model.parameters())
     for it in range(-warm,iters):
-        if it == 0 and profile:
-            torch.ops.oclops.prof_start(device)
-        start = time.time()
-        if use_solver:
-            optimizer.zero_grad()
-            _sync()
-            zero_point = time.time()
-        else:
-            zero_point = start
-
-        inp = inp_cpu.to(device)
-        if train:
-            lbl = lbl_cpu.to(device)
-
-        _sync()
-        io_point = time.time()
-        res = model(inp)
-        if train:
-            res = sm(res)
-            l=nll(res,lbl)
-            _sync()
-            fwd_end = time.time()
-            l.backward()
-            _sync()
-            bwd_end = time.time();
+        def run_step():
+            start = time.time()
             if use_solver:
-                optimizer.step()
+                optimizer.zero_grad()
                 _sync()
-                solver_end = time.time()
+                zero_point = time.time()
             else:
-                solver_end = bwd_end
-        else:
-            res.to('cpu') 
+                zero_point = start
+
+            inp = inp_cpu.to(device)
+            if train:
+                lbl = lbl_cpu.to(device)
+
             _sync()
-            fwd_end = time.time()
-            solver_end = fwd_end
-            bwd_end = fwd_end
-        end = time.time()
+            io_point = time.time()
+            res = model(inp)
+            if train:
+                res = sm(res)
+                l=nll(res,lbl)
+                _sync()
+                fwd_end = time.time()
+                l.backward()
+                _sync()
+                bwd_end = time.time();
+                if use_solver:
+                    optimizer.step()
+                    _sync()
+                    solver_end = time.time()
+                else:
+                    solver_end = bwd_end
+            else:
+                res.to('cpu') 
+                _sync()
+                fwd_end = time.time()
+                solver_end = fwd_end
+                bwd_end = fwd_end
+            end = time.time()
+            return start,end,zero_point,io_point,fwd_end,bwd_end,solver_end
         if it == 0 and profile:
-            report = torch.ops.oclops.prof_stop()
-            print(report)
-            _prof_summary(report)
+            with torch.ocl.profile(device,"prof.csv"):
+                start,end,zero_point,io_point,fwd_end,bwd_end,solver_end=run_step()
+        else:
+            start,end,zero_point,io_point,fwd_end,bwd_end,solver_end = run_step()
         msg = ''
         if it == -warm:
             msg = 'warming up'
@@ -244,6 +245,8 @@ if __name__ == '__main__':
     r = p.parse_args()
     if r.device.find('ocl')==0 or r.device.find('privateuseone')==0:
         import pytorch_ocl
+        if r.profile:
+            torch.ocl.enable_profiling(r.device)
     if r.device.find('xpu')==0:
         import intel_extension_for_pytorch
     main(r)
