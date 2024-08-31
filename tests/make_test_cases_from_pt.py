@@ -463,6 +463,60 @@ def make_activation():
             cases.append(case)
     return report
 
+def make_interpolation():
+    report = {
+        "operator" : "Interpolation",
+        "tests" : []
+    }
+    tests = report["tests"]
+    for method,align in [('bilinear',False),('bilinear',True),('nearest',None),('nearest-exact',None)]:
+        for xs in [(4,8),(7,9),(16,16)]:
+            cfgs = []
+            for scale in [ (2,1),(2,2),(3.4,3.3),(0.5,0.7)]:
+                cfgs.append((None,scale))
+            for ys in [(8,8),(15,16),(4,4)]:
+                cfgs.append((ys,None))
+            for cfg in cfgs:
+                cases=[]
+                tin = torch.randn(1,1,*xs)
+                op = lambda x:torch.nn.functional.interpolate(x,size=cfg[0],scale_factor = cfg[1],mode=method,align_corners = align)
+                tout = op(tin)
+                test = {
+                    "train" : True,
+                    "options" : {
+                        "method" : method,
+                        "out_h": -1 if cfg[0] is None else cfg[0][0],
+                        "out_w": -1 if cfg[0] is None else cfg[0][1],
+                        "scale_y": -1 if cfg[1] is None else cfg[1][0],
+                        "scale_x": -1 if cfg[1] is None else cfg[1][1],
+                        "align_corners" : False if align is None else align,
+                    },
+                    "setup_tensors" : [ { "shape" : list(tin.shape) } ],
+                    "output_tensors": [ { "shape" : list(tout.shape) } ],
+                    "workspce": 0,
+                    "cases": cases
+                }
+                print(test["options"])
+                tests.append(test)
+                for s in [[1,1,*xs],[2,3,*xs],[4,4,*xs],[64,128,*xs]]:
+                    print("- ",s)
+                    tin = torch.randn(s,requires_grad=True)
+                    tout = op(tin)
+                    dout = torch.randn(tout.shape)
+                    tout.backward(dout,retain_graph=True)
+                    case = dict(in_shapes = [ list(tin.shape)] ,out_shapes = [list(tout.shape)])
+                    if np.prod(s) < 200:
+                        case["in_tensors"] = [tin.reshape((-1,)).tolist()]
+                        case["out_tensors"] = [tout.reshape((-1,)).tolist()]
+                        case["out_diffs"] = [dout.reshape((-1,)).tolist()]
+                        case["in_diffs"] = [tin.grad.reshape((-1)).tolist()]
+                    else:
+                        case["use_cpu_reference"]=True
+                        case["eps"] = 1e-4
+                    cases.append(case)
+    return report
+
+
 
 def make_pooling2d():
     report = {
@@ -1136,6 +1190,7 @@ if __name__ == "__main__":
         'abs': make_abs,
         'reduction': make_reduction,
         'param': make_param,
+        'interpolation': make_interpolation,
     }
     parse = argparse.ArgumentParser()
     parse.add_argument("--case",default="all",help="select case - one of " + ", ".join(list(cases) + ['all']))

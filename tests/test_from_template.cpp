@@ -227,8 +227,11 @@ int main(int argc,char **argv)
         dp::ExecutionContext cpu_e;
 
         dp::Context ctx(argv[1]);
-        cl::CommandQueue q = ctx.make_queue();
-        dp::ExecutionContext e(q);
+        dp::ExecutionContext e;
+        if(!ctx.is_cpu_context()) {
+            cl::CommandQueue q = ctx.make_queue();
+            e = dp::ExecutionContext(q);
+        }
         
         std::ifstream f(argv[2]);
         if(!f) {
@@ -264,6 +267,14 @@ int main(int argc,char **argv)
                 ref_op->mode(dp::CalculationsMode::train);
             }
             op->setup(input_specs,res_specs,res_param_specs,res_ws);
+            if(res_specs != output_specs) {
+                std::cerr << "Res"<<std::endl;
+                for(auto x:res_specs)
+                    std::cerr <<x<<std::endl;
+                std::cerr << "out"<<std::endl;
+                for(auto x:output_specs)
+                    std::cerr <<x<<std::endl;
+            }
             TEST(res_specs == output_specs);
             TEST(ws == -1 || res_ws == size_t(ws));
             if(res_ws > 0) {
@@ -317,6 +328,14 @@ int main(int argc,char **argv)
                 if(ws_size > res_ws) {
                     res_ws = ws_size;
                     res_ws_tensor = dp::Tensor(ctx,dp::Shape(res_ws),dp::uint8_data);
+                }
+                if(out_shapes != res_shape) {
+                    std::cerr << "Res" <<std::endl;
+                    for(auto s:res_shape)
+                        std::cerr << s << std::endl;
+                    std::cerr << "Out" <<std::endl;
+                    for(auto s:out_shapes)
+                        std::cerr << s << std::endl;
                 }
                 TEST(out_shapes == res_shape);
                 ws_size = 0;

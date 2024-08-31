@@ -17,4 +17,5 @@
 #include <dlprim/ops/reshape.hpp>
 #include <dlprim/ops/pointwise.hpp>
 #include <dlprim/ops/reduction.hpp>
+#include <dlprim/ops/interpolation.hpp>
 

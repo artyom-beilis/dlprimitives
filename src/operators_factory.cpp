@@ -146,6 +146,12 @@ static std::map<std::string,std::function<Operator *(Context &,json::value const
             return new Parameter(ctx,ParameterConfig::from_json(p));
         }
     },
+    {
+        "Interpolation", 
+        [](Context &ctx,json::value const &p) {
+            return new Interpolation(ctx,InterpolationConfig::from_json(p));
+        }
+    },
 };
     
 std::unique_ptr<Operator> create_by_name(Context &ctx,

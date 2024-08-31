@@ -319,6 +319,14 @@ namespace dlprim {
 		int pad[2] = {0,0};
 		int groups = 1;
     };
+    ///
+    /// Interpolation methods
+    ///
+    enum class InterpolateType {
+        nearest  = 0,
+        nearest_exact  = 1,
+        bilinear = 2
+    };
 
 
 

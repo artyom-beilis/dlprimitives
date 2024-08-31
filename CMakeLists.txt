@@ -233,6 +233,7 @@ set(DLPRIM_CORE_SRC
         src/core/loss.cpp
         src/core/activation.cpp
         src/core/util.cpp
+        src/core/interpolate.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/kernels.cpp)
 
 set(DLPRIM_SRC 
@@ -258,6 +259,7 @@ set(DLPRIM_SRC
         src/ops/pointwise.cpp
         src/ops/reduction.cpp
         src/ops/parameter.cpp
+        src/ops/interpolation.cpp
         ${EXTRA_SRC}
         )
 
