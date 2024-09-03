@@ -14,6 +14,14 @@ void atomic_addf(__global volatile float *ptr,float v)
         prev = atomic_load(p);
         newv = as_int(as_float(prev) + v);
     } while(! atomic_compare_exchange_weak(p,&prev,newv));
+#elif defined(__NV_CL_C_VERSION)
+    float prev;
+    asm volatile(
+        "atom.global.add.f32 %0, [%1], %2;"
+        : "=f"(prev)
+        : "l"(ptr) , "f"(v)
+        : "memory"
+    );
 #else
     float oldv = *ptr;
     for(;;) {
