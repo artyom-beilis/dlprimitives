@@ -138,7 +138,7 @@ namespace gpu {
             }
             if(!batch_gemm_) {
                 int cores = ctx.estimated_core_count();
-                if(M * N / (block_size_m_ * block_size_n_) < 4 * cores && K > M*16 && K > N*16) {
+                if(cores >= 256 && M * N / (block_size_m_ * block_size_n_) < 4 * cores && K > M*16 && K > N*16) {
                     reduce_k_ = 8;
                     set_scale(ctx,activation);
                 }
