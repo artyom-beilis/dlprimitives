@@ -355,11 +355,17 @@ public:
         dp::core::fill_tensor(C,0,ec_);
 
 
-        time_point_type start,end;
-        for(int i=-warm;i<calc;i++) {
+        time_point_type warmp,start,end;
+        for(int i=-warm - 1;i<calc;i++) {
+            if(i == -warm) {
+                ec_.finish();
+                warmp = clock_type::now();
+            }
             if(i == 0) {
                 ec_.finish();
                 start = clock_type::now();
+                double time_per_kern = sec_diff(warmp,start) / warm;
+                calc = std::max(5,int(ceil(1/time_per_kern)));
             }
             gemm->gemm(m,n,k,
                         A.device_buffer(),A.device_offset(),A.shape()[1],
@@ -624,11 +630,17 @@ do{                                                          \
         if(ws_size > 0)
             ws = dp::Tensor(ctx_,dp::Shape(ws_size),dp::uint8_data);
 
-        time_point_type start,end;
-        for(int i=-warm;i<calc;i++) {
+        time_point_type warmp,start,end;
+        for(int i=-warm - 1;i<calc;i++) {
+            if(i == -warm) {
+                ec_.finish();
+                warmp = clock_type::now();
+            }
             if(i == 0) {
                 ec_.finish();
                 start = clock_type::now();
+                double time_per_kern = sec_diff(warmp,start) / warm;
+                calc = std::max(5,int(ceil(1/time_per_kern)));
             }
             switch(op) {
                 case dp::forward_data:
