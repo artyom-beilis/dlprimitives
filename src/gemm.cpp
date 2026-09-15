@@ -422,7 +422,6 @@ namespace gpu {
     private:
         cl::Kernel kernel_;
         bool bias_;
-        bool zorder_;
     };
     
 
