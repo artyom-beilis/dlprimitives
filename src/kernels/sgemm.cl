@@ -186,7 +186,11 @@
 #error "Unsupported condif"
 #endif
 
-#if defined(cl_intel_subgroups)
+#ifndef HOST_HAS_INTEL_SUBGROUPS
+#define HOST_HAS_INTEL_SUBGROUPS 0
+#endif
+
+#if HOST_HAS_INTEL_SUBGROUPS && defined(cl_intel_subgroups)
 #define INTEL_PLATFORM 1
 #else
 #define INTEL_PLATFORM 0
