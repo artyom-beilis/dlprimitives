@@ -685,7 +685,8 @@ namespace core {
     }
     static bool is_winograd_compatible(Context &ctx,Conv2DSettings const &config)
     {
-        if(!(ctx.is_amd() || ctx.is_nvidia() || ctx.is_intel()))
+        //if(!(ctx.is_amd() || ctx.is_nvidia() || ctx.is_intel()))
+        if(!(ctx.is_amd() || ctx.is_nvidia()))
             return false;
         if(ctx.device().getInfo<CL_DEVICE_LOCAL_MEM_SIZE>() < 32768)
             return false;
