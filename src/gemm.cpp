@@ -21,7 +21,9 @@ namespace gpu {
             sep_act_ = false;
             batch_gemm_ = batch_gemm;
             reduce_k_ = 1;
-            if(ctx.check_device_extension("cl_intel_subgroups")) {
+            // Use the host-reported extension both for tuning and to permit the matching kernel path.
+            host_has_intel_subgroups_ = ctx.check_device_extension("cl_intel_subgroups");
+            if(host_has_intel_subgroups_) {
                 block_size_m_ = 8;
                 block_size_n_ = 8;
                 tile_size_k_ = 4;
@@ -232,6 +234,7 @@ namespace gpu {
         bool sep_scale_;
         bool sep_act_;
         bool batch_gemm_;
+        bool host_has_intel_subgroups_ = false;
         cl::Kernel scal_;
         cl::Kernel act_;
         bool zorder_ = false;
@@ -254,6 +257,7 @@ namespace gpu {
                                         "BLOCK_SIZE_M",block_size_m_,
                                         "BLOCK_SIZE_N",block_size_n_,
                                         "TILE_SIZE_K",tile_size_k_,
+                                        "HOST_HAS_INTEL_SUBGROUPS",int(host_has_intel_subgroups_),
                                         "TILE_OFFSET",off_,
                                         "BIAS",bias,
                                         "ATRANS",int(atrans),
@@ -363,6 +367,7 @@ namespace gpu {
                                         "BLOCK_SIZE_M",block_size_m_,
                                         "BLOCK_SIZE_N",block_size_n_,
                                         "TILE_SIZE_K",tile_size_k_,
+                                        "HOST_HAS_INTEL_SUBGROUPS",int(host_has_intel_subgroups_),
                                         "TILE_OFFSET",off_,
                                         "BIAS",0,
                                         "ATRANS",int(atrans),
@@ -445,6 +450,7 @@ namespace gpu {
                                         "BLOCK_SIZE_M",block_size_m_,
                                         "BLOCK_SIZE_N",block_size_n_,
                                         "TILE_SIZE_K",tile_size_k_,
+                                        "HOST_HAS_INTEL_SUBGROUPS",int(host_has_intel_subgroups_),
                                         "TILE_OFFSET",off_,
                                         "BIAS",bias,
                                         "ATRANS",int(atrans),
