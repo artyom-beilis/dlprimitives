@@ -9,7 +9,7 @@ void atomic_addf(__global volatile float *ptr,float v)
 {
 #if defined(__opencl_c_ext_fp32_global_atomic_add)
     atomic_fetch_add((__global volatile atomic_float *)ptr,v);
-#elif defined(cl_intel_subgroups)
+#elif defined(cl_intel_subgroups) && defined(__OPENCL_C_VERSION__) && __OPENCL_C_VERSION__ == 200
     __global atomic_int *p = (__global atomic_int *)(ptr);
     int prev,newv;
     do {
