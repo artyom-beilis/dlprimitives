@@ -46,7 +46,7 @@ public:
 			flag->set_arg(sel, p);
 		} else {
 			sel.setArg(p++, nullptr);
-			sel.setArg(p++, 0);
+			sel.setArg(p++, 0llu);
 		}
 		e.queue().enqueueNDRangeKernel(sel, cl::NullRange, get_broadcast_ndrange(limit), cl::NullRange, e.events(), e.event("select"));
 	}
