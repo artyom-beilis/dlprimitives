@@ -58,7 +58,7 @@ private:
 };
 std::unique_ptr<Select> Select::create(Context &ctx, int dims, DataType dtype, DataType itype, Op op, Target target, bool scal)
 {
-	std::unique_ptr<Select> ptr = std::make_unique<SelectImpl>(ctx, dims, dtype, itype, op, target, scal);
+	std::unique_ptr<Select> ptr(new SelectImpl(ctx, dims, dtype, itype, op, target, scal));
 	return ptr;
 }
 }
