@@ -9,7 +9,7 @@ namespace core {
 class SelectImpl :public Select {
 public:
 	SelectImpl(Context &ctx, int dims, DataType dtype, DataType itype, Op op, Target target, bool scal)
-		:dims(dims), dtype(dtype), scal(scal), target(target)
+		:dims(dims), scal(scal), target(target) , dtype(dtype)
 	{
 		DLPRIM_CHECK(!is_floating_point_data_type(itype));
 		DLPRIM_CHECK(dims <= 8);
