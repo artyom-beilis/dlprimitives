@@ -70,8 +70,9 @@ cl::Program Cache::build_program(Context  &ctx,std::string const &source,std::ve
     bool combine = false;
     // CL_DEVICE_OPENCL_C_VERSION reports the highest fully backward-compatible language version.
     std::string const opencl_c_version = ctx.device().getInfo<CL_DEVICE_OPENCL_C_VERSION>();
-    if(opencl_c_version.rfind("OpenCL C 2.",0) == 0 ||
-       opencl_c_version.rfind("OpenCL C 3.",0) == 0)
+    if(opencl_c_version.rfind("OpenCL C 3.",0) == 0)
+        ss << "-cl-std=CL3.0 ";
+    else if(opencl_c_version.rfind("OpenCL C 2.",0) == 0)
         ss << "-cl-std=CL2.0 ";
     bool enable_half = ctx.check_device_extension("cl_khr_fp16");
     for(size_t i=0;i<params.size();i++) {
