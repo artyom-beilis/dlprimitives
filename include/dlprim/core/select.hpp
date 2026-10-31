@@ -16,7 +16,7 @@ public:
         Y = 1
     };
     virtual ~Select() = default;
-    virtual void enqueue(Tensor&x, Tensor&y, Tensor&idx, Shape xstrds, Shape ystrds, Shape istrds, uint64_t axis, Tensor *flag, double alpha, ExecutionContext e) = 0;
+    virtual void enqueue(Tensor&x, Tensor&y, Tensor&idx, uint64_t axis, Tensor *flag, double alpha, ExecutionContext e) = 0;
     static std::unique_ptr<Select> create(Context &ctx, int dim, DataType dtype, DataType itype, Op op, Target target, bool scal);
 };
 } // core

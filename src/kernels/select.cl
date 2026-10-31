@@ -1,24 +1,11 @@
 #include "broadcast_dims.h"
 
-#if META >= 12
+#if META >= 6
 #include "atomic.h"
 #define atomic_add atomic_addf
 #endif
 
-#if (META&4) == 0
-#define SELOP(x,y) x=y
-#else
-#define SELOP(x,y) atomic_add(&x,y)
-#endif
-
 #define _POS(x) ulong x##pos=get_offset(pos,x##stride,x##off)
-#if (META&2) == 0
-#define RPOS _POS(y)
-#define SPOS _POS(x)
-#else
-#define RPOS _POS(x)
-#define SPOS _POS(y)
-#endif
 
 inline ulong get_offset(Shape s, Shape strides, ulong offset)
 {
@@ -45,7 +32,7 @@ __kernel void sel(
   __global const itype *__restrict idx, ulong ioff,
   __global dtype *vy, ulong yoff,
   Shape xstride, Shape istride, Shape ystride,
-  ulong bound, ulong dim,
+  itype bound, ulong dim,
 #if (META&1)==1
   dtype alpha,
 #define SCL *alpha
@@ -61,11 +48,11 @@ __kernel void sel(
   }
   itype i = idx[get_offset(pos, istride, ioff)];
   if (i >= bound) {
-    if(flag)flag[foff] = -1;
+    if(foff!=ULONG_MAX)flag[foff] = -1;
     return;
   }
   RPOS;
-  pos.s[dim] = i;
+  pos.s[dim] = (ulong)i;
   SPOS;
   SELOP(vy[ypos], vx[xpos] SCL);
 }

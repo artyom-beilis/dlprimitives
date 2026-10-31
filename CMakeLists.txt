@@ -4,8 +4,10 @@ cmake_minimum_required(VERSION 3.5)
 enable_testing()
 
 if(NOT WIN32)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -O2 -Wall")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O2 -Wall")
 endif()
+
+set(CMAKE_CXX_STANDARD 11)
 
 option(USE_CL_HPP "Use older CL/cl.hpp instead of CL/opencl.hpp" OFF)
 option(USE_CL2_HPP "Use older CL/cl2.hpp instead of CL/opencl.hpp" OFF)

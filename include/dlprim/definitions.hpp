@@ -99,6 +99,12 @@ namespace dlprim {
         return (d >> 3) < 2;
     }
 
+    /// returns size-equivalent integer type
+    inline DataType as_integer_type(DataType d)
+    {
+        return DataType((d & 7) | (2 << 3));
+    }
+
     template<typename T>
     struct TypeTraits;
 
