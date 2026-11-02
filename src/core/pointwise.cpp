@@ -151,7 +151,7 @@ namespace core {
     }
 
 
-    cl::NDRange get_broadcast_ndrange(Shape ref)
+    cl::NDRange get_broadcast_ndrange(const Shape &ref)
     {
         cl::NDRange range;
         switch(ref.size()) {
@@ -169,7 +169,7 @@ namespace core {
         return range;
     }
 
-    cl::NDRange get_broadcast_reduce_ndrange(Shape ref,int zero,int non_reduce_dims,size_t nd_range)
+    cl::NDRange get_broadcast_reduce_ndrange(const Shape &ref,int zero,int non_reduce_dims,size_t nd_range)
     {
         cl::NDRange range;
         switch(non_reduce_dims) {
