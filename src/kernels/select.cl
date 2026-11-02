@@ -32,7 +32,7 @@ __kernel void sel(
   __global const itype *__restrict idx, ulong ioff,
   __global dtype *vy, ulong yoff,
   Shape xstride, Shape istride, Shape ystride,
-  itype bound, ulong dim,
+  long bound, long lbound, long dim,
 #if (META&1)==1
   dtype alpha,
 #define SCL *alpha
@@ -46,8 +46,9 @@ __kernel void sel(
   if (!valid_pos(pos, limit)) {
     return;
   }
-  itype i = idx[get_offset(pos, istride, ioff)];
-  if (i >= bound) {
+  long i = (long)idx[get_offset(pos, istride, ioff)];
+  if (i < 0) i += lbound;
+  if (i >= bound || i < 0) {
     if(foff!=ULONG_MAX)flag[foff] = -1;
     return;
   }

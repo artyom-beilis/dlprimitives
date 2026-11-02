@@ -1,5 +1,5 @@
 #include <dlprim/core/select.hpp>
-#include <dlprim/definitions.hpp>
+#include <dlprim/gpu/program_cache.hpp>
 
 namespace dlprim {
 namespace core {
@@ -22,7 +22,7 @@ class SelectImpl :public Select {
 public:
     SelectImpl(Context &ctx, int dims, DataType dtype, DataType itype, Op op, Target target, bool scal)
             : dims(dims), scal(scal), dtype_(op == Op::ASSIGN && !scal ? as_integer_type(dtype) : dtype),
-              itype_(itype), target(target) {
+              target(target) {
         DLPRIM_CHECK(!is_floating_point_data_type(itype));
         DLPRIM_CHECK(dims <= max_tensor_dim);
         cl::Program prg = gpu::Cache::instance().get_program(ctx, "select",
@@ -36,32 +36,36 @@ public:
         sel_ = cl::Kernel(prg, "sel");
     }
 
-    void enqueue(Tensor &x, Tensor &y, Tensor &idx, uint64_t axis, Tensor *flag, double alpha, ExecutionContext e) override {
+    void enqueue(Tensor &x, Tensor &y, Tensor &idx, int64_t axis, Tensor *flag, double alpha, ExecutionContext e, bool negIdx) override {
         auto &sx = x.shape();
         DLPRIM_CHECK(sx.size() == dims);
         auto &sy = y.shape();
         DLPRIM_CHECK(sy.size() == dims);
-        auto &si = idx.shape();
+        auto si = idx.shape();
         DLPRIM_CHECK(si.size() == 1 || si.size() == dims);
-        cl::Kernel& sel = sel_;
-        int p = 0;
-        auto &limit = target == X ? sy : sx;
-        bind_shape(sel, p, limit);
-        x.set_arg(sel,p);
-        idx.set_arg(sel,p);
-        y.set_arg(sel, p);
-        bind_shape(sel, p, to_strides(sx));
         Shape sti;
         if (si.size() == 1) {
             std::vector<size_t> temp(dims, 0);
             temp[axis] = 1;
             sti = Shape::from_range(temp.begin(), temp.end());
+            size_t siz = si[0];
+            si = sy;
+            si[axis] = siz;
         } else {
             sti = to_strides(si);
         }
+        cl::Kernel& sel = sel_;
+        int p = 0;
+        bind_shape(sel, p, si);
+        x.set_arg(sel,p);
+        idx.set_arg(sel,p);
+        y.set_arg(sel, p);
+        bind_shape(sel, p, to_strides(sx));
         bind_shape(sel, p, sti);
         bind_shape(sel, p, to_strides(sy));
-        bind_as_dtype(sel, p, (target == Target::Y ? sy : sx)[axis], itype_);
+        cl_long bound = (target == Y ? sy : sx)[axis];
+        sel.setArg(p++, bound);
+        sel.setArg(p++, negIdx * bound);
         sel.setArg(p++, axis);
         if (scal) {
             bind_as_dtype(sel, p, alpha, dtype_);
@@ -72,11 +76,11 @@ public:
             sel.setArg(p++, x.device_buffer());
             sel.setArg(p, CL_ULONG_MAX);
         }
-        e.queue().enqueueNDRangeKernel(sel, cl::NullRange, get_broadcast_ndrange(limit), cl::NullRange, e.events(), e.event("select"));
+        e.queue().enqueueNDRangeKernel(sel, cl::NullRange, get_broadcast_ndrange(si), cl::NullRange, e.events(), e.event("select"));
     }
 private:
     const int dims, scal;
-    const DataType dtype_, itype_;
+    const DataType dtype_;
     const Target target;
     cl::Kernel sel_;
 };
