@@ -10,7 +10,10 @@
 #endif
 
 #define my_get_local_wg_id() ((get_local_id(2) * get_local_size(1) * get_local_size(0)) + (get_local_id(1) * get_local_size(0)) + get_local_id(0))
-#if __OPENCL_VERSION__ >= 200 && !CUSTOM_REDUCE
+// OpenCL C 3.x exposes work-group collectives only when the feature is available.
+#if !CUSTOM_REDUCE && defined(__OPENCL_C_VERSION__) && \
+    (__OPENCL_C_VERSION__ == 200 || \
+     (__OPENCL_C_VERSION__ >= 300 && defined(__opencl_c_work_group_collective_functions)))
 #define REDUCE_PREPARE(WG_SIZE,dtype) do {} while(0)
 #define my_work_group_reduce_add(val) do { val = work_group_reduce_add(val); } while(0)
 #define my_work_group_reduce_max(val) do { val = work_group_reduce_max(val); } while(0)
@@ -30,6 +33,8 @@
             barrier(CLK_LOCAL_MEM_FENCE); \
         } \
         myval = my_reduce[0]; \
+        /* All work-items must read the result before the next reduction reuses the scratch space. */ \
+        barrier(CLK_LOCAL_MEM_FENCE); \
     } while(0)
 
 #define REDUCE_OP_ADD(x,y) ((x) + (y))
