@@ -39,7 +39,11 @@ void softmax(int batch,int channels,
              __global dtype *in_diff,ulong  in_diff_offset,
 #endif
              __global itype *label,ulong  label_offset,             
+#if CALC_LOSS==1
+             __global accum_t *out,ulong  out_offset
+#else
              __global dtype *out,ulong  out_offset
+#endif
 #if CALC_LOSS==2
             ,dtype factor
 #endif            
@@ -110,7 +114,7 @@ void softmax(int batch,int channels,
         dtype loss = 0;
         if(0 <= index && index < channels)
             loss = -(in[index] - maxv - log(sum));
-        atomic_addf(out,loss / batch);
+        atomic_accum_add(out,loss / batch);
     }
 #elif CALC_LOSS == 2
     val = (dtype)1 / sum;

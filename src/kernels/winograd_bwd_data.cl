@@ -229,7 +229,7 @@ inline void store_local(__local float *l_val,int strd,float16 v)
 __kernel 
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3_bwd_data(int B, int N,int C,int H,int W,
-                          __global float const * restrict image,ulong image_offset,
+                          __global accum_t * restrict image,ulong image_offset,
                           __global float16 const * restrict kernels,ulong kernels_offset,
                           __global float *restrict result,ulong result_offset
                           )
@@ -381,7 +381,7 @@ void winconv_3x3_bwd_data(int B, int N,int C,int H,int W,
             int s_channel = wg_channel + s_row_t;
 
             if(s_b < B && s_channel < C ) {
-                __global float *ptr = image + ((s_b * C + s_channel) * H + s_row) * W + s_col;
+                __global accum_t *ptr = image + ((s_b * C + s_channel) * H + s_row) * W + s_col;
                 #pragma unroll
                 for(int dr=0;dr<4;dr++,ptr+=W) {
                     int r = s_row + dr;
@@ -390,7 +390,7 @@ void winconv_3x3_bwd_data(int B, int N,int C,int H,int W,
                         for(int dc=0;dc<4;dc++) {
                             int c = s_col + dc;
                             if(c >= 0 && c < W) {
-                                atomic_addf(ptr + dc,s_img_tile[dr][dc]);
+                                atomic_accum_add(ptr + dc,s_img_tile[dr][dc]);
                             }
                         }
                     }

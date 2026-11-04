@@ -70,7 +70,7 @@
 
 #if CONVGEMM != 0
     #if CONVGEMM == 3
-    void add_img_value(__global float *ptr,int matrix_row,int matrix_col,float dV)
+    void add_img_value(__global accum_t *ptr,int matrix_row,int matrix_col,float dV)
     #else
     float get_img_value(__global float const *ptr,int matrix_row,int matrix_col)
     #endif
@@ -86,9 +86,9 @@
             return ptr[address];
         #else
             #if REDUCE_K > 1
-                atomic_addf(ptr+address,dV);
+                atomic_accum_add(ptr+address,dV);
             #else
-                ptr[address] += dV;
+                accum_write(ptr+address,accum_read(ptr+address) + dV);
             #endif
         #endif
 #else
@@ -124,9 +124,9 @@
         #else
             #if PAD_W > 0 || PAD_H > 0
                 if(x >= 0 && y >= 0 && x < SRC_COLS && y < SRC_ROWS) 
-                    atomic_addf(ptr+address,dV);
+                    atomic_accum_add(ptr+address,dV);
             #else
-                atomic_addf(ptr+address,dV);
+                atomic_accum_add(ptr+address,dV);
             #endif
         #endif
 #endif  
@@ -321,7 +321,11 @@ void    sgemm(
         int batch_stride_b,
 #endif                
         int ldb,
+#if CONVGEMM == 3 || REDUCE_K > 1
+        __global accum_t * restrict C,ulong offset_C,
+#else
         __global float * restrict C,ulong offset_C,
+#endif
 #if BATCH_GEMM == 1
         int batch_stride_c,
 #endif                
@@ -706,7 +710,7 @@ void    sgemm(
                 if(row+dr < M) {
                     int index =(row + dr)*ldc + offset;
                     #if REDUCE_K > 1
-                    atomic_addf(C+index,c[dr][dc]);
+                    atomic_accum_add(C+index,c[dr][dc]);
                     #else
                     if(beta_factor != 0)
                         C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));
@@ -729,7 +733,7 @@ void    sgemm(
                     #else
                         int index = (row+dr)*ldc+col+dc;
                         #if REDUCE_K > 1
-                        atomic_addf(C+index,ACTIVATION_F(c[dr][dc]));
+                        atomic_accum_add(C+index,ACTIVATION_F(c[dr][dc]));
                         #else
                         if(beta_factor != 0)
                             C[index] = mad(C[index], beta_factor,ACTIVATION_F(c[dr][dc]));

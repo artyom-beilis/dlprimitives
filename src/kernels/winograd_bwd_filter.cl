@@ -235,7 +235,7 @@ __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,1,1)))
 void winconv_3x3_bwd_filter(int B, int N,int C,
                           __global float const * restrict image,ulong image_offset,
-                          __global float * restrict kernels,ulong kernels_offset,
+                          __global accum_t * restrict kernels,ulong kernels_offset,
                           __global float const *restrict result,ulong result_offset,
                           float beta
                           )
@@ -380,20 +380,20 @@ void winconv_3x3_bwd_filter(int B, int N,int C,
             float16 s_kern16 = vload16(0,&s_img_tile(s_row_t,s_col_t,0));
             float s_kern9[9];
             transform_kernel_bwd(s_kern16,s_kern9);
-            __global float *ptr = kernels + 9* (kern_ch_in +  kern_ch_out * C);
+            __global accum_t *ptr = kernels + 9* (kern_ch_in +  kern_ch_out * C);
             if(reduce_k) {
                 #pragma unroll
                 for(int i=0;i<9;i++) {
-                    atomic_addf(ptr + i, s_kern9[i]);
+                    atomic_accum_add(ptr + i, s_kern9[i]);
                 }
             }
             else {
                 #pragma unroll
                 for(int i=0;i<9;i++) {
                     if(beta == 0)
-                        ptr[i] = s_kern9[i];
+                        accum_write(ptr + i,s_kern9[i]);
                     else
-                        ptr[i] = ptr[i] * beta + s_kern9[i];
+                        accum_write(ptr + i,accum_read(ptr + i) * beta + s_kern9[i]);
                 }
             }
         }

@@ -106,7 +106,7 @@ void conv(int batch,int height,int width,
 
 __kernel
 void backward_data_conv(int batch,int height,int width,
-          __global float *input,ulong input_offset,
+          __global accum_t *input,ulong input_offset,
           __global const float *kern,ulong kernel_offset,
           __global float const *output,ulong output_offset)
 {
@@ -170,9 +170,9 @@ void backward_data_conv(int batch,int height,int width,
             for(int dc=0;dc<PATCH_W;dc++,x++) {
                 if(0 <= x && x < width) {
                     #if KERN == 1
-                    input[dr*width+dc] += I_vals[dr][dc];
+                    accum_write(input + (dr*width+dc),accum_read(input + (dr*width+dc)) + I_vals[dr][dc]);
                     #else
-                    atomic_addf(input + (dr*width+dc),I_vals[dr][dc]);
+                    atomic_accum_add(input + (dr*width+dc),I_vals[dr][dc]);
                     #endif
                 }
             }
