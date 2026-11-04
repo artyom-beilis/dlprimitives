@@ -38,11 +38,10 @@ void var_gamma_to_a(int N,float eps,
     if(pos >= N)
         return;
     var  += var_offset;
-    gamma += gamma_offset;
     a += a_offset;
     float scale = 1.0f / sqrt(var[pos] + eps);
-    if(gamma)
-        scale *= gamma[pos];
+    if(gamma_offset != ULONG_MAX)
+        scale *= gamma[gamma_offset + pos];
     a[pos] = scale;
 }
 
@@ -116,8 +115,6 @@ void compute_backward_factors(int N,int M,float eps,
     offset += offset_offset; 
     mean += mean_offset;
     varrstd  += varrstd_offset;
-    if(gamma_in)
-        gamma_in += gamma_in_offset;
     dyx_sum += dyx_sum_offset;
     dy_sum  += dy_sum_offset;
 
@@ -129,8 +126,8 @@ void compute_backward_factors(int N,int M,float eps,
         rsqrtsig = 1.0f / sqrt(varrstd[i] + eps);
 
     float gamma=1.0f;
-    if(gamma_in)
-        gamma = gamma_in[i];
+    if(gamma_in_offset != ULONG_MAX)
+        gamma = gamma_in[gamma_in_offset + i];
     float mu = mean[i];
     float dys = dy_sum[i];
     float dsig = -0.5 * gamma * (dyx_sum[i] - mu * dys) * (rsqrtsig * rsqrtsig * rsqrtsig);
@@ -234,7 +231,7 @@ void backward_filter(int N,
 
     float dys = dy_sum[i];
 
-    if(dgamma) {
+    if(dgamma_offset != ULONG_MAX) {
         dgamma += dgamma_offset;
         float dG = (dyx_sum[i] - mean[i]*dys) / sqrt(var[i] + eps); 
         if(factor_gamma == 0)
@@ -243,7 +240,7 @@ void backward_filter(int N,
             dgamma[i] = dgamma[i]*factor_gamma + dG;
     }
     
-    if(dbeta) {
+    if(dbeta_offset != ULONG_MAX) {
         dbeta += dbeta_offset;
         if(factor_beta == 0)
             dbeta[i] = dys;
