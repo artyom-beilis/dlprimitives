@@ -12,6 +12,18 @@
 
 namespace dlprim {
 namespace core {
+    static void set_optional_arg(cl::Kernel &kernel,int &p,Tensor &value,Tensor &fallback)
+    {
+        if(value.memory_size() != 0) {
+            value.set_arg(kernel,p);
+        }
+        else {
+            // The sentinel marks absence while the fallback supplies a valid buffer.
+            kernel.setArg(p++,fallback.device_buffer());
+            kernel.setArg(p++,cl_ulong(CL_ULONG_MAX));
+        }
+    }
+
     class BatchNormImpl : public BatchNormFwdBwd {
     public:
         virtual ~BatchNormImpl() {}
@@ -398,7 +410,7 @@ namespace core {
             var_gamma_to_a_.setArg(p++,features_);
             var_gamma_to_a_.setArg(p++,eps);
             var.set_arg(var_gamma_to_a_,p);
-            gamma.set_arg(var_gamma_to_a_,p);
+            set_optional_arg(var_gamma_to_a_,p,gamma,var);
             dy_factor.set_arg(var_gamma_to_a_,p);
             e.queue().enqueueNDRangeKernel(var_gamma_to_a_,
                                            cl::NullRange,cl::NDRange(features_),cl::NullRange,
@@ -437,7 +449,7 @@ namespace core {
             var.set_arg(compute_backward_factors_,p);
             dy_sum.set_arg(compute_backward_factors_,p);
             dyx_sum.set_arg(compute_backward_factors_,p);
-            gamma.set_arg(compute_backward_factors_,p);
+            set_optional_arg(compute_backward_factors_,p,gamma,mean);
             x_factor.set_arg(compute_backward_factors_,p);
             dy_factor.set_arg(compute_backward_factors_,p);
             b_offset.set_arg(compute_backward_factors_,p);
@@ -469,8 +481,8 @@ namespace core {
             var.set_arg(backward_filter_,p);
             dy_sum.set_arg(backward_filter_,p);
             dyx_sum.set_arg(backward_filter_,p);
-            dgamma.set_arg(backward_filter_,p);
-            dbeta.set_arg(backward_filter_,p);
+            set_optional_arg(backward_filter_,p,dgamma,mean);
+            set_optional_arg(backward_filter_,p,dbeta,mean);
             backward_filter_.setArg(p++,eps);
             backward_filter_.setArg(p++,dg_fact);
             backward_filter_.setArg(p++,db_fact);
@@ -543,7 +555,7 @@ namespace core {
             rstd.set_arg(compute_backward_factors_,p);
             dy_sum.set_arg(compute_backward_factors_,p);
             dyx_sum.set_arg(compute_backward_factors_,p);
-            null_.set_arg(compute_backward_factors_,p);
+            set_optional_arg(compute_backward_factors_,p,null_,mean);
             x_factor.set_arg(compute_backward_factors_,p);
             dy_factor.set_arg(compute_backward_factors_,p);
             b_offset.set_arg(compute_backward_factors_,p);
