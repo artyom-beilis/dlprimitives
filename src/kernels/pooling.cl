@@ -150,12 +150,12 @@ void pooling(int BC,int inp_H,int inp_W,int out_H,int out_W,
     #endif
 }
 
-void save_dx(__global dtype *ptr,dtype value)
+void save_dx(__global accum_t *ptr,dtype value)
 {
     #if POOL_W <= STRIDE_W && POOL_H <= STRIDE_H
-    *ptr = value + *ptr;
+    accum_write(ptr,value + accum_read(ptr));
     #else
-    atomic_addf(ptr,value);
+    atomic_accum_add(ptr,value);
     #endif
 
 }
@@ -164,7 +164,7 @@ void save_dx(__global dtype *ptr,dtype value)
 __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,WG_SIZE,1)))
 void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
-             __global dtype *src,ulong src_offset,
+             __global accum_t *src,ulong src_offset,
              __global const dtype *tgt,ulong tgt_offset,
              __global const itype *indx,ulong indx_offset)
 {
@@ -196,7 +196,7 @@ __attribute__((reqd_work_group_size(WG_SIZE,WG_SIZE,1)))
 void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
              __global const dtype *src,ulong src_offset,
              __global const dtype *tgt,ulong tgt_offset,
-             __global dtype *dx,ulong dx_offset)
+             __global accum_t *dx,ulong dx_offset)
 {
     int out_r = get_global_id(0);
     int out_c = get_global_id(1);
@@ -255,7 +255,7 @@ __kernel
 __attribute__((reqd_work_group_size(WG_SIZE,WG_SIZE,1)))
 void pooling_bw(int BC,int inp_H,int inp_W,int out_H,int out_W,
              __global const dtype *tgt,ulong tgt_offset,
-             __global dtype *dx,ulong dx_offset)
+             __global accum_t *dx,ulong dx_offset)
 {
     int out_r = get_global_id(0);
     int out_c = get_global_id(1);

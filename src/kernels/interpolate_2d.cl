@@ -115,7 +115,7 @@ void bilinear(
         int tgtH,int tgtW,
         float scale_y,float scale_x,
         int align_corners,
-        __global dtype* restrict x,ulong x_offset,
+        __global accum_t* restrict x,ulong x_offset,
         __global dtype* restrict y,ulong y_offset)
 {
     int n0 = get_global_id(2) * items_per_thread;
@@ -146,24 +146,24 @@ void bilinear(
 
     y+= r * tgtW + c;
 
-    __global dtype* restrict x00 = x + src_r0 * srcW + src_c0; 
-    __global dtype* restrict x01 = x + src_r0 * srcW + src_c1; 
-    __global dtype* restrict x10 = x + src_r1 * srcW + src_c0; 
-    __global dtype* restrict x11 = x + src_r1 * srcW + src_c1; 
+    __global accum_t* restrict x00 = x + src_r0 * srcW + src_c0;
+    __global accum_t* restrict x01 = x + src_r0 * srcW + src_c1;
+    __global accum_t* restrict x10 = x + src_r1 * srcW + src_c0;
+    __global accum_t* restrict x11 = x + src_r1 * srcW + src_c1;
 
     for(int n=n0;n<n1;n++) {
         if(fwd) {
             dtype val = 
-                w_r0 * (w_c0 * *x00 + w_c1 * *x01) +
-                w_r1 * (w_c0 * *x10 + w_c1 * *x11);
+                w_r0 * (w_c0 * accum_read(x00) + w_c1 * accum_read(x01)) +
+                w_r1 * (w_c0 * accum_read(x10) + w_c1 * accum_read(x11));
             *y = val;
         }
         else {
             dtype val = *y;
-            atomic_addf(x00,w_r0 * w_c0 * val);
-            atomic_addf(x01,w_r0 * w_c1 * val);
-            atomic_addf(x10,w_r1 * w_c0 * val);
-            atomic_addf(x11,w_r1 * w_c1 * val);
+            atomic_accum_add(x00,w_r0 * w_c0 * val);
+            atomic_accum_add(x01,w_r0 * w_c1 * val);
+            atomic_accum_add(x10,w_r1 * w_c0 * val);
+            atomic_accum_add(x11,w_r1 * w_c1 * val);
         }
 
         x00 += step_src;

@@ -36,3 +36,48 @@ void atomic_addf(__global volatile float *ptr,float v)
 #endif    
 }
 
+// clspv defines VULKAN. Integer CAS requires integer-typed storage buffers,
+// including their ordinary reads and writes, rather than casts from float pointers.
+#ifdef VULKAN
+typedef uint accum_t;
+
+float accum_read(__global accum_t const *ptr)
+{
+    return as_float(*ptr);
+}
+
+void accum_write(__global accum_t *ptr,float value)
+{
+    *ptr = as_uint(value);
+}
+
+void atomic_accum_add(__global volatile accum_t *ptr,float value)
+{
+    // A failed CAS supplies the current bits without a racy non-atomic load.
+    uint oldv = 0;
+    for(;;) {
+        uint newv = as_uint(as_float(oldv) + value);
+        uint prev = atomic_cmpxchg(ptr,oldv,newv);
+        if(prev == oldv)
+            return;
+        oldv = prev;
+    }
+}
+#else
+typedef float accum_t;
+
+float accum_read(__global accum_t const *ptr)
+{
+    return *ptr;
+}
+
+void accum_write(__global accum_t *ptr,float value)
+{
+    *ptr = value;
+}
+
+void atomic_accum_add(__global volatile accum_t *ptr,float value)
+{
+    atomic_addf(ptr,value);
+}
+#endif
